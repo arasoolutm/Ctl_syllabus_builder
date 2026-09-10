@@ -1,8 +1,8 @@
-import React, { useState, useMemo, useRef } from "react";
+import React, { useEffect, useState, useMemo, useRef } from "react";
 import {
   BookOpen, User, MessageSquare, Target, Library, Scale, Gavel,
   ShieldCheck, CalendarDays, FileDown, Check, AlertTriangle, Plus, Trash2,
-  Save, Upload, Printer, Lock, Info, ChevronRight
+  Save, Upload, Printer, Lock, Info, ChevronRight, ChevronDown, X
 } from "lucide-react";
 
 /* ============================================================
@@ -23,6 +23,7 @@ const C = {
   wash: "#F4F6F9",
   good: "#1E7A46",
   warn: "#B45309",
+  bad: "#C0392B",
 };
 
 /* ---------- Institutional content maintained by CTL ---------- */
@@ -192,6 +193,7 @@ const blank = {
   calNote: true,
 };
 
+
 /* ---------- small UI atoms ---------- */
 
 const Lbl = ({ children, hint }) => (
@@ -233,10 +235,72 @@ const Note = ({ children }) => (
 export default function SyllabusBuilder() {
   const [d, setD] = useState(blank);
   const [tab, setTab] = useState(0);
+  const [crnStatus, setCrnStatus] = useState(null);
+  const [deliveryOpen, setDeliveryOpen] = useState(false);
+  const deliveryRef = useRef(null);
   const fileRef = useRef(null);
+
+  useEffect(() => {
+    if (!deliveryOpen) return undefined;
+    const onDocClick = (e) => {
+      if (deliveryRef.current && !deliveryRef.current.contains(e.target)) setDeliveryOpen(false);
+    };
+    const onKey = (e) => { if (e.key === "Escape") setDeliveryOpen(false); };
+    document.addEventListener("mousedown", onDocClick);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDocClick);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [deliveryOpen]);
   const frameRef = useRef(null);
 
   const set = (k, v) => setD((p) => ({ ...p, [k]: v }));
+
+  const lookupCourseByCrn = async (raw, signal) => {
+    try {
+      const res = await fetch("/api/class-details", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ term: "202640", courseReferenceNumber: raw }),
+        signal,
+      });
+
+      if (!res.ok) {
+        const errorText = await res.text();
+        throw new Error(errorText || "Lookup failed");
+      }
+
+      const payload = await res.json();
+      if (!payload.crn || !payload.title) throw new Error("The portal returned no course details");
+      setD((p) => ({
+        ...p,
+        crn: payload.crn || p.crn,
+        code: payload.code || p.code,
+        title: payload.title || p.title,
+        section: payload.section || p.section,
+        term: payload.term || p.term,
+        credits: payload.credits || p.credits,
+        modality: payload.modality || p.modality,
+        meeting: payload.meeting || p.meeting,
+        location: payload.location || p.location,
+        dept: payload.dept || p.dept,
+        prereq: payload.prereq || p.prereq,
+      }));
+      setCrnStatus("ok");
+    } catch (error) {
+      if (error.name !== "AbortError") setCrnStatus("error");
+    }
+  };
+
+  useEffect(() => {
+    const raw = String(d.crn || "").trim();
+    if (raw.length !== 5) { setCrnStatus(null); return undefined; }
+
+    const controller = new AbortController();
+    lookupCourseByCrn(raw, controller.signal);
+    return () => controller.abort();
+  }, [d.crn]);
   const setDeep = (k, i, key, v) =>
     setD((p) => { const a = [...p[k]]; a[i] = { ...a[i], [key]: v }; return { ...p, [k]: a }; });
   const push = (k, obj) => setD((p) => ({ ...p, [k]: [...p[k], obj] }));
@@ -503,8 +567,23 @@ export default function SyllabusBuilder() {
               <div style={{ flex: "1 1 150px" }}><Field label="Course code" hint="POSC 322"><T value={d.code} onChange={(v) => set("code", v)} placeholder="POSC 322" /></Field></div>
               <div style={{ flex: "2 1 240px" }}><Field label="Course title"><T value={d.title} onChange={(v) => set("title", v)} placeholder="American Foreign Policy" /></Field></div>
             </div>
-            <div className="flex gap-3 flex-wrap">
-              <div style={{ flex: "1 1 130px" }}><Field label="CRN" hint="the 5-digit registration number"><T value={d.crn} onChange={(v) => set("crn", v)} placeholder="12345" /></Field></div>
+            <div className="flex gap-3 flex-wrap items-end">
+              <div style={{ flex: "1 1 130px" }}>
+                <Field label="CRN" hint="the 5-digit registration number">
+                  <div style={{ position: "relative" }}>
+                    <input
+                      style={{ ...inputBase, paddingRight: 30 }}
+                      value={d.crn}
+                      placeholder="12345"
+                      onChange={(e) => set("crn", e.target.value.replace(/\D/g, "").slice(0, 5))}
+                    />
+                    {crnStatus === "ok" &&
+                      <Check size={15} style={{ position: "absolute", right: 9, top: "50%", transform: "translateY(-50%)", color: C.good }} />}
+                    {crnStatus === "error" &&
+                      <X size={15} style={{ position: "absolute", right: 9, top: "50%", transform: "translateY(-50%)", color: C.bad }} />}
+                  </div>
+                </Field>
+              </div>
               <div style={{ flex: "1 1 130px" }}><Field label="Section"><T value={d.section} onChange={(v) => set("section", v)} placeholder="001" /></Field></div>
             </div>
             <div className="flex gap-3 flex-wrap">
@@ -512,9 +591,38 @@ export default function SyllabusBuilder() {
               <div style={{ flex: "1 1 130px" }}><Field label="Credit hours"><T value={d.credits} onChange={(v) => set("credits", v)} /></Field></div>
             </div>
             <Field label="Delivery" hint="students read this before they register">
-              <select style={inputBase} value={d.modality} onChange={(e) => set("modality", e.target.value)}>
-                {["In person", "Hybrid", "Online synchronous", "Online asynchronous"].map((m) => <option key={m}>{m}</option>)}
-              </select>
+              <div ref={deliveryRef} style={{ position: "relative" }}>
+                <button type="button" onClick={() => setDeliveryOpen((o) => !o)}
+                  aria-haspopup="listbox" aria-expanded={deliveryOpen}
+                  style={{ ...inputBase, display: "flex", alignItems: "center", justifyContent: "space-between", cursor: "pointer" }}>
+                  <span>{d.modality}</span>
+                  <ChevronDown size={14} className="transition-transform duration-200"
+                    style={{ color: C.slate, flexShrink: 0, marginLeft: 8, transform: deliveryOpen ? "rotate(180deg)" : "none" }} />
+                </button>
+                <div role="listbox" className="transition-all duration-200"
+                  style={{
+                    position: "absolute", left: 0, right: 0, top: "calc(100% + 4px)", zIndex: 20,
+                    background: "#fff", border: `1px solid ${C.line}`, borderRadius: 4,
+                    boxShadow: "0 6px 16px rgba(0,0,0,.12)", overflow: "hidden",
+                    opacity: deliveryOpen ? 1 : 0,
+                    transform: deliveryOpen ? "translateY(0) scaleY(1)" : "translateY(-4px) scaleY(0.96)",
+                    transformOrigin: "top", pointerEvents: deliveryOpen ? "auto" : "none",
+                  }}>
+                  {["In person", "Hybrid", "Online synchronous", "Online asynchronous"].map((m) => (
+                    <div key={m} role="option" aria-selected={d.modality === m}
+                      onClick={() => { set("modality", m); setDeliveryOpen(false); }}
+                      onMouseEnter={(e) => { e.currentTarget.style.background = "#F4F6F9"; }}
+                      onMouseLeave={(e) => { e.currentTarget.style.background = d.modality === m ? "#EEF2F7" : "transparent"; }}
+                      style={{
+                        padding: "8px 10px", fontSize: 14, cursor: "pointer",
+                        color: d.modality === m ? C.navy : C.ink, fontWeight: d.modality === m ? "bold" : "normal",
+                        background: d.modality === m ? "#EEF2F7" : "transparent",
+                      }}>
+                      {m}
+                    </div>
+                  ))}
+                </div>
+              </div>
             </Field>
             <Field label="Meeting time" hint="leave blank if fully asynchronous"><T value={d.meeting} onChange={(v) => set("meeting", v)} placeholder="Tuesday and Thursday, 9:30 to 10:45 a.m." /></Field>
             <Field label="Room"><T value={d.location} onChange={(v) => set("location", v)} placeholder="Humanities 407" /></Field>
