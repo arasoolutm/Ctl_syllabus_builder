@@ -257,6 +257,7 @@ function parseSectionPrerequisites(html) {
 function bannerHeaders(accept) {
   return {
     Accept: accept,
+    Connection: "close",
     "X-Requested-With": "XMLHttpRequest",
     "User-Agent": "Mozilla/5.0",
     ...(process.env.UTM_COOKIE ? { Cookie: process.env.UTM_COOKIE } : {}),
@@ -266,21 +267,21 @@ function bannerHeaders(accept) {
 async function fetchFacultyMeetingTimes(term, crn) {
   const url = `https://ban9ssb1.utm.edu/StudentRegistrationSsb/ssb/searchResults/getFacultyMeetingTimes?term=${encodeURIComponent(term)}&courseReferenceNumber=${encodeURIComponent(crn)}`;
   const response = await fetch(url, { headers: bannerHeaders("application/json, text/javascript, */*; q=0.01") });
-  if (!response.ok) return null;
+  if (!response.ok) { await response.text().catch(() => {}); return null; }
   return parseFacultyMeetingTimes(await response.json());
 }
 
 async function fetchSectionCatalogDetails(term, crn) {
   const url = `https://ban9ssb1.utm.edu/StudentRegistrationSsb/ssb/searchResults/getSectionCatalogDetails?term=${encodeURIComponent(term)}&courseReferenceNumber=${encodeURIComponent(crn)}`;
   const response = await fetch(url, { headers: bannerHeaders("text/html, */*; q=0.01") });
-  if (!response.ok) return null;
+  if (!response.ok) { await response.text().catch(() => {}); return null; }
   return parseSectionCatalogDetails(await response.text());
 }
 
 async function fetchSectionPrerequisites(term, crn) {
   const url = `https://ban9ssb1.utm.edu/StudentRegistrationSsb/ssb/searchResults/getSectionPrerequisites?term=${encodeURIComponent(term)}&courseReferenceNumber=${encodeURIComponent(crn)}`;
   const response = await fetch(url, { headers: bannerHeaders("text/html, */*; q=0.01") });
-  if (!response.ok) return null;
+  if (!response.ok) { await response.text().catch(() => {}); return null; }
   return parseSectionPrerequisites(await response.text());
 }
 
@@ -301,14 +302,19 @@ export default async function handler(req, res) {
       first: "first",
     }).toString();
 
-    const response = await fetch("https://ban9ssb1.utm.edu/StudentRegistrationSsb/ssb/searchResults/getClassDetails", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
-        ...bannerHeaders("text/html, */*; q=0.01"),
-      },
-      body: formBody,
-    });
+    const [response, meetingInfo, dept, prereq] = await Promise.all([
+      fetch("https://ban9ssb1.utm.edu/StudentRegistrationSsb/ssb/searchResults/getClassDetails", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
+          ...bannerHeaders("text/html, */*; q=0.01"),
+        },
+        body: formBody,
+      }),
+      fetchFacultyMeetingTimes(term, courseReferenceNumber).catch(() => null),
+      fetchSectionCatalogDetails(term, courseReferenceNumber).catch(() => null),
+      fetchSectionPrerequisites(term, courseReferenceNumber).catch(() => null),
+    ]);
 
     const html = await response.text();
     if (!response.ok) {
@@ -319,12 +325,6 @@ export default async function handler(req, res) {
     if (!data) {
       return res.status(404).json({ error: "No class data found for that CRN" });
     }
-
-    const [meetingInfo, dept, prereq] = await Promise.all([
-      fetchFacultyMeetingTimes(term, courseReferenceNumber).catch(() => null),
-      fetchSectionCatalogDetails(term, courseReferenceNumber).catch(() => null),
-      fetchSectionPrerequisites(term, courseReferenceNumber).catch(() => null),
-    ]);
 
     if (meetingInfo) {
       if (meetingInfo.meeting) data.meeting = meetingInfo.meeting;

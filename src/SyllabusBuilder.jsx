@@ -2,7 +2,7 @@ import React, { useEffect, useState, useMemo, useRef } from "react";
 import {
   BookOpen, User, MessageSquare, Target, Library, Scale, Gavel,
   ShieldCheck, CalendarDays, FileDown, Check, AlertTriangle, Plus, Trash2,
-  Save, Upload, Printer, Lock, Info, ChevronRight, ChevronDown, X
+  Save, Upload, Printer, Lock, Info, ChevronRight, ChevronDown, X, Loader2
 } from "lucide-react";
 
 /* ============================================================
@@ -193,7 +193,6 @@ const blank = {
   calNote: true,
 };
 
-
 /* ---------- small UI atoms ---------- */
 
 const Lbl = ({ children, hint }) => (
@@ -298,6 +297,7 @@ export default function SyllabusBuilder() {
     if (raw.length !== 5) { setCrnStatus(null); return undefined; }
 
     const controller = new AbortController();
+    setCrnStatus("loading");
     lookupCourseByCrn(raw, controller.signal);
     return () => controller.abort();
   }, [d.crn]);
@@ -577,6 +577,10 @@ export default function SyllabusBuilder() {
                       placeholder="12345"
                       onChange={(e) => set("crn", e.target.value.replace(/\D/g, "").slice(0, 5))}
                     />
+                    {crnStatus === "loading" &&
+                      <div style={{ position: "absolute", right: 9, top: 0, bottom: 0, display: "flex", alignItems: "center" }}>
+                        <Loader2 size={15} className="animate-spin" style={{ color: C.slate }} />
+                      </div>}
                     {crnStatus === "ok" &&
                       <Check size={15} style={{ position: "absolute", right: 9, top: "50%", transform: "translateY(-50%)", color: C.good }} />}
                     {crnStatus === "error" &&
