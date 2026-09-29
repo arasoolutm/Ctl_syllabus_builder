@@ -438,6 +438,12 @@ export default function SyllabusBuilder() {
     const r = new FileReader();
     r.onload = () => { try { setD({ ...blank, ...JSON.parse(r.result) }); } catch { alert("That file could not be read as a saved syllabus."); } };
     r.readAsText(f); e.target.value = "";
+      };
+      const clearForm = () => {
+    if (window.confirm("Clear the entire syllabus and start over? This cannot be undone. Use \"Save my work\" first if you want to keep a copy.")) {
+      setD(blank);
+      setTab(0);
+    }
   };
 
   /* ---------- sections ---------- */
@@ -706,7 +712,8 @@ export default function SyllabusBuilder() {
             </div>
             <div className="flex flex-wrap gap-2">
               <Btn onClick={saveJson} icon={Save}>Save my work</Btn>
-              <Btn onClick={() => fileRef.current?.click()} icon={Upload}>Load a saved file</Btn>
+              <Btn onClick={() => fileRef.current?.click()} icon={Upload}>Load a saved file</Btn>  
+                            <Btn onClick={clearForm} icon={Trash2}>Clear form</Btn>
               <input ref={fileRef} type="file" accept=".json" onChange={loadJson} style={{ display: "none" }} />
             </div>
             <div style={{ fontSize: 12, color: C.slate, marginTop: 14, lineHeight: 1.55 }}>
