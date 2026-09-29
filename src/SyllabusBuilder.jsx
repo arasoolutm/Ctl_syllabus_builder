@@ -518,8 +518,87 @@ export default function SyllabusBuilder() {
             </Field>
             <Field label="Meeting time" hint="leave blank if fully asynchronous"><T value={d.meeting} onChange={(v) => set("meeting", v)} placeholder="Tuesday and Thursday, 9:30 to 10:45 a.m." /></Field>
             <Field label="Room"><T value={d.location} onChange={(v) => set("location", v)} placeholder="Humanities 407" /></Field>
-            <Field label="Department"><T value={d.dept} onChange={(v) => set("dept", v)} placeholder="Department of Political Science and Global Studies" /></Field>
-            <Field label="Prerequisites"><T value={d.prereq} onChange={(v) => set("prereq", v)} placeholder="None" /></Field>
+<Field label="Department">
+  <select
+    style={inputBase}
+    value={d.dept}
+    onChange={(e) => set("dept", e.target.value)}
+  >
+    <option value="">Select a department...</option>
+
+    <optgroup label="College of Agriculture and Applied Sciences">
+      <option value="Agriculture, Geosciences, and Natural Resources">
+        Agriculture, Geosciences, and Natural Resources
+      </option>
+      <option value="Family and Consumer Sciences">
+        Family and Consumer Sciences
+      </option>
+    </optgroup>
+
+    <optgroup label="College of Business and Global Affairs">
+      <option value="Accounting, Finance, Economics, and Political Science">
+        Accounting, Finance, Economics, and Political Science
+      </option>
+      <option value="Management, Marketing, and Information Systems">
+        Management, Marketing, and Information Systems
+      </option>
+    </optgroup>
+
+    <optgroup label="College of Education, Health, and Behavioral Sciences">
+      <option value="Behavioral Sciences">
+        Behavioral Sciences
+      </option>
+      <option value="Educational Studies">
+        Educational Studies
+      </option>
+      <option value="Health and Human Performance">
+        Health and Human Performance
+      </option>
+      <option value="Nursing">
+        Nursing
+      </option>
+      <option value="Psychology">
+        Psychology
+      </option>
+    </optgroup>
+
+    <optgroup label="College of Engineering and Natural Sciences">
+      <option value="Biological Sciences">
+        Biological Sciences
+      </option>
+      <option value="Chemistry and Physics">
+        Chemistry and Physics
+      </option>
+      <option value="Computer Science">
+        Computer Science
+      </option>
+      <option value="Engineering">
+        Engineering
+      </option>
+      <option value="Mathematics and Statistics">
+        Mathematics and Statistics
+      </option>
+    </optgroup>
+
+    <optgroup label="College of Humanities and Fine Arts">
+      <option value="Communications">
+        Communications
+      </option>
+      <option value="English and Modern Foreign Languages">
+        English and Modern Foreign Languages
+      </option>
+      <option value="History and Philosophy">
+        History and Philosophy
+      </option>
+      <option value="Music">
+        Music
+      </option>
+      <option value="Visual and Theatre Arts">
+        Visual and Theatre Arts
+      </option>
+    </optgroup>
+  </select>
+</Field>            <Field label="Prerequisites"><T value={d.prereq} onChange={(v) => set("prereq", v)} placeholder="None" /></Field>
           </>)}
 
           {tab === 1 && (<>
