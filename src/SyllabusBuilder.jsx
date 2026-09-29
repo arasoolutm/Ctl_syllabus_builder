@@ -175,19 +175,9 @@ const FALL_2026 = [
 
 /* ---------- initial state ---------- */
 
-const SEMESTERS = ["Maymester", "Summer", "Fall", "Spring"];
-
-const MEETING_PATTERNS = [
-  { value: "MWF", label: "Monday-Wednesday-Friday (MWF)" },
-  { value: "MW", label: "Monday-Wednesday (MW)" },
-  { value: "TR", label: "Tuesday-Thursday (TR)" },
-  { value: "custom", label: "Custom" },
-];
-
 const blank = {
-  code: "", title: "", crn: "", section: "", term: "Fall", modality: "In person",
-  credits: "3", meetingPattern: "", meeting: "", meetingTime: "",
-  location: "", dept: "", prereq: "",
+  code: "", title: "", crn: "", section: "", term: "Fall 2026", modality: "In person",
+  credits: "3", meeting: "", location: "", dept: "", prereq: "",
   instructor: "", email: "", office: "", hours: "", address: "",
   subjectLine: "", responseTime: "48 hours on business days",
   description: "", welcome: "",
@@ -261,21 +251,10 @@ export default function SyllabusBuilder() {
 
   const aiText = d.aiTier === "custom" ? d.aiCustom : AI_POLICIES[d.aiTier].text;
 
-
-  const selectedMeetingPattern = MEETING_PATTERNS.find(
-    (pattern) => pattern.value === d.meetingPattern
-  );
-  const meetingDays = d.meetingPattern === "custom"
-    ? String(d.meeting || "").trim()
-    : selectedMeetingPattern?.label || "";
-  const meetingDisplay = [meetingDays, String(d.meetingTime || "").trim()]
-   .filter(Boolean)
-   .join(", ") || String(d.meeting || "").trim();
-
   /* ---------- readiness ---------- */
   const checks = [
     ["Course code, title, term, and credit hours", !!(d.code && d.title && d.term && d.credits)],
-    ["Meeting time and modality stated", !!(d.modality && (d.modality.startsWith("Online") || meetingDisplay))],
+    ["Meeting time and modality stated", !!(d.modality && (d.modality.startsWith("Online") || d.meeting))],
     ["Instructor name and email", !!(d.instructor && d.email)],
     ["Office hours and how to reach you", !!(d.hours)],
     ["Email response time committed to", !!d.responseTime],
@@ -320,7 +299,7 @@ export default function SyllabusBuilder() {
       ["Term", d.term],
       ["Delivery", d.modality],
       ["Credit hours", d.credits],
-      ["Meeting time", meetingDisplay],
+      ["Meeting time", d.meeting],
       ["Location", d.location],
       ["Prerequisites", d.prereq],
       ["Instructor", d.instructor],
@@ -395,7 +374,7 @@ export default function SyllabusBuilder() {
       }</table>`);
     }
 
-    if (d.calNote && d.term === "Fall") {
+    if (d.calNote) {
       sec("Fall 2026 Dates You Should Know");
       h.push(`<table class="grid">${FALL_2026.map((r) =>
         `<tr><th class="wk">${esc(r[0])}</th><td>${esc(r[1])}</td></tr>`).join("")}</table>
@@ -403,7 +382,7 @@ export default function SyllabusBuilder() {
     }
 
     return h.join("");
-  }, [d, weightTotal, realOutcomes, aiText, meetingDisplay]);
+  }, [d, weightTotal, realOutcomes, aiText]);
 
   const DOC_CSS = `
     body{font-family:Cambria,Georgia,serif;font-size:11pt;line-height:1.5;color:#1a1a1a;margin:0}
@@ -457,27 +436,7 @@ export default function SyllabusBuilder() {
   const loadJson = (e) => {
     const f = e.target.files?.[0]; if (!f) return;
     const r = new FileReader();
-    r.onload = () => {
-      try {
-        const saved = JSON.parse(r.result);
-        const migrated = { ...blank, ...saved };
-
-        // Older saved files stored the full meeting schedule in `meeting`.
-        if (!saved.meetingPattern && saved.meeting) migrated.meetingPattern = "custom";
-
-        // Older saved files may use values such as "Fall 2026".
-        if (!SEMESTERS.includes(migrated.term)) {
-          const semester = SEMESTERS.find((item) =>
-            String(migrated.term || "").toLowerCase().startsWith(item.toLowerCase())
-          );
-          if (semester) migrated.term = semester;
-        }
-
-        setD(migrated);
-      } catch {
-        alert("That file could not be read as a saved syllabus.");
-      }
-    };
+    r.onload = () => { try { setD({ ...blank, ...JSON.parse(r.result) }); } catch { alert("That file could not be read as a saved syllabus."); } };
     r.readAsText(f); e.target.value = "";
   };
 
@@ -549,15 +508,7 @@ export default function SyllabusBuilder() {
               <div style={{ flex: "1 1 130px" }}><Field label="Section"><T value={d.section} onChange={(v) => set("section", v)} placeholder="001" /></Field></div>
             </div>
             <div className="flex gap-3 flex-wrap">
-               <div style={{ flex: "1 1 130px" }}>
-                <Field label="Semester">
-                  <select style={inputBase} value={d.term} onChange={(e) => set("term", e.target.value)}>
-                    {SEMESTERS.map((semester) => (
-                      <option key={semester} value={semester}>{semester}</option>
-                    ))}
-                  </select>
-                </Field>
-              </div>
+              <div style={{ flex: "1 1 130px" }}><Field label="Term"><T value={d.term} onChange={(v) => set("term", v)} /></Field></div>
               <div style={{ flex: "1 1 130px" }}><Field label="Credit hours"><T value={d.credits} onChange={(v) => set("credits", v)} /></Field></div>
             </div>
             <Field label="Delivery" hint="students read this before they register">
@@ -565,34 +516,7 @@ export default function SyllabusBuilder() {
                 {["In person", "Hybrid", "Online synchronous", "Online asynchronous"].map((m) => <option key={m}>{m}</option>)}
               </select>
             </Field>
-                        <Field label="Meeting days" hint="leave blank if fully asynchronous">
-              <select
-                style={inputBase}
-                value={d.meetingPattern || ""}
-                onChange={(e) => set("meetingPattern", e.target.value)}
-              >
-                <option value="">Select meeting days</option>
-                {MEETING_PATTERNS.map((pattern) => (
-                  <option key={pattern.value} value={pattern.value}>{pattern.label}</option>
-                ))}
-              </select>
-            </Field>
-            {d.meetingPattern === "custom" && (
-              <Field label="Custom meeting days">
-                <T
-                  value={d.meeting}
-                  onChange={(v) => set("meeting", v)}
-                  placeholder="Monday and Thursday"
-                />
-              </Field>
-            )}
-            <Field label="Meeting time" hint="leave blank if fully asynchronous">
-              <T
-                value={d.meetingTime || ""}
-                onChange={(v) => set("meetingTime", v)}
-                placeholder="9:30 to 10:45 a.m."
-              />
-            </Field>
+            <Field label="Meeting time" hint="leave blank if fully asynchronous"><T value={d.meeting} onChange={(v) => set("meeting", v)} placeholder="Tuesday and Thursday, 9:30 to 10:45 a.m." /></Field>
             <Field label="Room"><T value={d.location} onChange={(v) => set("location", v)} placeholder="Humanities 407" /></Field>
             <Field label="Department"><T value={d.dept} onChange={(v) => set("dept", v)} placeholder="Department of Political Science and Global Studies" /></Field>
             <Field label="Prerequisites"><T value={d.prereq} onChange={(v) => set("prereq", v)} placeholder="None" /></Field>
@@ -741,14 +665,10 @@ export default function SyllabusBuilder() {
 
           {tab === 8 && (<>
             <H>Schedule</H>
-                        {d.term === "Fall" ? (
-              <label className="flex items-start gap-2 mb-4 text-sm" style={{ color: C.slate, cursor: "pointer" }}>
-                <input type="checkbox" checked={d.calNote} onChange={(e) => set("calNote", e.target.checked)} style={{ marginTop: 3 }} />
-                <span>Append the Fall 2026 registrar dates: add and drop deadlines, Fall Break, Thanksgiving, finals, and commencement.</span>
-              </label>
-            ) : (
-              <Note>The built-in registrar-date table is currently available only for Fall 2026, so it will not be appended for this semester.</Note>
-            )}
+            <label className="flex items-start gap-2 mb-4 text-sm" style={{ color: C.slate, cursor: "pointer" }}>
+              <input type="checkbox" checked={d.calNote} onChange={(e) => set("calNote", e.target.checked)} style={{ marginTop: 3 }} />
+              <span>Append the Fall 2026 registrar dates: add and drop deadlines, Fall Break, Thanksgiving, finals, and commencement.</span>
+            </label>
             {d.weeks.map((w, i) => (
               <div key={i} className="p-3 mb-3 rounded" style={{ background: "#fff", border: `1px solid ${C.line}` }}>
                 <div className="flex gap-2 mb-2">
