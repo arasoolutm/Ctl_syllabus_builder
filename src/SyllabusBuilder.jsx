@@ -175,7 +175,7 @@ const FALL_2026 = [
 
 /* ---------- initial state ---------- */
 
-const blank = {
+const createBlank = () => ({
   code: "", title: "", crn: "", section: "", term: "Fall 2026", modality: "In person",
   credits: "3", meeting: "", location: "", dept: "", prereq: "",
   instructor: "", email: "", office: "", hours: "", address: "",
@@ -190,7 +190,7 @@ const blank = {
   inc: { integrity: true, accessibility: true, support: true, crisis: true, changes: true },
   weeks: [{ label: "Week 1", dates: "", topics: "", due: "" }],
   calNote: true,
-};
+});
 
 /* ---------- small UI atoms ---------- */
 
@@ -231,10 +231,26 @@ const Note = ({ children }) => (
 /* ============================================================ */
 
 export default function SyllabusBuilder() {
-  const [d, setD] = useState(blank);
+  const [d, setD] = useState(createBlank);
   const [tab, setTab] = useState(0);
   const fileRef = useRef(null);
   const frameRef = useRef(null);
+  const formRef = useRef(null);
+  const previewRef = useRef(null);
+  const loadIdRef = useRef(0);
+
+  const clearAll = () => {
+    // Ignore any saved-file load that was started before the reset.
+    loadIdRef.current += 1;
+    setD(createBlank());
+    setTab(0);
+    if (fileRef.current) fileRef.current.value = "";
+    if (previewRef.current) previewRef.current.scrollTop = 0;
+    window.scrollTo({ top: 0, left: 0, behavior: "instant" });
+    window.requestAnimationFrame(() => {
+      formRef.current?.querySelector("input")?.focus({ preventScroll: true });
+    });
+  };
 
   const set = (k, v) => setD((p) => ({ ...p, [k]: v }));
   const setDeep = (k, i, key, v) =>
@@ -435,8 +451,13 @@ export default function SyllabusBuilder() {
   const saveJson = () => dl(new Blob([JSON.stringify(d, null, 2)], { type: "application/json" }), fname("json"));
   const loadJson = (e) => {
     const f = e.target.files?.[0]; if (!f) return;
+    const loadId = ++loadIdRef.current;
     const r = new FileReader();
-    r.onload = () => { try { setD({ ...blank, ...JSON.parse(r.result) }); } catch { alert("That file could not be read as a saved syllabus."); } };
+    r.onload = () => {
+      if (loadId !== loadIdRef.current) return;
+      try { setD({ ...createBlank(), ...JSON.parse(r.result) }); }
+      catch { alert("That file could not be read as a saved syllabus."); }
+    };
     r.readAsText(f); e.target.value = "";
   };
 
@@ -449,7 +470,7 @@ export default function SyllabusBuilder() {
   ];
 
   const Btn = ({ onClick, children, icon: I, primary }) => (
-    <button onClick={onClick} className="flex items-center gap-2 px-3 py-2 rounded text-sm font-semibold"
+    <button type="button" onClick={onClick} className="flex items-center gap-2 px-3 py-2 rounded text-sm font-semibold"
       style={{ background: primary ? C.navy : "#fff", color: primary ? "#fff" : C.navy,
         border: `1px solid ${primary ? C.navy : C.line}`, cursor: "pointer" }}>
       {I && <I size={15} />}{children}
@@ -470,11 +491,12 @@ export default function SyllabusBuilder() {
               <div style={{ color: C.orange, fontSize: 11, letterSpacing: 1 }}>CENTER FOR TEACHING AND LEARNING</div>
             </div>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <div style={{ color: "#B9C6D8", fontSize: 12, marginRight: 6 }}>{passed} of {checks.length} complete</div>
             <div style={{ width: 120, height: 6, background: "rgba(255,255,255,.2)", borderRadius: 3 }}>
               <div style={{ width: `${(passed / checks.length) * 100}%`, height: "100%", background: C.orange, borderRadius: 3, transition: "width .3s" }} />
             </div>
+            <Btn onClick={clearAll} icon={Trash2}>Clear All</Btn>
           </div>
         </div>
       </div>
@@ -496,7 +518,7 @@ export default function SyllabusBuilder() {
         </div>
 
         {/* form */}
-        <div className="p-5" style={{ flex: "1 1 420px", minWidth: 340, maxWidth: 620 }}>
+        <div ref={formRef} className="p-5" style={{ flex: "1 1 420px", minWidth: 340, maxWidth: 620 }}>
           {tab === 0 && (<>
             <H>Course</H>
             <div className="flex gap-3 flex-wrap">
@@ -720,7 +742,7 @@ export default function SyllabusBuilder() {
           <div className="flex items-center gap-2 mb-2" style={{ color: C.slate, fontSize: 12, letterSpacing: 1 }}>
             <ChevronRight size={13} style={{ color: C.orange }} />THIS IS EXACTLY WHAT EXPORTS
           </div>
-          <div style={{ background: "#fff", border: `1px solid ${C.line}`, borderRadius: 3, padding: "34px 40px",
+          <div ref={previewRef} style={{ background: "#fff", border: `1px solid ${C.line}`, borderRadius: 3, padding: "34px 40px",
             maxHeight: "calc(100vh - 130px)", overflow: "auto", boxShadow: "0 1px 4px rgba(11,34,64,.08)" }}>
             <style>{DOC_CSS}</style>
             <div dangerouslySetInnerHTML={{ __html: docBody || `<p class="soft">Start on the left. The document builds itself here.</p>` }} />
