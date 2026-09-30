@@ -302,6 +302,7 @@ export default function SyllabusBuilder() {
       ["Meeting time", d.meeting],
       ["Location", d.location],
       ["Prerequisites", d.prereq],
+      ["Lab", d.lab],
       ["Instructor", d.instructor],
       ["Email", d.email],
       ["Office", d.office],
@@ -520,6 +521,7 @@ export default function SyllabusBuilder() {
             <Field label="Room"><T value={d.location} onChange={(v) => set("location", v)} placeholder="Humanities 407" /></Field>
             <Field label="Department"><T value={d.dept} onChange={(v) => set("dept", v)} placeholder="Department of Political Science and Global Studies" /></Field>
             <Field label="Prerequisites"><T value={d.prereq} onChange={(v) => set("prereq", v)} placeholder="None" /></Field>
+            <Field label="Lab"><T value={d.lab} onChange={(v) => set("lab", v)} placeholder="(Lab Title & Number, if applicable) Ex: Geoscience 110L" /></Field>
           </>)}
 
           {tab === 1 && (<>
