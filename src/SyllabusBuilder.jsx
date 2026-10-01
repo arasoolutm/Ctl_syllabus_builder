@@ -2,15 +2,13 @@ import React, { useState, useMemo, useRef } from "react";
 import {
   BookOpen, User, MessageSquare, Target, Library, Scale, Gavel,
   ShieldCheck, CalendarDays, FileDown, Check, AlertTriangle, Plus, Trash2,
-  Save, Upload, Printer, Lock, Info, ChevronRight
+  Save, Upload, Printer, Lock, Info, ChevronRight, Moon, Sun
 } from "lucide-react";
 
 /* ============================================================
    UTM SYLLABUS BUILDER  ·  Center for Teaching and Learning
    Fill in the left. Watch the right. Export to Word or PDF.
    No accounts, no server, no stored data.
-
-   DELETE LATER: COLOR AT LINES: 463 / 487
    ============================================================ */
 
 const LOGO = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAggAAACkBAMAAAAAk8vsAAAAMFBMVEX///////7+/v79/f38/Pz18/HY1tTOnmv/hQL/gwL/gwB5hpZ+bmElOVQNJUQLI0JmWK/zAAAZI0lEQVR42u2ce3wUZZb3v1XdDbhAUh0EFKFT3YmAjomdEFg0XJoQXlm5yIuK7qoMgwu6M4oIrtdBLrP6ssu7EFHmA7hgZmDed1WQiJdF7WTaENEZQqaMzgyXpFMkERgu6UrU+Qh0Ve0f3Z10hw4kYRzy2U/9Ph+gq+o5z+X3nOec85yqB7BgwYIFCxYsWLBgwYIFCxYsWLBgwYIFCxYsWLBgwYIFCxYsWLBgwYIFC39VCElvSvEXTXEXbi2+nKkllLwQqer32nnR1Zn6RTnYHRL+orClOwWTUIpChqQriDlmFaJbgpARHUKGdEaFjNQqRG9zLYg5ugKjzCoipclIrcLjBLO5FjIks9ntB7CHbZPCgWgZjyAJJiFDZRQHsHkPxNrP7KfYb1LA40QKNdd2mgTHrPirN9t+yt/64p8YOwf6LkrA+ZLOc6XjVSDyVysSr+I6ogLyV9OS1y8akT8Rphyz3rSHL9q2PVkLI0fF6/wOs+3iQSmRhMnei9Z+Qlbl8SswmyVOTOhTHZKeeG9PqtBQlLU45IQvViiA/IOXtNQR8g3rtQ1S1uKz2fiWpZsPNY1/rPmqrPHLUoWGVYeqtYaiZenNEuYT1Ve9rTk5dLusYjt1kEHnlG82pQt/fEReJhMSJL5YP2SFdm7e/+e7ByKL4KYfrOLFFwKqb1l6swRLlSQrSExOZdzPOF2xfSW1LyVebDGiguw0gqIcVN3CkCLPuRZjU65ru3roqOfQ2qNIAOqpBs/h7ODhomuP1v9JGHy/r36TeBjlTy3utcP2bs1wbWsa8lL6tpZNonxorSilnFvvObRu7LtpkPXO6rWr50nBTWJKMZq7qS43O9gMJ+s9W1xb5a0RTbD/YdW/PvP1mga5fpMoH1orSFInl4M8cpIUZ/yeadUEm32lM15Hmp69N+ciltEMPWfgy2ooKRs5xF6dHe51orwoQFXvLIP+6gD6vrciAEC/+iWKQq8a2WDRymPZOnNFNcDctYN1qBp2bZi+h1wGi5YNJGuUovRtWFJclnVt2Gb7aiCLZi9WKBvpMowj1xNs8fb9ZJ7S/+iShvKjw3QAfM+3zKLv17uLAixaNpD+dypK55YDmG1jNeL8gSkQT4LRBAk32sEIuWth5t8VQmH4K9PulWxQiAR2H3dpLVqkaruPFrD7voY8TTLuCNpNUWOUSU4lk3+x1sQuVk4IFAoU8uko7D7BPrl4nYHgOO+YuGW+QiGSHHScKxSwFwoNiv1a5xPzev12fADAfuzmBQX1Q5UxFUQq6LRN6BCuqWJXiqtGELQ3XWEIGAHsCthGmQBGANNIiZnfAAYQkOC0WTZpyaLTGKALKPDrv2l+QBFv2q0RBq3flGLsAcJ6CBeN9L5ve4FdNMKgwppgA+Ea9SPCQ9S03/14W3Tujhm7w7iKl5utFVwmCR5DkrpQvIlT6SqKggswZBXQS0EbDMABdV9dEn/1es6I6pvizEoZs1TmTg0DVPbaoQUAuy1gNobtiM+x7aeRpW8Yv8QW9QsUPZ8195aIP7gpG7mGwP4VM9S4Ci6DhIza3s4ukNAkhd5RgVERj60C9FoI7sjjKb3kZJHOuRUrdhTFragh2vV7PUPkGoA5g1MACJcuOpdeawwJZawhNrPihHIAA6ioXD5mSHYVAJKzrwqiETGIC3unXOZyEGvHFHQhtDI17VAI4ECcFZ46FkE6BiBu4ruk4cLGovw7/6GNhOvUkcKxc/0Art4olQPw3P05S/tj9F23asCrDbURKo1A20odwlP7Y6O9I9obgKtXS+Xa5ZHg+tsc5M6TEDJ/s9toT8xnxfB0bwDzYcdz7Sg1AfRbA96dO9tuaiXLzdwiCeD0c70f1AA0j7E9DF9+yfqvHy26QJ/CQ5SJC9UkTvDMs70fvFREcAlF+CpHSOuKIvymxHXB3ZObN2+OdM/cvKHdpDhOA/DNDMbExYFfbhV+6C2PLOTNmyLd3fCY7X4fhMMvP+IcvTdJV99u+riVhG/lCMEamJs3oVwWCemTEbpiFo13k6x52+RRk6OV3FlYFE7YsMlkA4RHK33ig+Fz0sxF9ZGfeRPXVwHYPxDmAX1nF2xY5EyyQpvMNpV9W6gDE7NeAfImFF2eJpiy2IXFQJ2RbIen6wf02M+azY5Y1eZsCerVCD2NM5gUp9sudfi5qEopH229GyA8PjS8Ars41yjcqiUfTKxttUmc5YVcoxxA8RdfHglpXVEDkE4b8XbHB+DFDjbwghd7pu+/ogbpPK7GwnHzSzRsml0KjlaaAdE0vQBD1WuOuCId9RWy0o4Xm/5Sb58XQ7ZrPsxojeDDiEyTLdoe0PgWDwzIGJ9z0oUIPnyXR0KwSzECmthW3I/DD6Bo4QBnED7HUKjx77s5unCytevC/n2PbFfo75weMBrWmoAhCJUA6mv8UgMME7//vlTDVEz96y1pjyicv85fWX4yCx3td4Dxa8SI7TgD/tiivFEbU1r7yeI1LgwTP4HLIkEc2KVgEYKtiir+xGt/3wfpDzHtLtsgufePPHnzhTUfHTwZUXMjvM720Ud7DmYj9loxfDbqIQ3EgfNsC3xA41v6bgVExzzxI//L+ye4H2Shc0ho3LwJ5tf7FiqrEP8s954vIzoedg5ZIAMMj4oCxqnn+7w/Z8932wPit/NsC2Qui4S0erNL0aK5u9UkyLObgsMlWaxfHKxeoo9oUpfUVy8Kejz6c1FnXr2xypb73Ywq5OFG7/keve9yEPa5gk9KMpjXnUoH5D+nqB73mTv31j/WNGjokOdDYvC6f+/91MESRR5uqAsbEIXHa48+2Qh4R6QEn5Kje/z67ctG/J+UH4+DXil1T8pypzNL8kifp83Kq8+YiDkHHna7L3AAwWfvzXEnVQO5dkuww3RILN8R+xevktcv0JY/EQ1fANHAFjGis0raJVOIPbHNKIncsOkXZFxaY/2gY8Zb0eei0fmkyoXIPnCP7OyCa6Buf1xmUsxNrVUBMdeoQs1LLQXbpCZN7BcbdvXkUrHQD5AXVsCQA2BkpkeCQTHKQYYc0tIqQcwNK/qo5rBKXr+SgjIgL7WUWPUAap50upXRYKH/rcIaFciQS7uQY7xAE0QWuN0XluxIE8y6JNHipfZmHadMZfX7TrR2ShOyx8pCc+dNQsh41paidc2MXmxH3nFA1qlkthG8JE2dyYH+UaYL+0cz9OGAYV3j4AqjM5owbKrg7kqwqO/Vz/xVOp/hDp1pU4YMZ2qo6vsiQfxW7trbiZqs+G2KzSvFi4f0L29GiObvzDPKKKepB9pGBTRVjXKaZ1qrGOUEM1Rl87ZJRcZqGx+oRSz0R2yGWOAHCk8rYE9o4ELBbmlCS1e20JjmtgSHpR9oX+JAuwtb60Vt7YX3DnRQjS0rMEfiZIk9ogsT/FPcNO2wexXCBy7efndIMCZ1TblMOT5tZuvzuUYobr/4yv7dhDA1QJDO3rfFEL4piqqCd/xcDWHIjaWGsF2N3vMtS9EQhmT3rsbUTA3A+TdZOozfVzpJE5oW3i6rgOeTR5ZIpFa98A6eW1e2NuBsWNrwxzjB7HA3SRDkLkXMIbMuwaBkDUhIQ0iL79PcsZhD+q5h1xLpu4rWKGlABnwq71rFjbFkRMuuJRnwqSxqbqIVOY8LYN/3WXppyf/OveXI+SwdMViaU3vQkZnxqjJVvUWUWhvofdSj5sQEhXD3NUFKcDId7qhjhU4lem/JlDRA0iQtEpd8O/YDb0TJ09zf8crhjdL90Wmvqnr1UOqJabwSennwdC127/BG6fg0GPNRTEoCGJc9bGkxG+77WcYJAeRbvJ9Og14fTMwdpv7qjUOSWQWQIRnhw5PLvNRqgDjpTLdJcHRtE0194p7a2f9hgL/3HiwCuPfqxnGv/eLMFADHByPI+7Bo5ZPZ0cKZNYveLi8oK/zV1ctfiN3L+3DdyiO+gG38Hc1NUamxYN/31pJfFsKvhPUOwL30xLRCqLntYKqXxvyiohNTAHp9JmLzzaxPHQ1g//Gy7nuHdorRkcLETEJJQgmJTzYDXOU9txng/31mVPR5iUKA8B0HzcrMLStGxKa9xv4BNgN/5pbl1/iiKdTKzK2r3gG9YoRmRqUOmbjy9e3ZfsjcvnQo2D9Lf7DAD7bxRUWSpDb0R4oULZ7vVT7+W7RMGTC3PN1tEsKJove6kzpMU90TSB7mbpusgQS2PBOE3m5Ih0AYsN8QgrpRQvMLM2NMutWdgOpBeHR9tB7VI+nRyDEidVsquH50YkIZUFOwdi248o13w4BesX8lErUno0UzXJoE+yFYA9hv67530BMj+Y6TSZIGILbjYNYqVQUf6FUG2EU1LhBWw9mKflpLN2RdjQ9xzTohNf+u1q1Iu/Az0DSsvlGujihcuVhk4nKeT68FCI8LJXRdSxANmEZ3w+YufsfRrh1N3xvPSvjcfW0FzLNFgKuuWXzUk8C4rmvNth2+Dho4v0wS6qVoz8M3abrMrFDMJRXNijdPe4rjGjfOPee6zJcv3YQypR3rSnzetTjqQPLvSlxE2aZktqpCexLOFWOn1Vqn1M9S2q7qUxKLxieuDaP48jJLlxHgtxuCnBBSR1Nxth2Jy0zSgpr9/g5UweYDtJhCqf+hqZrkzI1cHd1TEr8C7AnVij6ujCZQ2/HO2DYsohbHBan9tGvHb5ReTK68YlYAcF4fDbFUFaTm/kokMxVTrmgDQ+P1S8wOXClNuJjJjXax33JpQPtpP78udXByVTAUMNFGTs+LTHMmELLv+LIgMqveJA20CfY4EsTh8yLDaHn9aPOLFe0ebtRa/nlvMinHPBl9WKj5xcqGyQA1QAnTppcVykA4bqRir1lyO8GeR8KxaB+NW9eZ7afduFUxr7nDm4y6xTIMU4Ubjswojc57fZ1pW/OP/saCxKLu26R4EsYs5krZhOTwAeFWS/7NxqLmf85u17MZDcKSRRdK8RuAhnW/YMD/XXi7UlAG1DdCxqbZm0sK/QkNuFuiVwUAn3WUqbtSJPgBymJ9DN8a8F5zRzBhzYZHK94R1YmeMyKlAWqDJuBJO/JCsS8AYZ/iQ7zl+gXTRh2IK+rYuipecBE9SxOcC4F7fLtj1xUzGoTHlyeWaZxZb9uR8PlB2kJgjm83oGc9/zIIGVvunimrUDHjCzkkZKS9f7sv4gEcC4F7YllBaSHgWFHfQeL6CpFgWw0IbR7dGK14R5Yn9jE4SmvnOcU4qS+UH+WA5hy7czYQHvfvP3OGEG/ZNyES5doTGhBXx3ZzPc9FtvXJaHye9gGTcX65lCx2jkjpntuWqUghMX+mDFRsWKYCjIy3r4lvDgVnD1sOp39iwqClcSlqQbsgYPryD6ukMfGes+mZEDijm9qgb8OphyY5Ndu/LFIhnLfh1fdzBYRIhGWe+YkJg16J8fmU1ibYcwzjGwB3xoU1fZf/QotlmGKm0beuKPV+tS1YMDYD9Ik6wvLCN9566AlJ0ssBKvMqC+c8lGv2mVulAH0TGtBeBfhuidazSMgzwVk8O3Ha28fJFfuKmp/MbiclvBaVMvyZQze8+sFE2/2KAlTafG/s2pNrzgy2NVCSILhrSQ9zkUoYxL6zE6Z9xTUXqELAO3h6Q3WClL1P60qvCRb6bzsozYqMTS/NHHrbR97op1xKGLza7KJIySoD7COkHhg2C2fjd3wVG6XmJ9vFzhUzEF5obpfCOlekRTYMYPjtty4XZC26WawpnzA9VWjLf1TvLIlPJxxRemDYrJ8rjguPwrcGzMHTE+NkY7TCYCmZVE1MquJ1HNXh6FiNwOjPHXHi3ybmVGapPdBFJuz4ItPekkhC4yLEn3ovTCfIc2IdD98YQmjdKBm2hLxJ59IJV5aEsBLfvjFaYXBivp66sxr5n7dThQCi/E8z5db8C/rY+bGrxDcLYTWhgcClz7h0BPP75CE7ftrXIu5oN+C+yyXbW0mkdqXJrSMwxd+5tI4acF3kqtMkCMyWv8fw+cv4aT+kkd+uwJevHxVuCyWRmtkaXUs1Bcagr2PbC/omFm1MuGrwdctFCpKreUDSUPcvgfFZLycGTIKt3YrxrVtpd18g1RCKhZK2gVIJOI7G1OmOoCvupaE4/rm/ixccZkt2vq4TccKgxO+dpv4Fsyq+ip0/18X4gCmqdZrU0hYwtZeatHfLgtJ10eOCwh/M+vrzV0cjDNu3cnUcCeKE/XFWVSz4+PDjWreCJaf2pHb5pjRBSgafX3S7wx9/ZAgY0jdx0x4p/Y3U2BYwRQ+byeDz40nrV/poSnlvcccTAOK47LPlpqg9mS2rwKRPU19WQQZvpeh2n/7kw/MA5FbiSevnf7T/O3q3SBDSSHi3LnbnUK3NMLEX1ET8tHwUyjxGba3jx97jLvETuf7q6Ca6Yt+KSJ+r5Wpb7N6MhkgdKoLfYwSDjkfWH5ePkz+UdNXZb9/W344LEBpx//bJITHVX3YioFN4FZriMWprHXsm7h5XcT1SpccIBu0/WX9c6GbYnGoIiZayO3HRJ1vNwdHUl1izSArN/w/uHjQ711yTovRlkL912hUvQOUDzcNjizA8TskBCP+9xIJXmTJ8dm7o2fR6wfbzG2vA8eGw4WHGq841Wgnw6M1LsxTR/5jW+4dbxDkDH3Sb29RwPcJ705jivmdS6LfjAt0jocOzHlqnv/QV7f/lxnx/s6ICrjGPC2mbnkGQm9G3D53zr07z/c0lxE27PG2plNJ6r/H53YA8aJXA6qejUuG8qtxrj6wJOe/NWjAuQMtbPtYMCjnvydm3TceV/5iTzc8iyM3moRKzV7mTsbXgbm7W7xraaU1QOzUyUzvSWeeZPTHX1ISxrpmArddqiZDgCSFIxoMT6ldLIWGsN7pWjdEK2I79TAgJY9Org7FUA5ro+M82qXfGBSqn7skZsNoZOvPE9jBUVZlPDFjtDKXume5VbMdeFggJnpAgSMaS8Y1vyDFB893sqs6SUN+rUyMLGdv6j+wcCdrxpwD0IGDWrQZTcwKY2/RI5suMRmRG/Yy7VdN4urU0oPd91KEZ8VJbdcifvPBuePNwebYC5G44tQDOby4pKMPk6dai57bp4sY2wVflDmKhJFbMvtLTiZEFTyjK1NbPes26zwJa1zPvFyzRJLnQC77L9gXANrEMwB5d5JFcu+gra1c0MSzwBTqfT+hUoGyYL+udjpwy0zUQ+gUi7poQmoQTjDIoDLU+AWiU1cg9Zzh2z8gMq1CYIIVelieBWRst5M+UgdNlcQ0IEjRVxQuapXRaE0Tbv7g7owi7g9LlakLPQLLQx+hvXto0mlQb/A9B0uXg0i59AjKkB/5nk6CqlzzhYWj7O3XY4K+ize5aQJQNFcRsBUQZQVcRvRogVXmQqjyCriLKyc8UJCWhZZf3kk7PSBqFXxEYtRD75stQoj9FXyB6EIYgEETs+OSDvYNMhHYJw68dzlJ6CAfyaN4E0ZPTtxgxI6tKZfjNOE/ujv3/ODv/MSScHMgplTEmO43OkmCcjz/WmNw/bg/3FEVIu+bx+4oC4vEPfh9QxWOvrlDF61eDtPTLP24yNSRj1z2y8dA1jx9bZAx6/GxVbaczS6JyiVBB/VN2jzFrykYyVbLvvGq2imv28AaM37+UMvLzNYp48Bnh7DPVTBV+r20URlRrr7z0b/07n15Ty0zt4opQHuwxJBj5qqcRYx43g+tHjqNgq8OcIY6b9W+btcObXxuXr9lS8usG7JC9dV9rnSfBuFHTLm4WlR4UGIn0Trd9myMp0OhKmymjS7jzBcl4dzK2ya9rLZKOuEvJr9AkvSuJ1i/WGRfdP+7vOasBDLN5/KRjIQTsx88enSsDqAGz5VdDz6Dr1ykGYJjL7TvkLkSMgHmtVnex/eM7Cj2JBXVe0+wiwBRr1UwV4Pycs+WRg0HRNxnCHu1/7e0aCYa4Dq1jRTic1aMiPql4eNPcZmDivJmvpTUCabXrn70p4r9iKn3d2j4PdI0E1BvqmjokwdzeoxQBfu34akiqBsa8hVIvE2haS3sn37jp6Itq10gwqrdS16F/vKlncSAFbXNOAbZj8lOL037oAzZoS1ralbp13WBv10jAuPF3ZlMHdmh9z9oza5xj/i9DDoSvvsgYqc4EyC0aXJ2ovnLFxpYVXSSBL15XtaZkyqDpstqjSBhAvpJdDD75zu0F+epouwhpW8XpMgMQATt27IIavnWFsyt7BwA9bePDstiUZNIr49yneeWDJrGUQPZIV8lav2/eEk0uWeb3agQ8znlF9aWSGIBKwgHvrJep2P98VzWBJu/GOiMJB/runqUI7vsGvPfayevftr93zPtzz5/n2d8btNL29pDAeNn3iDTsXTnjPmnagz+Y9IeC8OjqrmoCKJ5N1xdcuJH6U1wiIRSKX5pXBv2lZdOuXR948qe3Oz5zoJzYcnvgzJbbK6aW1AdveNpxe72Lzxw6exwp8t7pU7pR/6guKk9PgtzJe1zypZonyf+yFXdaP3Z+B2h3DvyviUzZ+DirugCj3IffNgnj40kYZfaJpRRCOECmzOlvZPxgD2PBggULFixYsGDBggULFixYsGDBggULFixYsGDBggULFixYsGDBggULFixY6DH4b1fGPQSWKw1uAAAAAElFTkSuQmCC";
@@ -199,15 +197,15 @@ const blank = {
 
 const Lbl = ({ children, hint }) => (
   <div className="mb-1">
-    <span className="text-xs font-semibold tracking-wide uppercase" style={{ color: C.slate }}>{children}</span>
+    <span className="text-xs font-semibold tracking-wide uppercase" style={{ color: "var(--muted)" }}>{children}</span>
     {hint && <span className="ml-2 text-xs" style={{ color: "#8894A8" }}>{hint}</span>}
   </div>
 );
 
 const inputBase = {
-  width: "100%", border: `1px solid ${C.line}`, borderRadius: 4,
+  width: "100%", border: "1px solid var(--border)", borderRadius: 4,
   padding: "7px 10px", fontFamily: "Cambria, Georgia, serif",
-  fontSize: 14, color: C.ink, background: "#fff", outline: "none",
+  fontSize: 14, color: "var(--input-text)", background: "var(--surface)", outline: "none",
 };
 
 const T = ({ value, onChange, placeholder, mono }) => (
@@ -225,7 +223,7 @@ const Field = ({ label, hint, children }) => (
 );
 
 const Note = ({ children }) => (
-  <div className="flex gap-2 p-3 mb-4 rounded text-sm" style={{ background: "#F0F5FA", color: C.slate, lineHeight: 1.55 }}>
+  <div className="flex gap-2 p-3 mb-4 rounded text-sm" style={{ background: "var(--surface)", color: "var(--muted)", lineHeight: 1.55 }}>
     <Info size={15} style={{ color: C.navy, flexShrink: 0, marginTop: 2 }} />
     <div>{children}</div>
   </div>
@@ -236,6 +234,7 @@ const Note = ({ children }) => (
 export default function SyllabusBuilder() {
   const [d, setD] = useState(blank);
   const [tab, setTab] = useState(0);
+  const [isDarkMode, setIsDarkMode] = useState(false);
   const fileRef = useRef(null);
   const frameRef = useRef(null);
 
@@ -442,7 +441,6 @@ export default function SyllabusBuilder() {
     r.onload = () => { try { setD({ ...blank, ...JSON.parse(r.result) }); } catch { alert("That file could not be read as a saved syllabus."); } };
     r.readAsText(f); e.target.value = "";
   };
-
   /* ---------- sections ---------- */
   const TABS = [
     { n: "Course", i: BookOpen }, { n: "Instructor", i: User }, { n: "Welcome", i: MessageSquare },
@@ -451,16 +449,26 @@ export default function SyllabusBuilder() {
     { n: "Export", i: FileDown },
   ];
 
-  const Btn = ({ onClick, children, icon: I, primary }) => (
+  const Btn = ({ onClick, children, icon: I, primary, color = "var(--text)" }) => (
     <button onClick={onClick} className="flex items-center gap-2 px-3 py-2 rounded text-sm font-semibold"
-      style={{ background: primary ? C.navy : "#fff", color: primary ? "#fff" : C.navy,
-        border: `1px solid ${primary ? C.navy : C.line}`, cursor: "pointer" }}>
+      style={{ background: primary ? C.navy : "var(--surface)", color: primary ? "#fff" : color,
+        border: `1px solid ${primary ? C.navy : "var(--border)"}`, cursor: "pointer" }}>
       {I && <I size={15} />}{children}
     </button>
   );
 
   return (
-    <div style={{ fontFamily: "Cambria, Georgia, serif", background: C.dark, minHeight: "100vh" }}>
+    <div style={{
+      "--page": isDarkMode ? "#101820" : C.wash,
+      "--surface": isDarkMode ? "#1b2733" : C.paper,
+      "--input-text": isDarkMode ? "#fff" : C.ink,
+      "--muted": isDarkMode ? "#c1cad4" : C.slate, 
+      "--border": isDarkMode ? "#405064" : C.line, 
+      fontFamily: "Cambria, Georgia, serif",
+      background: "var(--page)",
+      color: "var(--text)",
+      minHeight: "100vh",
+    }}>
       <iframe ref={frameRef} title="print" style={{ position: "fixed", width: 0, height: 0, border: 0, left: -9999 }} />
 
       {/* masthead */}
@@ -474,6 +482,13 @@ export default function SyllabusBuilder() {
             </div>
           </div>
           <div className="flex items-center gap-2">
+            <button type="button" onClick={() => setIsDarkMode((current) => !current)}
+              className="flex items-center gap-1 px-2 py-1 rounded text-xs font-semibold"
+              style={{ background: "rgba(255,255,255,.08)", color: "#fff",
+                border: "1px solid rgba(255,255,255,.35)", cursor: "pointer" }}>
+              {isDarkMode ? <Sun size={14} /> : <Moon size={14} />}
+              {isDarkMode ? "Light Mode" : "Dark Mode"}
+            </button>
             <div style={{ color: "#B9C6D8", fontSize: 12, marginRight: 6 }}>{passed} of {checks.length} complete</div>
             <div style={{ width: 120, height: 6, background: "rgba(255,255,255,.2)", borderRadius: 3 }}>
               <div style={{ width: `${(passed / checks.length) * 100}%`, height: "100%", background: C.orange, borderRadius: 3, transition: "width .3s" }} />
@@ -484,13 +499,13 @@ export default function SyllabusBuilder() {
 
       <div className="flex flex-wrap" style={{ alignItems: "flex-start" }}>
         {/* left rail */}
-        <div style={{ width: 150, background: C.dark, borderRight: `1px solid ${C.line}`, minHeight: "calc(100vh - 62px)" }}>
+        <div style={{ width: 150, background: "var(--surface)", borderRight: "1px solid var(--border)", minHeight: "calc(100vh - 62px)" }}>
           {TABS.map((t, i) => {
             const on = tab === i; const I = t.i;
             return (
               <button key={t.n} onClick={() => setTab(i)}
                 className="flex items-center gap-2 w-full px-3 py-2 text-sm text-left"
-                style={{ background: on ? "#EEF2F7" : "transparent", color: on ? C.navy : C.slate,
+                style={{ background: on ? (isDarkMode ? "#26384b" : "#EEF2F7") : "transparent", color: on ? (isDarkMode ? "#EEF2F7" : "#26384b") : "var(--muted)",
                   borderLeft: `3px solid ${on ? C.orange : "transparent"}`, fontWeight: on ? "bold" : "normal", cursor: "pointer" }}>
                 <I size={15} />{t.n}
               </button>
@@ -501,7 +516,7 @@ export default function SyllabusBuilder() {
         {/* form */}
         <div className="p-5" style={{ flex: "1 1 420px", minWidth: 340, maxWidth: 620 }}>
           {tab === 0 && (<>
-            <H>Course</H>
+            <H color={isDarkMode ? "#EEF2F7" : C.slate}>Course</H>
             <div className="flex gap-3 flex-wrap">
               <div style={{ flex: "1 1 150px" }}><Field label="Course code" hint="POSC 322"><T value={d.code} onChange={(v) => set("code", v)} placeholder="POSC 322" /></Field></div>
               <div style={{ flex: "2 1 240px" }}><Field label="Course title"><T value={d.title} onChange={(v) => set("title", v)} placeholder="American Foreign Policy" /></Field></div>
@@ -526,7 +541,7 @@ export default function SyllabusBuilder() {
           </>)}
 
           {tab === 1 && (<>
-            <H>Instructor</H>
+            <H color={isDarkMode ? "#EEF2F7" : C.slate}>Instructor</H>
             <Note>Office hours are the single most under-used thing on a syllabus. Students who work shifts or commute from Dresden or Union City often cannot make a fixed midday block. Naming an alternative, even just "email me and we will find a time," changes who walks through the door.</Note>
             <Field label="Your name"><T value={d.instructor} onChange={(v) => set("instructor", v)} placeholder="Dr. Jane Doe" /></Field>
             <Field label="Email"><T value={d.email} onChange={(v) => set("email", v)} placeholder="jdoe@utm.edu" /></Field>
@@ -538,7 +553,7 @@ export default function SyllabusBuilder() {
           </>)}
 
           {tab === 2 && (<>
-            <H>Welcome and Description</H>
+            <H color={isDarkMode ? "#EEF2F7" : C.slate}>Welcome and Description </H>
             <Note>The description is what the catalog says. The welcome is what you say. Research on student-centered syllabi is consistent that the second one moves how students read everything after it, so it is worth four sentences of your own voice.</Note>
             <Field label="Why this course matters" hint="your voice, not the catalog">
               <A rows={6} value={d.welcome} onChange={(v) => set("welcome", v)}
@@ -548,8 +563,8 @@ export default function SyllabusBuilder() {
           </>)}
 
           {tab === 3 && (<>
-            <H>Learning Outcomes</H>
-            <label className="flex items-start gap-2 mb-4 text-sm" style={{ color: C.slate, cursor: "pointer" }}>
+            <H color={isDarkMode ? "#EEF2F7" : C.slate}>Learning Outcomes</H>
+            <label className="flex items-start gap-2 mb-4 text-sm" style={{ color: "var(--muted)", cursor: "pointer" }}>
               <input type="checkbox" checked={d.showPrimer} onChange={(e) => set("showPrimer", e.target.checked)} style={{ marginTop: 3 }} />
               <span>Include the explainer box in the exported document. It tells a new faculty member what an SLO is, how to test one, and why the Gen Ed outcomes belong here. Uncheck it, or delete the box in Word, once your outcomes are written.</span>
             </label>
@@ -561,17 +576,17 @@ export default function SyllabusBuilder() {
                 <button onClick={() => drop("outcomes", i)} style={{ color: "#9AA5B5", marginTop: 8, cursor: "pointer" }}><Trash2 size={15} /></button>
               </div>
             ))}
-            <Btn onClick={() => push("outcomes", "")} icon={Plus}>Add outcome</Btn>
+            <Btn onClick={() => push("outcomes", "")} icon={Plus} color = {isDarkMode ? "#FFFFFF" : C.slate}>Add outcome</Btn>
             <div className="mt-6">
               {OUTCOME_LIBRARY.map((g) => (
-                <div key={g.group} className="mb-4 p-3 rounded" style={{ background: "#fff", border: `1px solid ${C.line}` }}>
+                <div key={g.group} className="mb-4 p-3 rounded" style={{ background: "var(--surface)", border: "1px solid var(--border)" }}>
                   <div style={{ color: C.navy, fontWeight: "bold", fontSize: 13 }}>{g.group}</div>
-                  <div style={{ color: C.slate, fontSize: 12, margin: "3px 0 8px" }}>{g.note}</div>
+                  <div style={{ color: "var(--muted)", fontSize: 12, margin: "3px 0 8px" }}>{g.note}</div>
                   {g.items.map((it) => (
                     <div key={it} className="flex gap-2 items-start mb-2">
                       <button onClick={() => setD((p) => ({ ...p, outcomes: [...p.outcomes.filter((x) => x.trim()), it] }))}
                         style={{ color: C.orange, marginTop: 2, cursor: "pointer" }}><Plus size={14} /></button>
-                      <div style={{ fontSize: 12.5, color: C.slate, lineHeight: 1.45 }}>{it}</div>
+                      <div style={{ fontSize: 12.5, color: "var(--muted)", lineHeight: 1.45 }}>{it}</div>
                     </div>
                   ))}
                 </div>
@@ -580,14 +595,14 @@ export default function SyllabusBuilder() {
           </>)}
 
           {tab === 4 && (<>
-            <H>Materials</H>
+            <H color={isDarkMode ? "#EEF2F7" : C.slate}>Materials</H>
             <Field label="Required texts"><A rows={4} value={d.texts} onChange={(v) => set("texts", v)} placeholder="Hastedt, G. P. (2020). American Foreign Policy: Past, Present, and Future (12th ed.). Rowman and Littlefield." /></Field>
             <Field label="Cost note" hint="tell them the real number, and the free path if there is one"><A rows={2} value={d.costNote} onChange={(v) => set("costNote", v)} placeholder="The textbook runs about $60 used. A copy is on reserve at Paul Meek Library. Tell me before the second week if cost is a barrier." /></Field>
             <Field label="Technology and platforms"><A rows={3} value={d.tech} onChange={(v) => set("tech", v)} placeholder="Canvas for all materials and submissions. A phone or laptop microphone is enough for the audio assignments." /></Field>
           </>)}
 
           {tab === 5 && (<>
-            <H>Assessment and Grading</H>
+            <H color={isDarkMode ? "#EEF2F7" : C.slate}>Assessment and Grading</H>
             <div className="p-3 mb-4 rounded flex items-center gap-2" style={{
               background: Math.abs(weightTotal - 100) < 0.01 ? "#EAF6EF" : "#FEF6E7",
               color: Math.abs(weightTotal - 100) < 0.01 ? C.good : C.warn, fontSize: 14, fontWeight: "bold" }}>
@@ -595,7 +610,7 @@ export default function SyllabusBuilder() {
               Weights total {weightTotal}%{Math.abs(weightTotal - 100) < 0.01 ? "" : `, which is ${weightTotal > 100 ? "over" : "under"} by ${Math.abs(100 - weightTotal).toFixed(1)}`}
             </div>
             {d.items.map((x, i) => (
-              <div key={i} className="p-3 mb-3 rounded" style={{ background: "#fff", border: `1px solid ${C.line}` }}>
+              <div key={i} className="p-3 mb-3 rounded" style={{ background: "var(--surface)", border: "1px solid var(--border)" }}>
                 <div className="flex gap-2 mb-2">
                   <div style={{ flex: 3 }}><T value={x.name} onChange={(v) => setDeep("items", i, "name", v)} placeholder="Final paper" /></div>
                   <div style={{ flex: 1 }}><T mono value={x.weight} onChange={(v) => setDeep("items", i, "weight", v)} placeholder="%" /></div>
@@ -604,14 +619,14 @@ export default function SyllabusBuilder() {
                 <A rows={2} value={x.desc} onChange={(v) => setDeep("items", i, "desc", v)} placeholder="What it is, how long, when it is due." />
                 {realOutcomes.length > 0 && (
                   <div className="mt-2">
-                    <div style={{ fontSize: 11, color: C.slate, marginBottom: 4 }}>WHICH OUTCOMES DOES THIS PRODUCE EVIDENCE FOR?</div>
+                    <div style={{ fontSize: 11, color: "var(--muted)", marginBottom: 4 }}>WHICH OUTCOMES DOES THIS PRODUCE EVIDENCE FOR?</div>
                     <div className="flex flex-wrap gap-1">
                       {realOutcomes.map((_, oi) => {
                         const on = x.slos.includes(oi);
                         return (
                           <button key={oi} onClick={() => setDeep("items", i, "slos", on ? x.slos.filter((z) => z !== oi) : [...x.slos, oi])}
                             style={{ fontSize: 12, padding: "2px 9px", borderRadius: 11, cursor: "pointer",
-                              border: `1px solid ${on ? C.orange : C.line}`, background: on ? C.orange : "#fff", color: on ? "#fff" : C.slate }}>
+                              border: `1px solid ${on ? C.orange : "var(--border)"}`, background: on ? C.orange : "var(--surface)", color: on ? "#fff" : "var(--muted)" }}>
                             {oi + 1}
                           </button>
                         );
@@ -621,7 +636,7 @@ export default function SyllabusBuilder() {
                 )}
               </div>
             ))}
-            <Btn onClick={() => push("items", { name: "", weight: "", desc: "", slos: [] })} icon={Plus}>Add assignment</Btn>
+            <Btn onClick={() => push("items", { name: "", weight: "", desc: "", slos: [] })} icon={Plus} color = {isDarkMode ? "#FFFFFF" : C.slate}>Add assignment</Btn>
             {unmapped.length > 0 && (
               <div className="mt-4 p-3 rounded flex gap-2" style={{ background: "#FEF6E7", color: C.warn, fontSize: 13 }}>
                 <AlertTriangle size={15} style={{ flexShrink: 0, marginTop: 2 }} />
@@ -632,15 +647,15 @@ export default function SyllabusBuilder() {
           </>)}
 
           {tab === 6 && (<>
-            <H>Course Policies</H>
+            <H color={isDarkMode ? "#EEF2F7" : C.slate}>Course Policies</H>
             <Field label="Attendance"><A rows={3} value={d.attendance} onChange={(v) => set("attendance", v)} placeholder="Say what counts as present, what happens after an absence, and who to tell." /></Field>
             <Field label="What engagement looks like here" hint="optional, but it removes a lot of guesswork"><A rows={3} value={d.participation} onChange={(v) => set("participation", v)} placeholder="Merely showing up and sitting through the class is not participation. Asking questions during Q and A, contributing to project discussions, and showing up to team meetings all count." /></Field>
             <Field label="Late work and make-up"><A rows={3} value={d.late} onChange={(v) => set("late", v)} placeholder="All assignments except exams can be made up with a 30 percent late penalty. Exams cannot be made up except for documented emergencies. Reach out before the deadline, not after." /></Field>
 
-            <div className="mt-6 mb-2" style={{ color: C.navy, fontWeight: "bold", fontSize: 14 }}>Artificial Intelligence Policy</div>
+            <div className="mt-6 mb-2" style={{ color: isDarkMode ? "#C1CAD4": C.slate, fontWeight: "bold", fontSize: 14 }}>Artificial Intelligence Policy</div>
             <Note>UTM's AI policy, effective July 1, 2025, requires every syllabus to state your expectations for student AI use. This is not optional, so pick a tier below. The three tiers match the policy: unrestricted, mixed, and total prohibition.</Note>
             {Object.entries(AI_POLICIES).map(([k, v]) => (
-              <label key={k} className="flex items-start gap-2 mb-2 text-sm" style={{ color: C.slate, cursor: "pointer" }}>
+              <label key={k} className="flex items-start gap-2 mb-2 text-sm" style={{ color: "var(--muted)", cursor: "pointer" }}>
                 <input type="radio" name="ai" checked={d.aiTier === k} onChange={() => set("aiTier", k)} style={{ marginTop: 3 }} />
                 <span>{v.label}</span>
               </label>
@@ -652,28 +667,28 @@ export default function SyllabusBuilder() {
           </>)}
 
           {tab === 7 && (<>
-            <H>University Policies</H>
+            <H color={isDarkMode ? "#EEF2F7" : C.slate}>University Policies</H>
             <Note>CTL maintains this language and checks it each term. Leave it checked and it stays current. If you edit it in Word after export, you own the accuracy of the edit.</Note>
             {Object.entries(LOCKED).map(([k, v]) => (
-              <div key={k} className="mb-3 p-3 rounded" style={{ background: "#fff", border: `1px solid ${C.line}` }}>
+              <div key={k} className="mb-3 p-3 rounded" style={{ background: "var(--surface)", border: "1px solid var(--border)" }}>
                 <label className="flex items-center gap-2" style={{ cursor: "pointer" }}>
                   <input type="checkbox" checked={d.inc[k]} onChange={(e) => set("inc", { ...d.inc, [k]: e.target.checked })} />
                   <Lock size={12} style={{ color: C.orange }} />
                   <span style={{ color: C.navy, fontWeight: "bold", fontSize: 13.5 }}>{v.title}</span>
                 </label>
-                <div style={{ fontSize: 12, color: C.slate, marginTop: 6, lineHeight: 1.5, maxHeight: 86, overflow: "auto", whiteSpace: "pre-wrap" }}>{v.text}</div>
+                <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 6, lineHeight: 1.5, maxHeight: 86, overflow: "auto", whiteSpace: "pre-wrap" }}>{v.text}</div>
               </div>
             ))}
           </>)}
 
           {tab === 8 && (<>
-            <H>Schedule</H>
-            <label className="flex items-start gap-2 mb-4 text-sm" style={{ color: C.slate, cursor: "pointer" }}>
+            <H color={isDarkMode ? "#EEF2F7" : C.slate}>Schedule</H>
+            <label className="flex items-start gap-2 mb-4 text-sm" style={{ color: "var(--muted)", cursor: "pointer" }}>
               <input type="checkbox" checked={d.calNote} onChange={(e) => set("calNote", e.target.checked)} style={{ marginTop: 3 }} />
               <span>Append the Fall 2026 registrar dates: add and drop deadlines, Fall Break, Thanksgiving, finals, and commencement.</span>
             </label>
             {d.weeks.map((w, i) => (
-              <div key={i} className="p-3 mb-3 rounded" style={{ background: "#fff", border: `1px solid ${C.line}` }}>
+              <div key={i} className="p-3 mb-3 rounded" style={{ background: "var(--surface)", border: "1px solid var(--border)" }}>
                 <div className="flex gap-2 mb-2">
                   <div style={{ flex: 1 }}><T value={w.label} onChange={(v) => setDeep("weeks", i, "label", v)} placeholder="Week 1" /></div>
                   <div style={{ flex: 2 }}><T value={w.dates} onChange={(v) => setDeep("weeks", i, "dates", v)} placeholder="August 24 to 28" /></div>
@@ -686,16 +701,16 @@ export default function SyllabusBuilder() {
               </div>
             ))}
             <div className="flex gap-2 flex-wrap">
-              <Btn onClick={() => push("weeks", { label: `Week ${d.weeks.length + 1}`, dates: "", topics: "", due: "" })} icon={Plus}>Add week</Btn>
-              <Btn onClick={() => setD((p) => ({ ...p, weeks: Array.from({ length: 15 }, (_, i) => p.weeks[i] || { label: `Week ${i + 1}`, dates: "", topics: "", due: "" }) }))}>Build 15 weeks</Btn>
+              <Btn onClick={() => push("weeks", { label: `Week ${d.weeks.length + 1}`, dates: "", topics: "", due: "" })} icon={Plus} color = {isDarkMode ? "#FFFFFF" : C.slate}>Add week</Btn>
+              <Btn onClick={() => setD((p) => ({ ...p, weeks: Array.from({ length: 15 }, (_, i) => p.weeks[i] || { label: `Week ${i + 1}`, dates: "", topics: "", due: "" }) }))} color = {isDarkMode ? "#FFFFFF" : C.slate}>Build 15 weeks</Btn>
             </div>
           </>)}
 
           {tab === 9 && (<>
-            <H>Review and Export</H>
+            <H color={isDarkMode ? "#EEF2F7" : C.slate}>Review and Export</H>
             <div className="mb-5">
               {checks.map(([label, ok]) => (
-                <div key={label} className="flex items-start gap-2 py-1" style={{ fontSize: 13.5, color: ok ? C.ink : C.warn }}>
+                <div key={label} className="flex items-start gap-2 py-1" style={{ fontSize: 13.5, color: ok ? (isDarkMode ? "#EEF2F7" : C.dark) : (isDarkMode ? "#FF8426" : C.warn) }}>
                   {ok ? <Check size={15} style={{ color: C.good, flexShrink: 0, marginTop: 2 }} />
                       : <AlertTriangle size={15} style={{ color: C.warn, flexShrink: 0, marginTop: 2 }} />}
                   <span>{label}</span>
@@ -708,11 +723,11 @@ export default function SyllabusBuilder() {
               <Btn onClick={exportPdf} icon={Printer} primary>Export to PDF</Btn>
             </div>
             <div className="flex flex-wrap gap-2">
-              <Btn onClick={saveJson} icon={Save}>Save my work</Btn>
-              <Btn onClick={() => fileRef.current?.click()} icon={Upload}>Load a saved file</Btn>
+              <Btn onClick={saveJson} icon={Save} color = {isDarkMode ? "#FFFFFF" : C.slate}>Save my work</Btn>
+              <Btn onClick={() => fileRef.current?.click()} icon={Upload} color = {isDarkMode ? "#FFFFFF" : C.slate}>Load a saved file</Btn>
               <input ref={fileRef} type="file" accept=".json" onChange={loadJson} style={{ display: "none" }} />
             </div>
-            <div style={{ fontSize: 12, color: C.slate, marginTop: 14, lineHeight: 1.55 }}>
+            <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 14, lineHeight: 1.55 }}>
               Word opens the export as a normal document you can keep editing. PDF opens your browser's print dialog, where you choose Save as PDF. Both come out in Cambria with the UT Martin banner and real Word heading styles, so a screen reader can navigate it.
             </div>
           </>)}
@@ -720,7 +735,7 @@ export default function SyllabusBuilder() {
 
         {/* preview */}
         <div className="p-5" style={{ flex: "1 1 460px", minWidth: 360 }}>
-          <div className="flex items-center gap-2 mb-2" style={{ color: C.slate, fontSize: 12, letterSpacing: 1 }}>
+          <div className="flex items-center gap-2 mb-2" style={{ color: "var(--muted)", fontSize: 12, letterSpacing: 1 }}>
             <ChevronRight size={13} style={{ color: C.orange }} />THIS IS EXACTLY WHAT EXPORTS
           </div>
           <div style={{ background: "#fff", border: `1px solid ${C.line}`, borderRadius: 3, padding: "34px 40px",
@@ -734,7 +749,7 @@ export default function SyllabusBuilder() {
   );
 }
 
-function H({ children }) {
-  return <div style={{ color: C.navy, fontWeight: "bold", fontSize: 17, marginBottom: 12,
+function H({ children, color = C.navy }) {
+  return <div style={{ color, fontWeight: "bold", fontSize: 17, marginBottom: 12,
     borderBottom: `2px solid ${C.orange}`, paddingBottom: 6, display: "inline-block" }}>{children}</div>;
 }
