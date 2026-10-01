@@ -1,8 +1,8 @@
-import React, { useState, useMemo, useRef } from "react";
+import React, { useState, useMemo, useRef, useEffect } from "react";
 import {
   BookOpen, User, MessageSquare, Target, Library, Scale, Gavel,
   ShieldCheck, CalendarDays, FileDown, Check, AlertTriangle, Plus, Trash2,
-  Save, Upload, Printer, Lock, Info, ChevronRight
+  Save, Upload, Printer, Lock, Info, ChevronRight, Eye, ChevronDown
 } from "lucide-react";
 
 /* ============================================================
@@ -13,17 +13,115 @@ import {
 
 const LOGO = "data:image/png;base64,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";
 
-const C = {
-  navy: "#0B2240",      // UT Martin PMS 289
-  orange: "#FF8300",    // UT Martin PMS 151
-  ink: "#1a1a1a",
-  slate: "#4A5568",
-  line: "#D8DEE7",
-  paper: "#FFFFFF",
-  wash: "#F4F6F9",
-  good: "#1E7A46",
-  warn: "#B45309",
+/* ---------- screen palettes ----------
+   Brand marks (navy, orange) are fixed by UT Martin identity standards and do
+   not change between palettes. Only surfaces, rules, and body text shift, so a
+   blue light palette stays recognizably the same page. The exported document is
+   never affected: it reads DOC below, which is locked to the standard set.
+   To add dark mode later, fill in PALETTES.dark and list "dark" in THEME_ORDER.
+   --------------------------------------------------------------------------- */
+
+const PALETTES = {
+  light: {
+    label: "Standard",
+    navy: "#0B2240",      // UT Martin PMS 289
+    orange: "#FF8300",    // UT Martin PMS 151
+    ink: "#1a1a1a",
+    slate: "#4A5568",
+    line: "#D8DEE7",
+    paper: "#FFFFFF",
+    wash: "#F4F6F9",
+    good: "#1E7A46",
+    warn: "#B45309",
+    field: "#FFFFFF",     // text inputs
+    railOn: "#EEF2F7",    // selected tab, table heads
+    noteBg: "#F0F5FA",    // Note boxes
+    okBg: "#EAF6EF",
+    warnBg: "#FEF6E7",
+    hint: "#8894A8",
+    faint: "#9AA5B5",     // delete icons
+    onNavy: "#FFFFFF",    // text on the masthead
+    onNavySoft: "#B9C6D8",
+    onAccent: "#FFFFFF",  // text on an orange chip
+    docPaper: "#FFFFFF",  // the preview page
+    docInk: "#1a1a1a",
+    shadow: "rgba(11,34,64,.08)",
+  },
+  warm: {
+    label: "Blue light",
+    navy: "#0B2240",
+    orange: "#FF8300",
+    ink: "#2A2318",
+    slate: "#5A4F3C",
+    line: "#E3D6BC",
+    paper: "#FBF4E6",
+    wash: "#F6EBD6",
+    good: "#1E7A46",
+    warn: "#B45309",
+    field: "#FFFBF2",
+    railOn: "#F2E6CE",
+    noteBg: "#F7EEDC",
+    okBg: "#EDF2DF",
+    warnBg: "#FAEFD6",
+    hint: "#8E8068",
+    faint: "#A2947C",
+    onNavy: "#FFFFFF",
+    onNavySoft: "#C6CEDA",
+    onAccent: "#FFFFFF",
+    docPaper: "#FDF7EA",
+    docInk: "#2A2318",
+    shadow: "rgba(90,70,30,.10)",
+  },
+  amber: {
+    label: "Blue light +",
+    navy: "#0B2240",
+    orange: "#FF8300",
+    ink: "#2E2415",
+    slate: "#5C4A2E",
+    line: "#DCC49A",
+    paper: "#F7E8CC",
+    wash: "#F1DEBB",
+    good: "#1E7A46",
+    warn: "#9A4A08",
+    field: "#FCF2DD",
+    railOn: "#ECD9B2",
+    noteBg: "#F3E4C6",
+    okBg: "#E9EDCD",
+    warnBg: "#F6E3BE",
+    hint: "#8A7854",
+    faint: "#9C8A66",
+    onNavy: "#FFFFFF",
+    onNavySoft: "#C6CEDA",
+    onAccent: "#FFFFFF",
+    docPaper: "#F9EDD5",
+    docInk: "#2E2415",
+    shadow: "rgba(80,55,15,.14)",
+  },
+  /* Reserved. Define these values and add "dark" to THEME_ORDER to ship it. */
+  dark: { label: "Dark" },
 };
+
+/* Order the Display menu offers. Add "dark" here once that palette is filled in. */
+const THEME_ORDER = ["light", "warm", "amber"];
+const THEME_KEY = "utm-syllabus-display";
+
+/* DOC is the print palette. It never moves, so Word and PDF exports come out in
+   UT Martin white no matter what a user picks on screen. */
+const DOC = { ...PALETTES.light };
+
+/* C is the live screen palette. Every component below reads it at render time,
+   so a palette change is one write plus one re-render. */
+const C = { ...PALETTES.light };
+
+const applyTheme = (key) => Object.assign(C, PALETTES.light, PALETTES[key] || {});
+
+const readTheme = () => {
+  try {
+    const k = window.localStorage.getItem(THEME_KEY);
+    return THEME_ORDER.includes(k) ? k : "light";
+  } catch { return "light"; }
+};
+const writeTheme = (k) => { try { window.localStorage.setItem(THEME_KEY, k); } catch {} };
 
 /* ---------- Institutional content maintained by CTL ---------- */
 
@@ -197,14 +295,19 @@ const blank = {
 const Lbl = ({ children, hint }) => (
   <div className="mb-1">
     <span className="text-xs font-semibold tracking-wide uppercase" style={{ color: C.slate }}>{children}</span>
-    {hint && <span className="ml-2 text-xs" style={{ color: "#8894A8" }}>{hint}</span>}
+    {hint && <span className="ml-2 text-xs" style={{ color: C.hint }}>{hint}</span>}
   </div>
 );
 
+/* The three themed values are getters so that this object, which is built once
+   at module load, still reports the live palette on every render. */
 const inputBase = {
-  width: "100%", border: `1px solid ${C.line}`, borderRadius: 4,
+  width: "100%", borderRadius: 4,
   padding: "7px 10px", fontFamily: "Cambria, Georgia, serif",
-  fontSize: 14, color: C.ink, background: "#fff", outline: "none",
+  fontSize: 14, outline: "none",
+  get border() { return `1px solid ${C.line}`; },
+  get color() { return C.ink; },
+  get background() { return C.field; },
 };
 
 const T = ({ value, onChange, placeholder, mono }) => (
@@ -222,7 +325,7 @@ const Field = ({ label, hint, children }) => (
 );
 
 const Note = ({ children }) => (
-  <div className="flex gap-2 p-3 mb-4 rounded text-sm" style={{ background: "#F0F5FA", color: C.slate, lineHeight: 1.55 }}>
+  <div className="flex gap-2 p-3 mb-4 rounded text-sm" style={{ background: C.noteBg, color: C.slate, lineHeight: 1.55 }}>
     <Info size={15} style={{ color: C.navy, flexShrink: 0, marginTop: 2 }} />
     <div>{children}</div>
   </div>
@@ -233,8 +336,21 @@ const Note = ({ children }) => (
 export default function SyllabusBuilder() {
   const [d, setD] = useState(blank);
   const [tab, setTab] = useState(0);
+  const [theme, setTheme] = useState(readTheme);
+  const [displayOpen, setDisplayOpen] = useState(false);
   const fileRef = useRef(null);
   const frameRef = useRef(null);
+
+  /* Point C at the chosen palette before anything below renders. */
+  applyTheme(theme);
+  const pickTheme = (k) => { setTheme(k); writeTheme(k); };
+
+  /* Carry the page background past the app shell so there is no white gutter. */
+  useEffect(() => {
+    const prev = document.body.style.background;
+    document.body.style.background = C.wash;
+    return () => { document.body.style.background = prev; };
+  }, [theme]);
 
   const set = (k, v) => setD((p) => ({ ...p, [k]: v }));
   const setDeep = (k, i, key, v) =>
@@ -387,30 +503,43 @@ export default function SyllabusBuilder() {
   const DOC_CSS = `
     body{font-family:Cambria,Georgia,serif;font-size:11pt;line-height:1.5;color:#1a1a1a;margin:0}
     .page{padding:0}
-    h2{font-family:Cambria,Georgia,serif;font-size:14pt;color:${C.navy};margin:22px 0 8px;
-       border-bottom:2px solid ${C.orange};padding-bottom:4px;text-transform:uppercase;letter-spacing:.5px}
-    h3{font-family:Cambria,Georgia,serif;font-size:11.5pt;color:${C.navy};margin:14px 0 4px}
+    h2{font-family:Cambria,Georgia,serif;font-size:14pt;color:${DOC.navy};margin:22px 0 8px;
+       border-bottom:2px solid ${DOC.orange};padding-bottom:4px;text-transform:uppercase;letter-spacing:.5px}
+    h3{font-family:Cambria,Georgia,serif;font-size:11.5pt;color:${DOC.navy};margin:14px 0 4px}
     p{margin:0 0 9px}
     ol,ul{margin:0 0 10px 20px;padding:0} li{margin-bottom:5px}
     .soft{color:#5A6A80;font-size:10pt}
-    table.hdr{width:100%;border-collapse:collapse;margin-bottom:6px;border-bottom:3px solid ${C.navy}}
+    table.hdr{width:100%;border-collapse:collapse;margin-bottom:6px;border-bottom:3px solid ${DOC.navy}}
     .hdr td{vertical-align:bottom;padding:0 0 10px}
     .hdr-l{width:245px}
     .hdr-r{text-align:right}
-    .ct{font-size:10pt;letter-spacing:2px;color:${C.orange};font-weight:bold}
-    .tt{font-size:19pt;color:${C.navy};line-height:1.15;font-weight:bold}
+    .ct{font-size:10pt;letter-spacing:2px;color:${DOC.orange};font-weight:bold}
+    .tt{font-size:19pt;color:${DOC.navy};line-height:1.15;font-weight:bold}
     .st{font-size:10pt;color:#5A6A80;margin-top:3px}
     table.grid{width:100%;border-collapse:collapse;margin:6px 0 12px;font-size:10.5pt}
-    .grid th,.grid td{border:1px solid ${C.line};padding:6px 9px;text-align:left;vertical-align:top}
-    .grid th{background:#EEF2F7;color:${C.navy};font-weight:bold;width:auto}
-    .grid td .tag{font-size:8.5pt;color:${C.orange};font-weight:bold;margin-top:3px}
+    .grid th,.grid td{border:1px solid ${DOC.line};padding:6px 9px;text-align:left;vertical-align:top}
+    .grid th{background:#EEF2F7;color:${DOC.navy};font-weight:bold;width:auto}
+    .grid td .tag{font-size:8.5pt;color:${DOC.orange};font-weight:bold;margin-top:3px}
     .grid .w{width:70px;text-align:right}
     .grid .wk{width:110px}
     .grid .due{width:150px}
     .grid tr.tot td{background:#EEF2F7;font-weight:bold}
-    .primer{border-left:4px solid ${C.orange};background:#FAFBFD;padding:10px 14px;margin:8px 0 14px;font-size:10pt}
-    .primer-h{font-weight:bold;color:${C.navy};margin-bottom:6px}
-    .pnote{border:1px solid ${C.orange};background:#FFF8F0;padding:10px 14px;margin:10px 0;font-size:10.5pt}
+    .primer{border-left:4px solid ${DOC.orange};background:#FAFBFD;padding:10px 14px;margin:8px 0 14px;font-size:10pt}
+    .primer-h{font-weight:bold;color:${DOC.navy};margin-bottom:6px}
+    .pnote{border:1px solid ${DOC.orange};background:#FFF8F0;padding:10px 14px;margin:10px 0;font-size:10.5pt}
+  `;
+
+  /* Screen-only overlay for the preview pane. DOC_CSS above stays print-exact,
+     so this re-tints the page a user is reading for an hour without touching a
+     single value that lands in the exported file. */
+  const PREVIEW_CSS = `
+    .grid th,.grid tr.tot td{background:${C.railOn}}
+    .grid th,.grid td{border-color:${C.line}}
+    .grid th{color:${C.navy}}
+    .hdr{border-bottom-color:${C.navy}}
+    .primer{background:${C.paper}}
+    .pnote{background:${C.warnBg}}
+    .soft,.st{color:${C.slate}}
   `;
 
   const fullHtml = () =>
@@ -450,7 +579,7 @@ export default function SyllabusBuilder() {
 
   const Btn = ({ onClick, children, icon: I, primary }) => (
     <button onClick={onClick} className="flex items-center gap-2 px-3 py-2 rounded text-sm font-semibold"
-      style={{ background: primary ? C.navy : "#fff", color: primary ? "#fff" : C.navy,
+      style={{ background: primary ? C.navy : C.paper, color: primary ? C.onNavy : C.navy,
         border: `1px solid ${primary ? C.navy : C.line}`, cursor: "pointer" }}>
       {I && <I size={15} />}{children}
     </button>
@@ -466,12 +595,12 @@ export default function SyllabusBuilder() {
           <div className="flex items-center gap-4">
             <img src={LOGO} alt="The University of Tennessee at Martin" style={{ height: 30, filter: "brightness(0) invert(1)" }} />
             <div style={{ borderLeft: "1px solid rgba(255,255,255,.3)", paddingLeft: 16 }}>
-              <div style={{ color: "#fff", fontSize: 15, fontWeight: "bold", lineHeight: 1.1 }}>Syllabus Builder</div>
+              <div style={{ color: C.onNavy, fontSize: 15, fontWeight: "bold", lineHeight: 1.1 }}>Syllabus Builder</div>
               <div style={{ color: C.orange, fontSize: 11, letterSpacing: 1 }}>CENTER FOR TEACHING AND LEARNING</div>
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <div style={{ color: "#B9C6D8", fontSize: 12, marginRight: 6 }}>{passed} of {checks.length} complete</div>
+            <div style={{ color: C.onNavySoft, fontSize: 12, marginRight: 6 }}>{passed} of {checks.length} complete</div>
             <div style={{ width: 120, height: 6, background: "rgba(255,255,255,.2)", borderRadius: 3 }}>
               <div style={{ width: `${(passed / checks.length) * 100}%`, height: "100%", background: C.orange, borderRadius: 3, transition: "width .3s" }} />
             </div>
@@ -481,18 +610,48 @@ export default function SyllabusBuilder() {
 
       <div className="flex flex-wrap" style={{ alignItems: "flex-start" }}>
         {/* left rail */}
-        <div style={{ width: 150, background: "#fff", borderRight: `1px solid ${C.line}`, minHeight: "calc(100vh - 62px)" }}>
+        <div style={{ width: 150, background: C.paper, borderRight: `1px solid ${C.line}`, minHeight: "calc(100vh - 62px)" }}>
           {TABS.map((t, i) => {
             const on = tab === i; const I = t.i;
             return (
               <button key={t.n} onClick={() => setTab(i)}
                 className="flex items-center gap-2 w-full px-3 py-2 text-sm text-left"
-                style={{ background: on ? "#EEF2F7" : "transparent", color: on ? C.navy : C.slate,
+                style={{ background: on ? C.railOn : "transparent", color: on ? C.navy : C.slate,
                   borderLeft: `3px solid ${on ? C.orange : "transparent"}`, fontWeight: on ? "bold" : "normal", cursor: "pointer" }}>
                 <I size={15} />{t.n}
               </button>
             );
           })}
+
+          {/* Display · a menu, not a section of the document */}
+          <div style={{ borderTop: `1px solid ${C.line}`, marginTop: 6, paddingTop: 6 }}>
+            <button onClick={() => setDisplayOpen((v) => !v)}
+              className="flex items-center gap-2 w-full px-3 py-2 text-sm text-left"
+              style={{ background: displayOpen ? C.railOn : "transparent", color: displayOpen ? C.navy : C.slate,
+                borderLeft: "3px solid transparent", fontWeight: displayOpen ? "bold" : "normal", cursor: "pointer" }}
+              aria-expanded={displayOpen}>
+              <Eye size={15} />Display
+              <ChevronDown size={13} style={{ marginLeft: "auto", transition: "transform .15s",
+                transform: displayOpen ? "rotate(180deg)" : "none" }} />
+            </button>
+            {displayOpen && (
+              <div style={{ background: C.railOn, borderTop: `1px solid ${C.line}` }}>
+                {THEME_ORDER.map((k) => {
+                  const on = theme === k;
+                  return (
+                    <button key={k} onClick={() => pickTheme(k)}
+                      className="flex items-center gap-2 w-full px-3 py-2 text-left"
+                      style={{ background: "transparent", color: on ? C.navy : C.slate, fontSize: 13,
+                        fontWeight: on ? "bold" : "normal", cursor: "pointer" }}>
+                      {on ? <Check size={12} style={{ color: C.orange, flexShrink: 0 }} />
+                          : <span style={{ width: 12, flexShrink: 0 }} />}
+                      {PALETTES[k].label}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
         </div>
 
         {/* form */}
@@ -555,13 +714,13 @@ export default function SyllabusBuilder() {
                 <div style={{ width: 22, paddingTop: 8, color: C.orange, fontWeight: "bold", fontSize: 13 }}>{i + 1}</div>
                 <div style={{ flex: 1 }}><A rows={2} value={o} onChange={(v) => setD((p) => { const a = [...p.outcomes]; a[i] = v; return { ...p, outcomes: a }; })}
                   placeholder="Students will evaluate ..." /></div>
-                <button onClick={() => drop("outcomes", i)} style={{ color: "#9AA5B5", marginTop: 8, cursor: "pointer" }}><Trash2 size={15} /></button>
+                <button onClick={() => drop("outcomes", i)} style={{ color: C.faint, marginTop: 8, cursor: "pointer" }}><Trash2 size={15} /></button>
               </div>
             ))}
             <Btn onClick={() => push("outcomes", "")} icon={Plus}>Add outcome</Btn>
             <div className="mt-6">
               {OUTCOME_LIBRARY.map((g) => (
-                <div key={g.group} className="mb-4 p-3 rounded" style={{ background: "#fff", border: `1px solid ${C.line}` }}>
+                <div key={g.group} className="mb-4 p-3 rounded" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
                   <div style={{ color: C.navy, fontWeight: "bold", fontSize: 13 }}>{g.group}</div>
                   <div style={{ color: C.slate, fontSize: 12, margin: "3px 0 8px" }}>{g.note}</div>
                   {g.items.map((it) => (
@@ -586,17 +745,17 @@ export default function SyllabusBuilder() {
           {tab === 5 && (<>
             <H>Assessment and Grading</H>
             <div className="p-3 mb-4 rounded flex items-center gap-2" style={{
-              background: Math.abs(weightTotal - 100) < 0.01 ? "#EAF6EF" : "#FEF6E7",
+              background: Math.abs(weightTotal - 100) < 0.01 ? C.okBg : C.warnBg,
               color: Math.abs(weightTotal - 100) < 0.01 ? C.good : C.warn, fontSize: 14, fontWeight: "bold" }}>
               {Math.abs(weightTotal - 100) < 0.01 ? <Check size={16} /> : <AlertTriangle size={16} />}
               Weights total {weightTotal}%{Math.abs(weightTotal - 100) < 0.01 ? "" : `, which is ${weightTotal > 100 ? "over" : "under"} by ${Math.abs(100 - weightTotal).toFixed(1)}`}
             </div>
             {d.items.map((x, i) => (
-              <div key={i} className="p-3 mb-3 rounded" style={{ background: "#fff", border: `1px solid ${C.line}` }}>
+              <div key={i} className="p-3 mb-3 rounded" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
                 <div className="flex gap-2 mb-2">
                   <div style={{ flex: 3 }}><T value={x.name} onChange={(v) => setDeep("items", i, "name", v)} placeholder="Final paper" /></div>
                   <div style={{ flex: 1 }}><T mono value={x.weight} onChange={(v) => setDeep("items", i, "weight", v)} placeholder="%" /></div>
-                  <button onClick={() => drop("items", i)} style={{ color: "#9AA5B5", cursor: "pointer" }}><Trash2 size={15} /></button>
+                  <button onClick={() => drop("items", i)} style={{ color: C.faint, cursor: "pointer" }}><Trash2 size={15} /></button>
                 </div>
                 <A rows={2} value={x.desc} onChange={(v) => setDeep("items", i, "desc", v)} placeholder="What it is, how long, when it is due." />
                 {realOutcomes.length > 0 && (
@@ -608,7 +767,7 @@ export default function SyllabusBuilder() {
                         return (
                           <button key={oi} onClick={() => setDeep("items", i, "slos", on ? x.slos.filter((z) => z !== oi) : [...x.slos, oi])}
                             style={{ fontSize: 12, padding: "2px 9px", borderRadius: 11, cursor: "pointer",
-                              border: `1px solid ${on ? C.orange : C.line}`, background: on ? C.orange : "#fff", color: on ? "#fff" : C.slate }}>
+                              border: `1px solid ${on ? C.orange : C.line}`, background: on ? C.orange : C.paper, color: on ? C.onAccent : C.slate }}>
                             {oi + 1}
                           </button>
                         );
@@ -620,7 +779,7 @@ export default function SyllabusBuilder() {
             ))}
             <Btn onClick={() => push("items", { name: "", weight: "", desc: "", slos: [] })} icon={Plus}>Add assignment</Btn>
             {unmapped.length > 0 && (
-              <div className="mt-4 p-3 rounded flex gap-2" style={{ background: "#FEF6E7", color: C.warn, fontSize: 13 }}>
+              <div className="mt-4 p-3 rounded flex gap-2" style={{ background: C.warnBg, color: C.warn, fontSize: 13 }}>
                 <AlertTriangle size={15} style={{ flexShrink: 0, marginTop: 2 }} />
                 <div>Outcome{unmapped.length > 1 ? "s" : ""} {unmapped.map((i) => i + 1).join(", ")} {unmapped.length > 1 ? "have" : "has"} nothing in the grade breakdown producing evidence for {unmapped.length > 1 ? "them" : "it"}. Either attach an assignment or rewrite the outcome.</div>
               </div>
@@ -652,7 +811,7 @@ export default function SyllabusBuilder() {
             <H>University Policies</H>
             <Note>CTL maintains this language and checks it each term. Leave it checked and it stays current. If you edit it in Word after export, you own the accuracy of the edit.</Note>
             {Object.entries(LOCKED).map(([k, v]) => (
-              <div key={k} className="mb-3 p-3 rounded" style={{ background: "#fff", border: `1px solid ${C.line}` }}>
+              <div key={k} className="mb-3 p-3 rounded" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
                 <label className="flex items-center gap-2" style={{ cursor: "pointer" }}>
                   <input type="checkbox" checked={d.inc[k]} onChange={(e) => set("inc", { ...d.inc, [k]: e.target.checked })} />
                   <Lock size={12} style={{ color: C.orange }} />
@@ -670,11 +829,11 @@ export default function SyllabusBuilder() {
               <span>Append the Fall 2026 registrar dates: add and drop deadlines, Fall Break, Thanksgiving, finals, and commencement.</span>
             </label>
             {d.weeks.map((w, i) => (
-              <div key={i} className="p-3 mb-3 rounded" style={{ background: "#fff", border: `1px solid ${C.line}` }}>
+              <div key={i} className="p-3 mb-3 rounded" style={{ background: C.paper, border: `1px solid ${C.line}` }}>
                 <div className="flex gap-2 mb-2">
                   <div style={{ flex: 1 }}><T value={w.label} onChange={(v) => setDeep("weeks", i, "label", v)} placeholder="Week 1" /></div>
                   <div style={{ flex: 2 }}><T value={w.dates} onChange={(v) => setDeep("weeks", i, "dates", v)} placeholder="August 24 to 28" /></div>
-                  <button onClick={() => drop("weeks", i)} style={{ color: "#9AA5B5", cursor: "pointer" }}><Trash2 size={15} /></button>
+                  <button onClick={() => drop("weeks", i)} style={{ color: C.faint, cursor: "pointer" }}><Trash2 size={15} /></button>
                 </div>
                 <div className="flex gap-2">
                   <div style={{ flex: 2 }}><A rows={3} value={w.topics} onChange={(v) => setDeep("weeks", i, "topics", v)} placeholder="Topic and readings" /></div>
@@ -719,10 +878,12 @@ export default function SyllabusBuilder() {
         <div className="p-5" style={{ flex: "1 1 460px", minWidth: 360 }}>
           <div className="flex items-center gap-2 mb-2" style={{ color: C.slate, fontSize: 12, letterSpacing: 1 }}>
             <ChevronRight size={13} style={{ color: C.orange }} />THIS IS EXACTLY WHAT EXPORTS
+            {theme !== "light" && <span style={{ color: C.hint, letterSpacing: 0 }}>· tinted on screen only</span>}
           </div>
-          <div style={{ background: "#fff", border: `1px solid ${C.line}`, borderRadius: 3, padding: "34px 40px",
-            maxHeight: "calc(100vh - 130px)", overflow: "auto", boxShadow: "0 1px 4px rgba(11,34,64,.08)" }}>
+          <div style={{ background: C.docPaper, color: C.docInk, border: `1px solid ${C.line}`, borderRadius: 3, padding: "34px 40px",
+            maxHeight: "calc(100vh - 130px)", overflow: "auto", boxShadow: `0 1px 4px ${C.shadow}` }}>
             <style>{DOC_CSS}</style>
+            {theme !== "light" && <style>{PREVIEW_CSS}</style>}
             <div dangerouslySetInnerHTML={{ __html: docBody || `<p class="soft">Start on the left. The document builds itself here.</p>` }} />
           </div>
         </div>
