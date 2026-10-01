@@ -257,7 +257,6 @@ export default function SyllabusBuilder() {
     ["Meeting time and modality stated", !!(d.modality && (d.modality.startsWith("Online") || d.meeting))],
     ["Instructor name and email", !!(d.instructor && d.email)],
     ["Office hours and how to reach you", !!(d.hours)],
-    ["Email response time committed to", !!d.responseTime],
     ["Course description", !!d.description],
     ["Why this course matters, in your voice", !!d.welcome],
     ["At least three learning outcomes", realOutcomes.length >= 3],
@@ -530,7 +529,6 @@ export default function SyllabusBuilder() {
             <Field label="Office"><T value={d.office} onChange={(v) => set("office", v)} placeholder="Humanities 212" /></Field>
             <Field label="Office hours"><A rows={2} value={d.hours} onChange={(v) => set("hours", v)} placeholder="Monday and Wednesday, 10 a.m. to noon, and by appointment. Email me and we will find a time that works." /></Field>
             <Field label="Email subject line you want" hint="cuts your response time"><T value={d.subjectLine} onChange={(v) => set("subjectLine", v)} placeholder="POSC 322 - [your question]" /></Field>
-            <Field label="Response time you commit to"><T value={d.responseTime} onChange={(v) => set("responseTime", v)} /></Field>
             <Field label="How students should address you"><T value={d.address} onChange={(v) => set("address", v)} placeholder="Dr. Doe" /></Field>
           </>)}
 
