@@ -179,7 +179,7 @@ const FALL_2026 = [
 const blank = {
   code: "", title: "", crn: "", section: "", term: "Fall 2026", modality: "In person",
   credits: "3", meeting: "", location: "", dept: "", prereq: "",
-  instructor: "", email: "", office: "", hours: "", address: "",
+  instructor: "", email: "", phone: "", office: "", hours: "", address: "",
   subjectLine: "", responseTime: "48 hours on business days",
   description: "", welcome: "",
   showPrimer: true, outcomes: [""],
@@ -330,6 +330,7 @@ export default function SyllabusBuilder() {
       ["Prerequisites", d.prereq],
       ["Instructor", d.instructor],
       ["Email", d.email],
+      ["Phone", d.phone],
       ["Office", d.office],
       ["Office hours", d.hours],
     ].filter((r) => r[1] && String(r[1]).trim());
@@ -569,6 +570,7 @@ export default function SyllabusBuilder() {
             <Note>Office hours are the single most under-used thing on a syllabus. Students who work shifts or commute from Dresden or Union City often cannot make a fixed midday block. Naming an alternative, even just "email me and we will find a time," changes who walks through the door.</Note>
             <Field label="Your name"><T value={d.instructor} onChange={(v) => set("instructor", v)} placeholder="Dr. Jane Doe" /></Field>
             <Field label="Email"><T value={d.email} onChange={(v) => set("email", v)} placeholder="jdoe@utm.edu" /></Field>
+            <Field label="Phone"><T type="tel" value={d.phone} onChange={(v) => set("phone", v)} placeholder="731-555-0123" /></Field>
             <Field label="Office"><T value={d.office} onChange={(v) => set("office", v)} placeholder="Humanities 212" /></Field>
             <Field label="Office hours"><A rows={2} value={d.hours} onChange={(v) => set("hours", v)} placeholder="Monday and Wednesday, 10 a.m. to noon, and by appointment. Email me and we will find a time that works." /></Field>
             <Field label="Email subject line you want" hint="cuts your response time"><T value={d.subjectLine} onChange={(v) => set("subjectLine", v)} placeholder="POSC 322 - [your question]" /></Field>
