@@ -173,6 +173,20 @@ const FALL_2026 = [
   ["December 14", "Final grades due by 8:30 p.m."],
 ];
 
+/* ---------- weight helpers ---------- */
+const parseWeight = (s) => {
+  // Strip "%", whitespace, letters so "20%", " 20 ", "20 percent" → 20
+  const n = parseFloat(String(s ?? "").replace(/[^\d.\-]/g, ""));
+  return Number.isFinite(n) ? n : 0;
+};
+
+const fmtWeight = (n) => {
+  // Round to 2 decimals, drop trailing zeros:
+  // 100.00000000000001 → "100", 33.333 → "33.33"
+  const r = Math.round(n * 100) / 100;
+  return (Object.is(r, -0) ? 0 : r).toString();
+};
+
 /* ---------- initial state ---------- */
 
 const blank = {
@@ -242,8 +256,10 @@ export default function SyllabusBuilder() {
   const push = (k, obj) => setD((p) => ({ ...p, [k]: [...p[k], obj] }));
   const drop = (k, i) => setD((p) => ({ ...p, [k]: p[k].filter((_, j) => j !== i) }));
 
-  const weightTotal = useMemo(
-    () => d.items.reduce((s, x) => s + (parseFloat(x.weight) || 0), 0), [d.items]);
+  const weightTotal = useMemo(() => {
+    const sum = d.items.reduce((s, x) => s + parseWeight(x.weight), 0);
+    return Math.round(sum * 100) / 100;
+  }, [d.items]);
 
   const realOutcomes = d.outcomes.filter((o) => o.trim());
   const mappedSlos = new Set(d.items.flatMap((x) => x.slos));
@@ -338,8 +354,8 @@ export default function SyllabusBuilder() {
       h.push(`<table class="grid"><tr><th>Assignment</th><th class="w">Weight</th><th>What it is</th></tr>${
         live.map((x) => `<tr><td><strong>${esc(x.name)}</strong>${
           x.slos.length ? `<div class="tag">Outcome${x.slos.length > 1 ? "s" : ""} ${x.slos.map((i) => i + 1).join(", ")}</div>` : ""
-        }</td><td class="w">${esc(x.weight)}%</td><td>${esc(x.desc)}</td></tr>`).join("")
-      }<tr class="tot"><td>Total</td><td class="w">${weightTotal}%</td><td></td></tr></table>`);
+        }</td><td class="w">${fmtWeight(parseWeight(x.weight))}%</td><td>${esc(x.desc)}</td></tr>`).join("")
+      }<tr class="tot"><td>Total</td><td class="w">${fmtWeight(weightTotal)}%</td><td></td></tr></table>`);
       if (d.scale) { h.push(`<h3>Grading scale</h3>`); h.push(para(d.scale)); }
     }
 
@@ -589,7 +605,7 @@ export default function SyllabusBuilder() {
               background: Math.abs(weightTotal - 100) < 0.01 ? "#EAF6EF" : "#FEF6E7",
               color: Math.abs(weightTotal - 100) < 0.01 ? C.good : C.warn, fontSize: 14, fontWeight: "bold" }}>
               {Math.abs(weightTotal - 100) < 0.01 ? <Check size={16} /> : <AlertTriangle size={16} />}
-              Weights total {weightTotal}%{Math.abs(weightTotal - 100) < 0.01 ? "" : `, which is ${weightTotal > 100 ? "over" : "under"} by ${Math.abs(100 - weightTotal).toFixed(1)}`}
+              Weights total {fmtWeight(weightTotal)}%{Math.abs(weightTotal - 100) < 0.01 ? "" : `, which is ${weightTotal > 100 ? "over" : "under"} by ${fmtWeight(Math.abs(100 - weightTotal))}`}
             </div>
             {d.items.map((x, i) => (
               <div key={i} className="p-3 mb-3 rounded" style={{ background: "#fff", border: `1px solid ${C.line}` }}>
