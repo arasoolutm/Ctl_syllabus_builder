@@ -263,8 +263,14 @@ export default function SyllabusBuilder() {
   const drop = (k, i) => setD((p) => ({ ...p, [k]: p[k].filter((_, j) => j !== i) }));
   const setLab = (k, v) => setD((p) => ({ ...p, lab: { ...p.lab, [k]: v } }));
 
+  function calculateWeightTotal(items) {
+  return items.reduce(
+    (total, item) => total + (parseFloat(item.weight) || 0),
+    0
+  );}
+
   const weightTotal = useMemo(
-    () => d.items.reduce((s, x) => s + (parseFloat(x.weight) || 0), 0), [d.items]);
+    () => calculateWeightTotal(d.items), [d.items]);
 
   const realOutcomes = d.outcomes.filter((o) => o.trim());
   const mappedSlos = new Set(d.items.flatMap((x) => x.slos));
