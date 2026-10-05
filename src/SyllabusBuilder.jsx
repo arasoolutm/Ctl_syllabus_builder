@@ -273,30 +273,31 @@ export default function SyllabusBuilder() {
   const aiText = d.aiTier === "custom" ? d.aiCustom : AI_POLICIES[d.aiTier].text;
 
   /* ---------- readiness ---------- */
+  const hasText = (value) => value.trim().length > 0;
   const checks = [
-    ["Course code, title, term, and credit hours", !!(d.code && d.title && d.term && d.credits)],
-    ["Meeting time and modality stated", !!(d.modality && (d.modality.startsWith("Online") || d.meeting))],
-    ["Instructor name and email", !!(d.instructor && d.email)],
-    ["Office hours and how to reach you", !!(d.hours)],
-    ["Email response time committed to", !!d.responseTime],
-    ["Course description", !!d.description],
-    ["Why this course matters, in your voice", !!d.welcome],
+    ["Course code, title, term, and credit hours", [d.code, d.title, d.term, d.credits].every(hasText)],
+    ["Meeting time and modality stated", hasText(d.modality) && (d.modality.startsWith("Online") || hasText(d.meeting))],
+    ["Instructor name and email", hasText(d.instructor) && hasText(d.email)],
+    ["Office hours and how to reach you", hasText(d.hours)],
+    ["Email response time committed to", hasText(d.responseTime)],
+    ["Course description", hasText(d.description)],
+    ["Why this course matters, in your voice", hasText(d.welcome)],
     ["At least three learning outcomes", realOutcomes.length >= 3],
     ["Every outcome tied to an assessment", realOutcomes.length > 0 && unmapped.length === 0],
-    ["Required materials listed", !!d.texts],
+    ["Required materials listed", hasText(d.texts)],
     ["Assessment weights total 100 percent", Math.abs(weightTotal - 100) < 0.01],
-    ["Grading scale", !!d.scale],
-    ["Attendance policy", !!d.attendance],
-    ["Late work and make-up policy", !!d.late],
-    ["AI policy (required by UTM policy)", !!aiText.trim()],
+    ["Grading scale", hasText(d.scale)],
+    ["Attendance policy", hasText(d.attendance)],
+    ["Late work and make-up policy", hasText(d.late)],
+    ["AI policy (required by UTM policy)", hasText(aiText)],
     ["Accessibility statement included", d.inc.accessibility],
     ["Academic integrity included", d.inc.integrity],
     ["Crisis resources included", d.inc.crisis],
-    ["Schedule has at least one entry", d.weeks.some((w) => w.topics || w.dates)],
+    ["Schedule has at least one entry", d.weeks.some((w) => hasText(w.topics) || hasText(w.dates))],
     ...(d.hasLab ? [
-      ["Lab meeting time and location", !!(d.lab.meeting && d.lab.location)],
-      ["How the lab counts toward the course grade", !!d.lab.gradeNote],
-      ["Lab safety expectations stated", !!d.lab.safety],
+      ["Lab meeting time and location", hasText(d.lab.meeting) && hasText(d.lab.location)],
+      ["How the lab counts toward the course grade", hasText(d.lab.gradeNote)],
+      ["Lab safety expectations stated", hasText(d.lab.safety)],
     ] : []),
   ];
   const passed = checks.filter((c) => c[1]).length;
@@ -765,7 +766,7 @@ export default function SyllabusBuilder() {
                 </div>
               ))}
             </div>
-            <Note>Nothing here is stored anywhere. Closing this tab clears it. Save your work as a file, then load that file next time you teach the course and change the dates.</Note>
+            <Note>Nothing here is stored anywhere. Closing this tab clears it. Export your syllabus to Word or PDF before closing.</Note>
             <div className="flex flex-wrap gap-2 mb-4">
               <Btn onClick={exportWord} icon={FileDown} primary>Export to Word</Btn>
               <Btn onClick={exportPdf} icon={Printer} primary>Export to PDF</Btn>
