@@ -174,6 +174,26 @@ const FALL_2026 = [
   ["December 14", "Final grades due by 8:30 p.m."],
 ];
 
+/* ---------- schedule date helpers ---------- */
+const FALL_2026_START = "2026-08-24";
+
+const formatScheduleDate = (date) =>
+  new Intl.DateTimeFormat("en-US", { month: "long", day: "numeric" }).format(date);
+
+const buildWeekDates = (startDate, count = 15) => {
+  if (!startDate) return [];
+  const start = new Date(`${startDate}T12:00:00`);
+  if (Number.isNaN(start.getTime())) return [];
+
+  return Array.from({ length: count }, (_, i) => {
+    const from = new Date(start);
+    from.setDate(start.getDate() + i * 7);
+    const to = new Date(from);
+    to.setDate(from.getDate() + 4);
+    return `${formatScheduleDate(from)} to ${formatScheduleDate(to)}`;
+  });
+};
+
 /* ---------- initial state ---------- */
 
 const blank = {
@@ -189,7 +209,8 @@ const blank = {
   attendance: "", late: "", participation: "",
   aiTier: "mixed", aiCustom: "", profNote: "",
   inc: { integrity: true, accessibility: true, support: true, crisis: true, changes: true },
-  weeks: [{ label: "Week 1", dates: "", topics: "", due: "" }],
+  semesterStart: FALL_2026_START,
+  weeks: [{ label: "Week 1", dates: "August 24 to August 28", topics: "", due: "" }],
   calNote: true,
   hasLab: false,
   lab: {
@@ -214,8 +235,8 @@ const inputBase = {
   fontSize: 14, color: C.ink, background: "#fff", outline: "none",
 };
 
-const T = ({ value, onChange, placeholder, mono }) => (
-  <input style={{ ...inputBase, fontFamily: mono ? "ui-monospace, monospace" : inputBase.fontFamily }}
+const T = ({ value, onChange, placeholder, mono, type = "text" }) => (
+  <input type={type} style={{ ...inputBase, fontFamily: mono ? "ui-monospace, monospace" : inputBase.fontFamily }}
     value={value} placeholder={placeholder} onChange={(e) => onChange(e.target.value)} />
 );
 
@@ -262,6 +283,34 @@ export default function SyllabusBuilder() {
   const push = (k, obj) => setD((p) => ({ ...p, [k]: [...p[k], obj] }));
   const drop = (k, i) => setD((p) => ({ ...p, [k]: p[k].filter((_, j) => j !== i) }));
   const setLab = (k, v) => setD((p) => ({ ...p, lab: { ...p.lab, [k]: v } }));
+
+  const autofillScheduleDates = () => {
+    const dates = buildWeekDates(d.semesterStart, Math.max(15, d.weeks.length));
+    if (!dates.length) return;
+    setD((p) => ({
+      ...p,
+      weeks: p.weeks.map((w, i) => ({
+        ...w,
+        label: w.label || `Week ${i + 1}`,
+        dates: dates[i] || w.dates,
+      })),
+    }));
+  };
+
+  const buildSemesterSchedule = () => {
+    const dates = buildWeekDates(d.semesterStart, 15);
+    if (!dates.length) return;
+    setD((p) => ({
+      ...p,
+      weeks: Array.from({ length: 15 }, (_, i) => ({
+        ...(p.weeks[i] || {}),
+        label: p.weeks[i]?.label || `Week ${i + 1}`,
+        dates: dates[i],
+        topics: p.weeks[i]?.topics || "",
+        due: p.weeks[i]?.due || "",
+      })),
+    }));
+  };
 
   const weightTotal = useMemo(
     () => d.items.reduce((s, x) => s + (parseFloat(x.weight) || 0), 0), [d.items]);
@@ -707,6 +756,15 @@ export default function SyllabusBuilder() {
 
           {tab === 8 && (<>
             <H>Schedule</H>
+            <Note>Choose the first day of classes and the builder will fill each week's Monday-to-Friday date range automatically. You can still edit any individual week afterward.</Note>
+            <div className="flex gap-2 items-end flex-wrap mb-4">
+              <div style={{ minWidth: 220 }}>
+                <Lbl hint="used for automatic week dates">Semester start</Lbl>
+                <T type="date" value={d.semesterStart} onChange={(v) => set("semesterStart", v)} />
+              </div>
+              <Btn onClick={autofillScheduleDates} icon={CalendarDays}>Autofill dates</Btn>
+              <Btn onClick={buildSemesterSchedule} icon={CalendarDays}>Build 15 weeks with dates</Btn>
+            </div>
             <label className="flex items-start gap-2 mb-4 text-sm" style={{ color: C.slate, cursor: "pointer" }}>
               <input type="checkbox" checked={d.calNote} onChange={(e) => set("calNote", e.target.checked)} style={{ marginTop: 3 }} />
               <span>Append the Fall 2026 registrar dates: add and drop deadlines, Fall Break, Thanksgiving, finals, and commencement.</span>
@@ -725,8 +783,11 @@ export default function SyllabusBuilder() {
               </div>
             ))}
             <div className="flex gap-2 flex-wrap">
-              <Btn onClick={() => push("weeks", { label: `Week ${d.weeks.length + 1}`, dates: "", topics: "", due: "" })} icon={Plus}>Add week</Btn>
-              <Btn onClick={() => setD((p) => ({ ...p, weeks: Array.from({ length: 15 }, (_, i) => p.weeks[i] || { label: `Week ${i + 1}`, dates: "", topics: "", due: "" }) }))}>Build 15 weeks</Btn>
+              <Btn onClick={() => {
+                const i = d.weeks.length;
+                const dates = buildWeekDates(d.semesterStart, i + 1);
+                push("weeks", { label: `Week ${i + 1}`, dates: dates[i] || "", topics: "", due: "" });
+              }} icon={Plus}>Add week</Btn>
             </div>
           </>)}
 
