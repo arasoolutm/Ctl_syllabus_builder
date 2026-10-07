@@ -275,7 +275,7 @@ export default function SyllabusBuilder() {
   /* ---------- readiness ---------- */
   const checks = [
     ["Course code, title, term, and credit hours", !!(d.code && d.title && d.term && d.credits)],
-    ["Meeting time and modality stated", !!(d.modality && (d.modality.startsWith("Online") || d.meeting))],
+    ["Meeting time and modality stated", !!(d.modality && (d.modality === "Online asynchronous" || d.meeting))],
     ["Instructor name and email", !!(d.instructor && d.email)],
     ["Office hours and how to reach you", !!(d.hours)],
     ["Email response time committed to", !!d.responseTime],
