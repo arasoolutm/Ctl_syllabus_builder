@@ -187,7 +187,7 @@ const blank = {
   items: [{ name: "", weight: "", desc: "", slos: [] }],
   scale: "A 90 to 100  ·  B 80 to 89  ·  C 70 to 79  ·  D 60 to 69  ·  F below 60",
   attendance: "", late: "", participation: "",
-  aiTier: "mixed", aiCustom: "", profNote: "",
+  aiTier: "mixed", aiCustom: "", profNote: "", customPolicies: [],
   inc: { integrity: true, accessibility: true, support: true, crisis: true, changes: true },
   weeks: [{ label: "Week 1", dates: "", topics: "", due: "" }],
   calNote: true,
@@ -403,10 +403,15 @@ export default function SyllabusBuilder() {
         d.address && `You can address me as ${d.address}.`,
       ].filter(Boolean).join("\n")]);
     if (aiText.trim()) pol.push(["Artificial Intelligence Policy", aiText]);
-    if (pol.length) {
+      const customPolicies = d.customPolicies.filter((policy) => policy.title.trim() || policy.text.trim());
+      if (pol.length || customPolicies.length) {
       sec("Course Policies");
       pol.forEach(([t, b]) => { h.push(`<h3>${esc(t)}</h3>`); h.push(para(b)); });
       if (d.profNote) h.push(`<div class="pnote"><strong>A note from your professor.</strong> ${esc(d.profNote)}</div>`);
+        customPolicies.forEach((policy) => {
+        if (policy.title.trim()) h.push(`<h3>${esc(policy.title)}</h3>`);
+        if (policy.text.trim()) h.push(para(policy.text));
+      });
     }
 
     const uni = Object.keys(LOCKED).filter((k) => d.inc[k]);
@@ -688,6 +693,22 @@ export default function SyllabusBuilder() {
               placeholder="Your policy must still affirm academic honesty and state that unpermitted AI use is academic misconduct under the Student Code of Conduct." /></div>}
             <div className="mt-4"><Field label="A note from your professor" hint="optional warm box, sits under the policy">
               <A rows={3} value={d.profNote} onChange={(v) => set("profNote", v)} placeholder="If you are ever unsure whether what you are submitting crosses that line, reach out before you submit. That conversation is always easier before the fact than after." /></Field></div>
+            <div className="mt-6 mb-2" style={{ color: C.navy, fontWeight: "bold", fontSize: 14 }}>Additional Policies</div>
+            {d.customPolicies.map((policy, i) => (
+              <div key={i} className="mb-3 p-3 rounded" style={{ background: "#fff", border: `1px solid ${C.line}` }}>
+                <div className="flex items-start gap-2">
+                  <div style={{ flex: 1 }}>
+                    <Field label="Policy title"><T value={policy.title} onChange={(v) => setDeep("customPolicies", i, "title", v)} placeholder="Classroom conduct" /></Field>
+                    <Field label="Policy details"><A rows={3} value={policy.text} onChange={(v) => setDeep("customPolicies", i, "text", v)} placeholder="Describe your expectations for students." /></Field>
+                  </div>
+                  <button type="button" onClick={() => drop("customPolicies", i)} aria-label={`Remove custom policy ${i + 1}`} title="Remove policy"
+                    className="p-2 rounded" style={{ color: C.slate, background: "transparent", border: 0, cursor: "pointer" }}>
+                    <Trash2 size={16} />
+                  </button>
+                </div>
+              </div>
+            ))}
+            <Btn onClick={() => push("customPolicies", { title: "", text: "" })} icon={Plus}>Add custom policy</Btn>
           </>)}
 
           {tab === 7 && (<>
