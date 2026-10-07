@@ -194,6 +194,22 @@ const blank = {
 
 /* ---------- small UI atoms ---------- */
 
+const RESERVED = /^(con|prn|aux|nul|com[1-9]|lpt[1-9])$/i;
+const trimEnds = (s) => s.replace(/^[._-]+|[._-]+$/g, "");
+
+const sanitizePart = (s) => {
+  const out = trimEnds(
+    trimEnds(
+      String(s ?? "")
+        .normalize("NFKD")
+        .replace(/[\u0300-\u036f]/g, "")   // é -> e
+        .replace(/[^A-Za-z0-9._-]/g, "_")  // whitelist
+        .replace(/_+/g, "_")               // collapse runs
+    ).slice(0, 60)                         // length cap
+  );
+  return RESERVED.test(out) ? `${out}_` : out;
+};
+
 const Lbl = ({ children, hint }) => (
   <div className="mb-1">
     <span className="text-xs font-semibold tracking-wide uppercase" style={{ color: C.slate }}>{children}</span>
@@ -423,7 +439,7 @@ export default function SyllabusBuilder() {
     const u = URL.createObjectURL(blob); const a = document.createElement("a");
     a.href = u; a.download = name; a.click(); setTimeout(() => URL.revokeObjectURL(u), 4000);
   };
-  const fname = (ext) => `${(d.code || "Syllabus").replace(/\s+/g, "_")}_${d.term.replace(/\s+/g, "_")}.${ext}`;
+  const fname = (ext) => `${sanitizePart(d.code) || "Syllabus"}_${sanitizePart(d.term) || "Term"}.${ext}`;
 
   const exportWord = () => dl(new Blob(["\ufeff" + fullHtml()], { type: "application/msword" }), fname("doc"));
   const exportPdf = () => {
