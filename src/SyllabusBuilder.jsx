@@ -506,7 +506,7 @@ export default function SyllabusBuilder() {
       <div style={{ background: C.navy, borderBottom: `4px solid ${C.orange}` }} className="px-5 py-3">
         <div className="flex items-center justify-between flex-wrap gap-3">
           <div className="flex items-center gap-4">
-            <img src={LOGO} alt="The University of Tennessee at Martin" style={{ height: 30, filter: "brightness(0) invert(1)" }} />
+            <img src={LOGO} alt="The University of Tennessee at Martin" style={{ height: 30, filter: "brightness(1) invert(0)" }} />
             <div style={{ borderLeft: "1px solid rgba(255,255,255,.3)", paddingLeft: 16 }}>
               <div style={{ color: "#fff", fontSize: 15, fontWeight: "bold", lineHeight: 1.1 }}>Syllabus Builder</div>
               <div style={{ color: C.orange, fontSize: 11, letterSpacing: 1 }}>CENTER FOR TEACHING AND LEARNING</div>
