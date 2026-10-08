@@ -273,39 +273,6 @@ export default function SyllabusBuilder() {
   }, 0);
 };
 
-  setTimeout(() => {
-    const preview = [...document.querySelectorAll('div[style*="overflow: auto"]')]
-      .find((el) => el.scrollHeight > el.clientHeight + 100);
-
-    if (!preview) return;
-
-    const headings = [...preview.querySelectorAll("h2, h3")];
-
-    // Match the editor tab to the corresponding syllabus heading
-    const sectionNames = [
-      "COURSE INFORMATION",
-      "COURSE INFORMATION",
-      "WELCOME TO THIS COURSE",
-      "STUDENT LEARNING OUTCOMES",
-      "REQUIRED MATERIALS",
-      "ASSESSMENT AND GRADING",
-      "COURSE POLICIES",
-      "UNIVERSITY POLICIES AND STUDENT SUPPORT",
-      "COURSE SCHEDULE"
-    ];
-
-    const heading = headings.find(
-      (h) => h.innerText.trim() === sectionNames[tab]
-    );
-
-    if (heading) {
-      preview.scrollTo({
-        top: heading.offsetTop - 60,
-        behavior: "smooth"
-      });
-    }
-  }, 0);
-};
 
     
 
@@ -343,8 +310,43 @@ const setDeep = (k, i, key, v) => {
   }, 0);
 };
     
-  const push = (k, obj) => setD((p) => ({ ...p, [k]: [...p[k], obj] }));
-  const drop = (k, i) => setD((p) => ({ ...p, [k]: p[k].filter((_, j) => j !== i) }));
+const push = (k, obj) => setD((p) => ({ ...p, [k]: [...p[k], obj] }));
+
+const drop = (k, i) => {
+  const entry = d[k][i];
+
+  let hasInformation = false;
+
+  if (k === "outcomes") {
+    hasInformation = entry.trim() !== "";
+  } else if (k === "items") {
+    hasInformation =
+      entry.name.trim() !== "" ||
+      entry.weight.trim() !== "" ||
+      entry.desc.trim() !== "" ||
+      entry.slos.length > 0;
+  } else if (k === "weeks") {
+    hasInformation =
+      entry.dates.trim() !== "" ||
+      entry.topics.trim() !== "" ||
+      entry.due.trim() !== "" ||
+      entry.label.trim() !== `Week ${i + 1}`;
+  }
+
+  if (hasInformation) {
+    const confirmed = window.confirm(
+      "This entry contains information. Are you sure you want to delete it?"
+    );
+
+    if (!confirmed) return;
+  }
+
+  setD((p) => ({
+    ...p,
+    [k]: p[k].filter((_, j) => j !== i),
+  }));
+};
+
 
   const weightTotal = useMemo(
     () => d.items.reduce((s, x) => s + (parseFloat(x.weight) || 0), 0), [d.items]);
