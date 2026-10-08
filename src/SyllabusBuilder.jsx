@@ -513,7 +513,7 @@ export default function SyllabusBuilder() {
             </div>
             <Field label="Delivery" hint="students read this before they register">
               <select style={inputBase} value={d.modality} onChange={(e) => set("modality", e.target.value)}>
-                {["In person", "Hybrid", "Online synchronous", "Online asynchronous"].map((m) => <option key={m}>{m}</option>)}
+                {["In person", "Hybrid", "Online synchronous", "Online asynchronous", "Internship"].map((m) => <option key={m}>{m}</option>)}
               </select>
             </Field>
             <Field label="Meeting time" hint="leave blank if fully asynchronous"><T value={d.meeting} onChange={(v) => set("meeting", v)} placeholder="Tuesday and Thursday, 9:30 to 10:45 a.m." /></Field>
