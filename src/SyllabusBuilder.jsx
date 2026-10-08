@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useRef } from "react";
+import React, { useState, useMemo, useRef, useEffect } from "react";
 import {
   BookOpen, User, MessageSquare, Target, Library, Scale, Gavel,
   ShieldCheck, CalendarDays, FileDown, Check, AlertTriangle, Plus, Trash2,
@@ -233,6 +233,7 @@ const Note = ({ children }) => (
 export default function SyllabusBuilder() {
   const [d, setD] = useState(blank);
   const [tab, setTab] = useState(0);
+  const [pendingDelete, setPendingDelete] = useState(null);
   const fileRef = useRef(null);
   const frameRef = useRef(null);
 
@@ -240,7 +241,29 @@ export default function SyllabusBuilder() {
   const setDeep = (k, i, key, v) =>
     setD((p) => { const a = [...p[k]]; a[i] = { ...a[i], [key]: v }; return { ...p, [k]: a }; });
   const push = (k, obj) => setD((p) => ({ ...p, [k]: [...p[k], obj] }));
-  const drop = (k, i) => setD((p) => ({ ...p, [k]: p[k].filter((_, j) => j !== i) }));
+  const entryHasContent = (entry) => typeof entry === "string"
+    ? entry.trim().length > 0
+    : Object.values(entry).some((value) => Array.isArray(value) ? value.length > 0 : String(value ?? "").trim().length > 0);
+  const drop = (k, i) => {
+    if (entryHasContent(d[k][i])) {
+      setPendingDelete({ k, i });
+      return;
+    }
+    setD((p) => ({ ...p, [k]: p[k].filter((_, j) => j !== i) }));
+  };
+  const confirmDrop = () => {
+    if (!pendingDelete) return;
+    const { k, i } = pendingDelete;
+    setD((p) => ({ ...p, [k]: p[k].filter((_, j) => j !== i) }));
+    setPendingDelete(null);
+  };
+
+  useEffect(() => {
+    if (!pendingDelete) return undefined;
+    const closeOnEscape = (e) => { if (e.key === "Escape") setPendingDelete(null); };
+    window.addEventListener("keydown", closeOnEscape);
+    return () => window.removeEventListener("keydown", closeOnEscape);
+  }, [pendingDelete]);
 
   const weightTotal = useMemo(
     () => d.items.reduce((s, x) => s + (parseFloat(x.weight) || 0), 0), [d.items]);
@@ -460,6 +483,22 @@ export default function SyllabusBuilder() {
   return (
     <div style={{ fontFamily: "Cambria, Georgia, serif", background: C.wash, minHeight: "100vh" }}>
       <iframe ref={frameRef} title="print" style={{ position: "fixed", width: 0, height: 0, border: 0, left: -9999 }} />
+      {pendingDelete && (
+        <div role="presentation" onMouseDown={() => setPendingDelete(null)} style={{ position: "fixed", inset: 0, zIndex: 10,
+          display: "flex", alignItems: "center", justifyContent: "center", padding: 20, background: "rgba(11,34,64,.38)" }}>
+          <div role="dialog" aria-modal="true" aria-labelledby="delete-dialog-title" onMouseDown={(e) => e.stopPropagation()}
+            style={{ width: "min(100%, 420px)", background: "#fff", borderRadius: 4, padding: 24, boxShadow: "0 12px 36px rgba(11,34,64,.24)" }}>
+            <div id="delete-dialog-title" style={{ color: C.navy, fontSize: 18, fontWeight: "bold", marginBottom: 8 }}>Delete this entry?</div>
+            <div style={{ color: C.slate, fontSize: 14, lineHeight: 1.5, marginBottom: 20 }}>
+              This {({ outcomes: "learning outcome", items: "assignment", weeks: "schedule entry" }[pendingDelete.k] || "entry")} contains information. Are you sure you want to delete it?
+            </div>
+            <div className="flex justify-end gap-2">
+              <Btn onClick={() => setPendingDelete(null)}>Cancel</Btn>
+              <Btn onClick={confirmDrop} primary>Delete</Btn>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* masthead */}
       <div style={{ background: C.navy, borderBottom: `4px solid ${C.orange}` }} className="px-5 py-3">
