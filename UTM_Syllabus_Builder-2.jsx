@@ -236,9 +236,79 @@ export default function SyllabusBuilder() {
   const fileRef = useRef(null);
   const frameRef = useRef(null);
 
-  const set = (k, v) => setD((p) => ({ ...p, [k]: v }));
-  const setDeep = (k, i, key, v) =>
-    setD((p) => { const a = [...p[k]]; a[i] = { ...a[i], [key]: v }; return { ...p, [k]: a }; });
+   const set = (k, v) => {
+  setD((p) => ({ ...p, [k]: v }));
+
+  setTimeout(() => {
+    const preview = [...document.querySelectorAll('div[style*="overflow: auto"]')]
+      .find((el) => el.scrollHeight > el.clientHeight + 100);
+
+    if (!preview) return;
+
+    const headings = [...preview.querySelectorAll("h2, h3")];
+
+    // Match the editor tab to the corresponding syllabus heading
+    const sectionNames = [
+      "COURSE INFORMATION",
+      "COURSE INFORMATION",
+      "WELCOME TO THIS COURSE",
+      "STUDENT LEARNING OUTCOMES",
+      "REQUIRED MATERIALS",
+      "ASSESSMENT AND GRADING",
+      "COURSE POLICIES",
+      "UNIVERSITY POLICIES AND STUDENT SUPPORT",
+      "COURSE SCHEDULE"
+    ];
+
+    const heading = headings.find(
+      (h) => h.innerText.trim() === sectionNames[tab]
+    );
+
+    if (heading) {
+      preview.scrollTo({
+        top: heading.offsetTop - 60,
+        behavior: "smooth"
+      });
+    }
+  }, 0);
+};
+
+    
+
+const setDeep = (k, i, key, v) => {
+  setD((p) => {
+    const a = [...p[k]];
+    a[i] = { ...a[i], [key]: v };
+    return { ...p, [k]: a };
+  });
+
+  setTimeout(() => {
+    const preview = [...document.querySelectorAll('div[style*="overflow: auto"]')]
+      .find((el) => el.scrollHeight > el.clientHeight + 100);
+
+    if (!preview) return;
+
+    const sectionNames = {
+      weeks: "COURSE SCHEDULE",
+      items: "ASSESSMENT AND GRADING",
+      outcomes: "STUDENT LEARNING OUTCOMES"
+    };
+
+    const sectionName = sectionNames[k];
+    if (!sectionName) return;
+
+    const heading = [...preview.querySelectorAll("h2, h3")]
+      .find((h) => h.innerText.trim() === sectionName);
+
+    if (heading) {
+      preview.scrollTo({
+        top: heading.offsetTop - 60,
+        behavior: "smooth"
+      });
+    }
+  }, 0);
+};
+    
   const push = (k, obj) => setD((p) => ({ ...p, [k]: [...p[k], obj] }));
   const drop = (k, i) => setD((p) => ({ ...p, [k]: p[k].filter((_, j) => j !== i) }));
 
