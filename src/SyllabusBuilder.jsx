@@ -730,7 +730,7 @@ export default function SyllabusBuilder() {
               <Btn onClick={() => push("weeks", { label: `Week ${d.weeks.length + 1}`, dates: "", topics: "", due: "" })} icon={Plus}>Add week</Btn>
               <div style={{ flex: "0 0 250px" }}>
                 <div className="flex gap-2">
-                  <input
+                  <input //text box
                     type="text" 
                     inputMode="numeric"
                     pattern="[0-9]*"
@@ -750,17 +750,17 @@ export default function SyllabusBuilder() {
                     }}
                   />
                   <Btn onClick={() => {
-                    const count = Number(weekCount);
+                    const count = Number(weekCount); // builds the number of weeks input
                     if (!/^[0-9]+$/.test(weekCount) || count < 1 || count > 15) {
                       setWeekCountWarning(true);
                       return;
                     }
-                    setWeekCountWarning(false);
+                    setWeekCountWarning(false); 
                     setD((p) => ({ ...p, weeks: Array.from({ length: count }, (_, i) => p.weeks[i] || { label: `Week ${i + 1}`, dates: "", topics: "", due: "" }) }));
                   }}>Build weeks</Btn>
                 </div>
                 <div role="alert" className="mt-1 text-xs" style={{ color: C.warn, minHeight: 32 }}>
-                  {weekCountWarning ? "Enter a whole number between 1-15." : ""}
+                  {weekCountWarning ? "Enter a whole number between 1-15." : ""/* displays a warning if the week count is invalid */}
                 </div>
               </div>
             </div>
