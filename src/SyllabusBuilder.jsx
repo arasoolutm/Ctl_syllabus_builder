@@ -254,6 +254,8 @@ export default function SyllabusBuilder() {
     return () => window.removeEventListener("beforeunload", warnBeforeUnload);
   }, [hasUnsavedChanges]);
   const [tab, setTab] = useState(0);
+  const [weekCount, setWeekCount] = useState("15");
+  const [weekCountWarning, setWeekCountWarning] = useState(false);
   const frameRef = useRef(null);
 
   const set = (k, v) => setD((p) => ({ ...p, [k]: v }));
@@ -724,9 +726,43 @@ export default function SyllabusBuilder() {
                 </div>
               </div>
             ))}
-            <div className="flex gap-2 flex-wrap">
+            <div className="flex gap-2 flex-wrap items-start">
               <Btn onClick={() => push("weeks", { label: `Week ${d.weeks.length + 1}`, dates: "", topics: "", due: "" })} icon={Plus}>Add week</Btn>
-              <Btn onClick={() => setD((p) => ({ ...p, weeks: Array.from({ length: 15 }, (_, i) => p.weeks[i] || { label: `Week ${i + 1}`, dates: "", topics: "", due: "" }) }))}>Build 15 weeks</Btn>
+              <div style={{ flex: "0 0 250px" }}>
+                <div className="flex gap-2">
+                  <input
+                    type="text" 
+                    inputMode="numeric"
+                    pattern="[0-9]*"
+                    aria-label="Number of weeks"
+                    aria-invalid={weekCountWarning}
+                    placeholder="1-15"
+                    style={{ ...inputBase, width: 110 }}
+                    value={weekCount}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      if (!/^[0-9]*$/.test(value)) {
+                        setWeekCountWarning(true);
+                        return;
+                      }
+                      setWeekCount(value);
+                      setWeekCountWarning(!value || Number(value) < 1 || Number(value) > 15);
+                    }}
+                  />
+                  <Btn onClick={() => {
+                    const count = Number(weekCount);
+                    if (!/^[0-9]+$/.test(weekCount) || count < 1 || count > 15) {
+                      setWeekCountWarning(true);
+                      return;
+                    }
+                    setWeekCountWarning(false);
+                    setD((p) => ({ ...p, weeks: Array.from({ length: count }, (_, i) => p.weeks[i] || { label: `Week ${i + 1}`, dates: "", topics: "", due: "" }) }));
+                  }}>Build weeks</Btn>
+                </div>
+                <div role="alert" className="mt-1 text-xs" style={{ color: C.warn, minHeight: 32 }}>
+                  {weekCountWarning ? "Enter a whole number between 1-15." : ""}
+                </div>
+              </div>
             </div>
           </>)}
 
