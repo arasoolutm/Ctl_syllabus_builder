@@ -178,7 +178,7 @@ const FALL_2026 = [
 
 const blank = {
   code: "", title: "", crn: "", section: "", term: "Fall 2026", modality: "In person",
-  credits: "3", meeting: "", location: "", dept: "", prereq: "",
+  credits: "3", meeting: "", location: "", exlocation:"", dept: "", prereq: "",
   instructor: "", email: "", office: "", hours: "", address: "",
   subjectLine: "", responseTime: "48 hours on business days",
   description: "", welcome: "",
@@ -327,6 +327,7 @@ export default function SyllabusBuilder() {
       ["Credit hours", d.credits],
       ["Meeting time", d.meeting],
       ["Location", d.location],
+      ["Extra Location", d.exlocation],
       ["Prerequisites", d.prereq],
       ["Instructor", d.instructor],
       ["Email", d.email],
@@ -555,12 +556,20 @@ export default function SyllabusBuilder() {
             </div>
             <Field label="Delivery" hint="students read this before they register">
               <select style={inputBase} value={d.modality} onChange={(e) => set("modality", e.target.value)}>
-                {["In person", "Hybrid", "Online synchronous", "Online asynchronous"].map((m) => <option key={m}>{m}</option>)}
+                {["In person", "Hybrid", "Online synchronous", "Online asynchronous", "Internship"].map((m) => <option key={m}>{m}</option>)}
               </select>
             </Field>
             <Field label="Meeting time" hint="leave blank if fully asynchronous"><T value={d.meeting} onChange={(v) => set("meeting", v)} placeholder="Tuesday and Thursday, 9:30 to 10:45 a.m." /></Field>
             <Field label="Room"><T value={d.location} onChange={(v) => set("location", v)} placeholder="Humanities 407" /></Field>
-            <Field label="Department"><T value={d.dept} onChange={(v) => set("dept", v)} placeholder="Department of Political Science and Global Studies" /></Field>
+            <Field label="Other Meeting Room" hint="Only fill this if some classes take place in other room during the week"><T value={d.exlocation} onChange={(v) => set("exlocation", v)} placeholder="Humanities 409 on Fridays" /></Field>
+            <Field label="Department"><select style={inputBase} value={d.debt} onChange={(v) => set("dept", v.target.value)}>
+                {["[Enter Department Here]", "Agriculture, Geosciences, and Natural Resources", "Family and Consumer Sciences", "Military Science and Leadership", 
+                  "School of Business",
+                   "Behavioral Sciences", "Educational Studies", "Health and Human Performance","Interdisciplinary Studies", "Nursing", "Psychology",
+                   "Biological Sciences", "Chemistry and Physics", "Computer Science", "Engineering", "Mathematics and Statistics",
+                   "English and Modern Foreign Languages", "History and Philosophy", "Mass Media and Strategic Communication", "Music", "Political Science and Global Studies", "Visual and Theatre Arts"].map((m) => <option key={m}>{m}</option>)}
+              </select>
+              </Field>
             <Field label="Prerequisites"><T value={d.prereq} onChange={(v) => set("prereq", v)} placeholder="None" /></Field>
           </>)}
 
