@@ -184,6 +184,7 @@ const blank = {
   description: "", welcome: "",
   showPrimer: true, outcomes: [""],
   texts: "", costNote: "", tech: "",
+  materials: { provided: false, hardcopy: false, online: false, acquire: "" },
   items: [{ name: "", weight: "", desc: "", slos: [] }],
   scale: "A 90 to 100  ·  B 80 to 89  ·  C 70 to 79  ·  D 60 to 69  ·  F below 60",
   attendance: "", late: "", participation: "",
@@ -283,7 +284,7 @@ export default function SyllabusBuilder() {
     ["Why this course matters, in your voice", !!d.welcome],
     ["At least three learning outcomes", realOutcomes.length >= 3],
     ["Every outcome tied to an assessment", realOutcomes.length > 0 && unmapped.length === 0],
-    ["Required materials listed", !!d.texts],
+    ["Required materials listed", !!(d.texts || d.materials.provided || d.materials.hardcopy || d.materials.online || d.materials.acquire)],
     ["Assessment weights total 100 percent", Math.abs(weightTotal - 100) < 0.01],
     ["Grading scale", !!d.scale],
     ["Attendance policy", !!d.attendance],
@@ -351,12 +352,24 @@ export default function SyllabusBuilder() {
       }
     }
 
-    if (d.texts || d.costNote || d.tech) {
+            const m = d.materials;
+    const hasAccess = m.provided || m.hardcopy || m.online || m.acquire;
+    if (d.texts || d.costNote || d.tech || hasAccess) {
       sec("Required Materials");
       if (d.texts) h.push(para(d.texts));
       if (d.costNote) h.push(`<p class="soft">${esc(d.costNote)}</p>`);
+      if (hasAccess) {
+        const lines = [];
+        if (m.provided) lines.push("These materials will be provided to you at no additional cost.");
+        const fmt = m.hardcopy && m.online ? "both hardcopy and online"
+          : m.hardcopy ? "hardcopy" : m.online ? "online" : "";
+        if (fmt) lines.push(`Format: available in ${fmt}.`);
+        if (m.acquire) lines.push(`Where to acquire: ${m.acquire}`);
+        h.push(`<ul>${lines.map((l) => `<li>${esc(l)}</li>`).join("")}</ul>`);
+      }
       if (d.tech) { h.push(`<h3>Technology you will need</h3>`); h.push(para(d.tech)); }
     }
+  
 
     const live = d.items.filter((x) => x.name);
     if (live.length) {
@@ -480,6 +493,13 @@ export default function SyllabusBuilder() {
     const doc = f.contentWindow.document;
     doc.open(); doc.write(fullHtml()); doc.close();
     setTimeout(() => { f.contentWindow.focus(); f.contentWindow.print(); }, 250);
+  };
+  const saveJson = () => dl(new Blob([JSON.stringify(d, null, 2)], { type: "application/json" }), fname("json"));
+  const loadJson = (e) => {
+    const f = e.target.files?.[0]; if (!f) return;
+    const r = new FileReader();
+    r.onload = () => { try { setD({ ...blank, ...JSON.parse(r.result) }); } catch { alert("That file could not be read as a saved syllabus."); } };
+    r.readAsText(f); e.target.value = "";
   };
 
   /* ---------- sections ---------- */
@@ -623,6 +643,21 @@ export default function SyllabusBuilder() {
             <Field label="Required texts"><A rows={4} value={d.texts} onChange={(v) => set("texts", v)} placeholder="Hastedt, G. P. (2020). American Foreign Policy: Past, Present, and Future (12th ed.). Rowman and Littlefield." /></Field>
             <Field label="Cost note" hint="tell them the real number, and the free path if there is one"><A rows={2} value={d.costNote} onChange={(v) => set("costNote", v)} placeholder="The textbook runs about $60 used. A copy is on reserve at Paul Meek Library. Tell me before the second week if cost is a barrier." /></Field>
             <Field label="Technology and platforms"><A rows={3} value={d.tech} onChange={(v) => set("tech", v)} placeholder="Canvas for all materials and submissions. A phone or laptop microphone is enough for the audio assignments." /></Field>
+                        <Field label="Access details" hint="answer the questions students always ask: will I be given the book, what format, and where do I get it">
+              <label className="flex items-start gap-2 mb-2 text-sm" style={{ color: C.slate, cursor: "pointer" }}>
+                <input type="checkbox" checked={d.materials.provided} onChange={(e) => set("materials", { ...d.materials, provided: e.target.checked })} style={{ marginTop: 3 }} />
+                <span>These materials will be provided to you at no additional cost.</span>
+              </label>
+              <label className="flex items-start gap-2 mb-2 text-sm" style={{ color: C.slate, cursor: "pointer" }}>
+                <input type="checkbox" checked={d.materials.hardcopy} onChange={(e) => set("materials", { ...d.materials, hardcopy: e.target.checked })} style={{ marginTop: 3 }} />
+                <span>Available in hardcopy (print).</span>
+              </label>
+              <label className="flex items-start gap-2 mb-2 text-sm" style={{ color: C.slate, cursor: "pointer" }}>
+                <input type="checkbox" checked={d.materials.online} onChange={(e) => set("materials", { ...d.materials, online: e.target.checked })} style={{ marginTop: 3 }} />
+                <span>Available online (digital / e-text).</span>
+              </label>
+              <A rows={2} value={d.materials.acquire} onChange={(v) => set("materials", { ...d.materials, acquire: v })} placeholder="Where to acquire them: the UTM Bookstore, a copy on reserve at Paul Meek Library, or the publisher link in Canvas." />
+            </Field>
           </>)}
 
           {tab === 5 && (<>
