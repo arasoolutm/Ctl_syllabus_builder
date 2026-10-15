@@ -268,7 +268,17 @@ export default function SyllabusBuilder() {
   const setDeep = (k, i, key, v) =>
     setD((p) => { const a = [...p[k]]; a[i] = { ...a[i], [key]: v }; return { ...p, [k]: a }; });
   const push = (k, obj) => setD((p) => ({ ...p, [k]: [...p[k], obj] }));
-  const drop = (k, i) => setD((p) => ({ ...p, [k]: p[k].filter((_, j) => j !== i) }));
+     const drop = (k, i) => setD((p) => {
+       const next = { ...p, [k]: p[k].filter((_, j) => j !== i) };
+       if (k === "outcomes" && p.outcomes[i].trim()) {
+         const gone = p.outcomes.slice(0, i).filter((o) => o.trim()).length;
+         next.items = p.items.map((x) => ({
+           ...x,
+           slos: x.slos.filter((z) => z !== gone).map((z) => (z > gone ? z - 1 : z)),
+         }));
+       }
+       return next;
+     });
   const setLab = (k, v) => setD((p) => ({ ...p, lab: { ...p.lab, [k]: v } }));
 
   function calculateWeightTotal(items) {
