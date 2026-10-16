@@ -222,14 +222,14 @@ const inputBase = {
   fontSize: 14, color: C.ink, background: "#fff", outline: "none",
 };
 
-const T = ({ value, onChange, placeholder, mono }) => (
+const T = ({ value, onChange, placeholder, mono, onBlur }) => (
   <input style={{ ...inputBase, fontFamily: mono ? "ui-monospace, monospace" : inputBase.fontFamily }}
-    value={value} placeholder={placeholder} onChange={(e) => onChange(e.target.value)} />
+    value={value} placeholder={placeholder} onChange={(e) => onChange(e.target.value)} onBlur={onBlur} />
 );
 
-const A = ({ value, onChange, placeholder, rows = 4 }) => (
+const A = ({ value, onChange, placeholder, rows = 4, onBlur }) => (
   <textarea style={{ ...inputBase, resize: "vertical", lineHeight: 1.5 }} rows={rows}
-    value={value} placeholder={placeholder} onChange={(e) => onChange(e.target.value)} />
+    value={value} placeholder={placeholder} onChange={(e) => onChange(e.target.value)} onBlur={onBlur} />
 );
 
 const Field = ({ label, hint, children }) => (
@@ -480,7 +480,7 @@ export default function SyllabusBuilder() {
 
   const fullHtml = () =>
     `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word"><head>
-     <meta charset="utf-8"/><title>${esc(d.code)} Syllabus</title>
+    <meta charset="utf-8"/><title>${esc(pdfFilename())}</title>
      <style>@page{size:8.5in 11in;margin:0.8in}${DOC_CSS}</style></head>
      <body><div class="page">${docBody}</div></body></html>`;
 
@@ -489,12 +489,14 @@ export default function SyllabusBuilder() {
     a.href = u; a.download = name; a.click(); setTimeout(() => URL.revokeObjectURL(u), 4000);
   };
   const fname = (ext) => `${(d.code || "Syllabus").replace(/\s+/g, "_")}_${d.term.replace(/\s+/g, "_")}.${ext}`;
+  const pdfFilename = () => `Syllabus_${d.term.replace(/\s+/g, "_")}`;
 
   const exportWord = () => dl(new Blob(["\ufeff" + fullHtml()], { type: "application/msword" }), fname("doc"));
   const exportPdf = () => {
     const f = frameRef.current; if (!f) return;
     const doc = f.contentWindow.document;
     doc.open(); doc.write(fullHtml()); doc.close();
+    doc.title = pdfFilename();
     setTimeout(() => { f.contentWindow.focus(); f.contentWindow.print(); }, 250);
   };
 
@@ -571,7 +573,7 @@ export default function SyllabusBuilder() {
             </div>
             <Field label="Delivery" hint="students read this before they register">
               <select style={inputBase} value={d.modality} onChange={(e) => set("modality", e.target.value)}>
-                {["In person", "Hybrid", "Online synchronous", "Online asynchronous"].map((m) => <option key={m}>{m}</option>)}
+                {["In person", "Hybrid", "Online synchronous", "Online asynchronous", "Internship"].map((m) => <option key={m}>{m}</option>)}
               </select>
             </Field>
             <Field label="Meeting time" hint="leave blank if fully asynchronous"><T value={d.meeting} onChange={(v) => set("meeting", v)} placeholder="Tuesday and Thursday, 9:30 to 10:45 a.m." /></Field>
@@ -584,7 +586,7 @@ export default function SyllabusBuilder() {
             <H>Instructor</H>
             <Note>Office hours are the single most under-used thing on a syllabus. Students who work shifts or commute from Dresden or Union City often cannot make a fixed midday block. Naming an alternative, even just "email me and we will find a time," changes who walks through the door.</Note>
             <Field label="Your name"><T value={d.instructor} onChange={(v) => set("instructor", v)} placeholder="Dr. Jane Doe" /></Field>
-            <Field label="Email"><T value={d.email} onChange={(v) => set("email", v)} placeholder="jdoe@utm.edu" /></Field>
+            <Field label="Email"><T value={d.email} onChange={(v) => set("email", v)} onBlur={() => {const username = d.email.trim().split("@")[0]; set("email", username ? `${username}@utm.edu` : "");}} placeholder="jdoe (autofills @utm.edu)" /></Field>
             <Field label="Office"><T value={d.office} onChange={(v) => set("office", v)} placeholder="Humanities 212" /></Field>
             <Field label="Office hours"><A rows={2} value={d.hours} onChange={(v) => set("hours", v)} placeholder="Monday and Wednesday, 10 a.m. to noon, and by appointment. Email me and we will find a time that works." /></Field>
             <Field label="Email subject line you want" hint="cuts your response time"><T value={d.subjectLine} onChange={(v) => set("subjectLine", v)} placeholder="POSC 322 - [your question]" /></Field>
@@ -798,8 +800,9 @@ export default function SyllabusBuilder() {
           <div className="flex items-center gap-2 mb-2" style={{ color: C.slate, fontSize: 12, letterSpacing: 1 }}>
             <ChevronRight size={13} style={{ color: C.orange }} />THIS IS EXACTLY WHAT EXPORTS
           </div>
-          <div style={{ background: "#fff", border: `1px solid ${C.line}`, borderRadius: 3, padding: "34px 40px",
-            maxHeight: "calc(100vh - 130px)", overflow: "auto", boxShadow: "0 1px 4px rgba(11,34,64,.08)" }}>
+          <div style={{ background: "#fff", border: `1px solid ${C.line}`, borderRadius: 3, boxSizing: "border-box",
+            width: "8.5in", maxWidth: "100%", padding: "0.8in", maxHeight: "calc(100vh - 130px)",
+            overflow: "auto", boxShadow: "0 1px 4px rgba(11,34,64,.08)" }}>
             <style>{DOC_CSS}</style>
             <div dangerouslySetInnerHTML={{ __html: docBody || `<p class="soft">Start on the left. The document builds itself here.</p>` }} />
           </div>
