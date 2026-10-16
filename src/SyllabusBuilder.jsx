@@ -689,7 +689,45 @@ export default function SyllabusBuilder() {
 
           {tab === 6 && (<>
             <H>Course Policies</H>
-            <Field label="Attendance"><A rows={3} value={d.attendance} onChange={(v) => set("attendance", v)} placeholder="Say what counts as present, what happens after an absence, and who to tell." /></Field>
+            <Field label="Attendance">
+              <select
+                style={{ ...inputBase, marginBottom: 8 }}
+                value=""
+                onChange={(e) => {
+                  const text = e.target.value;
+                  if (!text) return;
+                  if (
+                    d.attendance.trim() &&
+                    !window.confirm("Replace your current attendance policy?")
+                  ) {
+                    return;
+                  }
+                  set("attendance", text);
+                }}
+              >
+                <option value="">Please select a sample attendance policy, then edit it to fit your course</option>
+                {[
+                  ["Graded",
+                    'Attendance in this course means that you will be present for all in-person class meetings. Roll will be called/marked at the beginning of each class period. If you are not present during roll call, it is your responsibility to see the professor after class so that you may be marked tardy; otherwise, you will be marked absent for the day. If you need to miss class for a valid reason (school events, family matters, appointments, etc.) you must notify the professor in advance of your absence, or as near as possible to the class period in the event of emergencies. You need not be detailed, a simple "I am out sick today" will suffice!'
+                  ],
+                  ["Flexible",
+                    `Your attendance is beneficial at all scheduled sessions. It's where new introductions to materials will take place, and group activities will facilitate learning. I understand that life happens and you may not be able to attend every class. Therefore, MWF sections have 3 free absences throughout the semester. T/TH sections have 2 free absences. This includes excused absences.`
+                  ],
+                  ["Online",
+                    `This course has no fixed meeting time, so attendance is measured by your activity in Canvas rather than by your presence in a room. You are counted present in a given week if you have submitted that week's work, posted to the discussion board, or otherwise engaged with the week's module by the Sunday deadline. Two consecutive weeks with no Canvas activity will trigger an outreach from me and may be reported to Student Success as a retention concern. Federal financial aid regulations also require that we document academically related activity.`
+                  ],
+                ].map(([label, text]) => (
+                  <option key={label} value={text}>{label}</option>
+                ))}
+              </select>
+
+              <A
+                rows={8}
+                value={d.attendance}
+                onChange={(v) => set("attendance", v)}
+                placeholder="Say what counts as present, what happens after an absence, and who to tell."
+              />
+            </Field> 
             <Field label="What engagement looks like here" hint="optional, but it removes a lot of guesswork"><A rows={3} value={d.participation} onChange={(v) => set("participation", v)} placeholder="Merely showing up and sitting through the class is not participation. Asking questions during Q and A, contributing to project discussions, and showing up to team meetings all count." /></Field>
             <Field label="Late work and make-up"><A rows={3} value={d.late} onChange={(v) => set("late", v)} placeholder="All assignments except exams can be made up with a 30 percent late penalty. Exams cannot be made up except for documented emergencies. Reach out before the deadline, not after." /></Field>
 
