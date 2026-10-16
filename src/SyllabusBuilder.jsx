@@ -328,7 +328,7 @@ export default function SyllabusBuilder() {
     h.push(`<table class="hdr"><tr>
       <td class="hdr-l"><img src="${LOGO}" alt="The University of Tennessee at Martin" width="230"/></td>
       <td class="hdr-r"><div class="ct">${esc(d.code || "COURSE 000")}</div>
-      <div class="tt">${esc(d.title || "Course Title")}</div>
+      <h1 class="tt">${esc(d.title || "Course Title")}</h1>
       <div class="st">${esc(d.term)}${d.modality ? " &nbsp;|&nbsp; " + esc(d.modality) : ""}${d.dept ? " &nbsp;|&nbsp; " + esc(d.dept) : ""}</div></td></tr></table>`);
 
     // Course facts
@@ -462,7 +462,7 @@ export default function SyllabusBuilder() {
     .hdr-l{width:245px}
     .hdr-r{text-align:right}
     .ct{font-size:10pt;letter-spacing:2px;color:${C.orange};font-weight:bold}
-    .tt{font-size:19pt;color:${C.navy};line-height:1.15;font-weight:bold}
+    .tt{font-size:19pt;color:${C.navy};line-height:1.15;font-weight:bold;margin:0}
     .st{font-size:10pt;color:#5A6A80;margin-top:3px}
     table.grid{width:100%;border-collapse:collapse;margin:6px 0 12px;font-size:10.5pt}
     .grid th,.grid td{border:1px solid ${C.line};padding:6px 9px;text-align:left;vertical-align:top}
