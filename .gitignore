@@ -1,0 +1,11 @@
+# CTL Syllabus Builder
+# Files git should never track
+
+# Installed npm packages. Reinstalled from pack-lock.json with 'npm install',
+# so there is no reason to commit them.
+node_modules/
+
+# Production build output from 'npm run build'. Fully reproducible from src/,
+# and the hashed filenames change every build, so committing it only creates
+# merge conflicts.
+dist/
