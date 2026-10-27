@@ -7,8 +7,6 @@ and exports it to Word or PDF. Maintained by the Center for Teaching and Learnin
 
 - No accounts, no database, no server-side code. Everything runs in the browser.
 - Nothing is transmitted or stored. Closing the tab clears the work.
-- "Save my work" downloads a small JSON file to the user's own machine.
-  "Load a saved file" reads it back. That is the entire persistence model.
 - Because of the above, there is no FERPA surface and no data retention question
   to answer for IT or Institutional Compliance.
 
