@@ -731,18 +731,16 @@ export default function SyllabusBuilder() {
           {tab === 7 && (<>
             <H>University Policies</H>
             <Note>CTL maintains this language and checks it each term. Leave it checked and it stays current. If you edit it in Word after export, you own the accuracy of the edit.</Note>
-            <div style={{ maxHeight: "60vh", overflowY: "auto", overflowX: "hidden", paddingRight: 8, minWidth: 0 }}>
-              {Object.entries(LOCKED).map(([k, v]) => (
-                <div key={k} className="mb-3 p-3 rounded" style={{ background: "#fff", border: `1px solid ${C.line}`, minWidth: 0 }}>
-                  <label className="flex items-center gap-2" style={{ cursor: "pointer" }}>
-                    <input type="checkbox" checked={d.inc[k]} onChange={(e) => set("inc", { ...d.inc, [k]: e.target.checked })} />
-                    <Lock size={12} style={{ color: C.orange }} />
-                    <span style={{ color: C.navy, fontWeight: "bold", fontSize: 13.5 }}>{v.title}</span>
-                  </label>
-                  <div style={{ fontSize: 12, color: C.slate, marginTop: 6, lineHeight: 1.5, whiteSpace: "pre-wrap" }}>{v.text}</div>
-                </div>
-              ))}
-            </div>
+            {Object.entries(LOCKED).map(([k, v]) => (
+              <div key={k} className="mb-3 p-3 rounded" style={{ background: "#fff", border: `1px solid ${C.line}` }}>
+                <label className="flex items-center gap-2" style={{ cursor: "pointer" }}>
+                  <input type="checkbox" checked={d.inc[k]} onChange={(e) => set("inc", { ...d.inc, [k]: e.target.checked })} />
+                  <Lock size={12} style={{ color: C.orange }} />
+                  <span style={{ color: C.navy, fontWeight: "bold", fontSize: 13.5 }}>{v.title}</span>
+                </label>
+                <div style={{ fontSize: 12, color: C.slate, marginTop: 6, lineHeight: 1.5, maxHeight: 86, overflow: "auto", whiteSpace: "pre-wrap" }}>{v.text}</div>
+              </div>
+            ))}
           </>)}
 
           {tab === 8 && (<>
