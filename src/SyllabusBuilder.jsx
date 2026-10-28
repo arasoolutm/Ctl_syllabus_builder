@@ -370,7 +370,7 @@ const createBlank = () => ({
   credits: "3", meetingPattern: "", meeting: "", meetingTime: "",
   location: "", exlocation: "", dept: "", prereq: "",
   instructor: "", email: "", phone: "", office: "", hours: "", address: "",
-  subjectLine: "", responseTime: "48 hours on business days",
+  subjectLine: "",
   description: "", welcome: "", customDescriptions: [],
   showPrimer: true, outcomes: [""],
   texts: "", costNote: "", tech: "",
@@ -917,10 +917,9 @@ export default function SyllabusBuilder() {
     if (d.attendance) pol.push(["Attendance and Participation", d.attendance]);
     if (d.participation) pol.push(["What Engagement Looks Like Here", d.participation]);
     if (lateText) pol.push(["Late Work and Make-Up Policy", lateText]);
-    if (d.subjectLine || d.responseTime || d.address)
+    if (d.subjectLine || d.address)
       pol.push(["Reaching Me", [
         d.subjectLine && `Use this subject line on every email: ${d.subjectLine}`,
-        d.responseTime && `I respond to email within ${d.responseTime}.`,
         d.address && `You can address me as ${d.address}.`,
       ].filter(Boolean).join("\n")]);
     if (aiText.trim()) pol.push(["Artificial Intelligence Policy", aiText]);
