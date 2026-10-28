@@ -376,6 +376,7 @@ const createBlank = () => ({
   texts: "", costNote: "", tech: "",
   materials: { provided: false, hardcopy: false, online: false, acquire: "" },
   extraMaterials: [],
+  gradingMethod: "percentage",
   items: [{ name: "", weight: "", points: "", due: "", desc: "", slos: [] }],
   scale: "A 90 to 100  ·  B 80 to 89  ·  C 70 to 79  ·  D 60 to 69  ·  F below 60",
   attendance: "", late: "", lateSample: "", lateAdditional: [], participation: "",
@@ -678,6 +679,14 @@ export default function SyllabusBuilder() {
     return Math.round(total * 100) / 100;
   }
 
+  function calculatePointsTotal(items) {
+    const total = items
+      .filter((item) => item.name.trim())
+      .reduce((sum, item) => sum + parseWeight(item.points), 0);
+
+    return Math.round(total * 100) / 100;
+  }
+
   const autofillScheduleDates = () => {
     const dates = buildWeekDates(d.semesterStart, Math.max(15, d.weeks.length));
     if (!dates.length) return;
@@ -708,6 +717,18 @@ export default function SyllabusBuilder() {
 
   const weightTotal = useMemo(
     () => calculateWeightTotal(d.items), [d.items]);
+
+  const pointsTotal = useMemo(
+    () => calculatePointsTotal(d.items), [d.items]);
+
+  const validPoints = d.items.some((item) => item.name.trim()) &&
+    d.items.every((item) =>
+      (!item.name.trim() && !item.points.trim()) ||
+      (item.name.trim() &&
+        item.points.trim() !== "" &&
+        Number.isFinite(Number(item.points)) &&
+        Number(item.points) > 0)
+    );
 
   const realOutcomes = d.outcomes.filter((o) => o.trim());
   const mappedSlos = new Set(d.items.flatMap((x) => x.slos));
@@ -775,7 +796,14 @@ export default function SyllabusBuilder() {
     ["At least three learning outcomes", realOutcomes.length >= 3],
     ["Every outcome tied to an assessment", realOutcomes.length > 0 && unmapped.length === 0],
     ["Required materials listed", hasText(d.texts) || d.materials.provided || d.materials.hardcopy || d.materials.online || hasText(d.materials.acquire)],
-    ["Assessment weights total 100 percent", Math.abs(weightTotal - 100) < 0.01],
+    [
+      d.gradingMethod === "percentage"
+        ? "Assessment weights total 100 percent"
+        : "All assignments have valid point values",
+      d.gradingMethod === "percentage"
+        ? Math.abs(weightTotal - 100) < 0.01
+        : validPoints
+    ],
     ["Grading scale", hasText(d.scale)],
     ["Attendance policy", hasText(d.attendance)],
     ["Late work and make-up policy", hasText(lateText)],
@@ -879,18 +907,21 @@ export default function SyllabusBuilder() {
     }
 
     const live = d.items.filter((x) => x.name);
+    const isPoints = d.gradingMethod === "points";
     if (live.length) {
       const hasDueDates = live.some((x) => x.due?.trim());
       sec("Assessment and Grading");
-      h.push(`<table class="grid"><tr><th>Assignment</th><th class="w">Weight</th>${hasDueDates ? '<th class="assignment-due">Due date</th>' : ""}<th>What it is</th></tr>${
-        live.map((x) => `<tr><td><strong>${esc(x.name)}</strong>${
-          x.slos.length ? `<div class="tag">Outcome${x.slos.length > 1 ? "s" : ""} ${x.slos.map((i) => i + 1).join(", ")}</div>` : ""
-        }</td><td class="w">${fmtWeight(parseWeight(x.weight))}%</td>${hasDueDates ? `<td class="assignment-due">${esc(x.due || "")}</td>` : ""}<td>${esc(x.desc)}</td></tr>`).join("")
-      }<tr class="tot"><td>Total</td><td class="w">${fmtWeight(weightTotal)}%</td>${hasDueDates ? "<td></td>" : ""}<td></td></tr></table>`);
+      h.push(`<table class="grid"><tr><th>Assignment</th><th class="w">${isPoints ? "Points" : "Weight"}</th>${hasDueDates ? '<th class="assignment-due">Due date</th>' : ""}<th>What it is</th></tr>${live.map((x) => `<tr><td><strong>${esc(x.name)}</strong>${x.slos.length ? `<div class="tag">Outcome${x.slos.length > 1 ? "s" : ""} ${x.slos.map((i) => i + 1).join(", ")}</div>` : ""
+        }</td><td class="w">${isPoints
+          ? fmtWeight(parseWeight(x.points))
+          : `${fmtWeight(parseWeight(x.weight))}%`}</td>${hasDueDates ? `<td class="assignment-due">${esc(x.due || "")}</td>` : ""}<td>${esc(x.desc)}</td></tr>`).join("")
+        }<tr class="tot"><td>Total</td><td class="w">${isPoints
+          ? fmtWeight(pointsTotal)
+          : `${fmtWeight(weightTotal)}%`}</td>${hasDueDates ? "<td></td>" : ""}<td></td></tr></table>`);
       if (d.scale) { h.push(`<h3>Grading scale</h3>`); h.push(para(d.scale)); }
     }
 
-        if (d.hasLab) {
+    if (d.hasLab) {
       const L = d.lab;
       sec("Laboratory Component");
       const lf = [
@@ -958,7 +989,7 @@ export default function SyllabusBuilder() {
     }
 
     return h.join("");
-  }, [d, weightTotal, realOutcomes, aiText, meetingDisplay, schedRows]);
+  }, [d, weightTotal, pointsTotal, realOutcomes, aiText, meetingDisplay, schedRows]);
 
   const DOC_CSS = `
     body{font-family:Cambria,Georgia,serif;font-size:11pt;line-height:1.5;color:#1a1a1a;margin:0}
@@ -1394,18 +1425,86 @@ export default function SyllabusBuilder() {
 
           {tab === 5 && (<>
             <H>Assessment and Grading</H>
+            <div className="flex gap-2 mb-4">
+              <button
+                type="button"
+                onClick={() => set("gradingMethod", "percentage")}
+                aria-pressed={d.gradingMethod === "percentage"}
+                className="px-3 py-2 rounded text-sm font-semibold"
+                style={{
+                  background: d.gradingMethod === "percentage" ? C.navy : UI.paper,
+                  color: d.gradingMethod === "percentage" ? "#fff" : UI.navy,
+                  border: `1px solid ${C.navy}`,
+                  cursor: "pointer"
+                }}
+              >
+                Percentage (%)
+              </button>
+
+              <button
+                type="button"
+                onClick={() => set("gradingMethod", "points")}
+                aria-pressed={d.gradingMethod === "points"}
+                className="px-3 py-2 rounded text-sm font-semibold"
+                style={{
+                  background: d.gradingMethod === "points" ? C.navy : UI.paper,
+                  color: d.gradingMethod === "points" ? "#fff" : UI.navy,
+                  border: `1px solid ${C.navy}`,
+                  cursor: "pointer"
+                }}
+              >
+                Points (pts)
+              </button>
+            </div>
             <div className="p-3 mb-4 rounded flex items-center gap-2" style={{
-              background: Math.abs(weightTotal - 100) < 0.01 ? UI.goodBg : UI.warnBg,
-              color: Math.abs(weightTotal - 100) < 0.01 ? UI.good : UI.warn, fontSize: 14, fontWeight: "bold" }}>
-              {Math.abs(weightTotal - 100) < 0.01 ? <Check size={16} /> : <AlertTriangle size={16} />}
-              Weights total {fmtWeight(weightTotal)}%{Math.abs(weightTotal - 100) < 0.01 ? "" : `, which is ${weightTotal > 100 ? "over" : "under"} by ${fmtWeight(Math.abs(100 - weightTotal))}`}
+              background: d.gradingMethod === "points"
+                ? (validPoints ? UI.goodBg : UI.warnBg)
+                : Math.abs(weightTotal - 100) < 0.01 ? UI.goodBg : UI.warnBg,
+              color: d.gradingMethod === "points"
+                ? (validPoints ? UI.good : UI.warn)
+                : Math.abs(weightTotal - 100) < 0.01 ? UI.good : UI.warn,
+              fontSize: 14,
+              fontWeight: "bold"
+            }}>
+              {d.gradingMethod === "points" ? (
+                <>
+                  {validPoints ? <Check size={16} /> : <AlertTriangle size={16} />}
+                  Total: {fmtWeight(pointsTotal)} points
+                  {!validPoints && (
+                    d.items.some((item) => !item.name.trim() && item.points.trim())
+                      ? " — Add a name to the incomplete assignment"
+                      : " — Enter valid points for each assignment"
+                  )}
+                </>
+              ) : (
+                <>
+                  {Math.abs(weightTotal - 100) < 0.01
+                    ? <Check size={16} />
+                    : <AlertTriangle size={16} />}
+                  Weights total {fmtWeight(weightTotal)}%
+                  {Math.abs(weightTotal - 100) < 0.01
+                    ? ""
+                    : `, which is ${weightTotal > 100 ? "over" : "under"} by ${fmtWeight(Math.abs(100 - weightTotal))}`}
+                </>
+              )}
             </div>
             {d.items.map((x, i) => (
               <div key={i} className="p-3 mb-3 rounded" style={{ background: UI.paper, border: `1px solid ${UI.line}` }}>
                 <div className="flex gap-2 mb-2">
                   <div style={{ flex: 3 }}><T value={x.name} onChange={(v) => setDeep("items", i, "name", v)} placeholder="Final paper" /></div>
-                  <div style={{ flex: 1 }}><T mono value={x.weight} onChange={(v) => setDeep("items", i, "weight", v)} placeholder="%" /></div>
-                  <div style={{ flex: 1 }}><T mono value={x.points} onChange={(v) => setDeep("items", i, "points", v)} placeholder="pts" /></div>
+                  {d.gradingMethod === "percentage" ? (
+                    <div style={{ flex: 1 }}>
+                      <T mono value={x.weight}
+                        onChange={(v) => setDeep("items", i, "weight", v)}
+                        placeholder="%" />
+                    </div>
+                  ) : (
+                    <div style={{ flex: 1 }}>
+                      <T mono value={x.points}
+                        onChange={(v) => setDeep("items", i, "points", v)}
+                        placeholder="pts" />
+                    </div>
+                  )}
                   <div style={{ flex: 1 }}><T value={x.due} onChange={(v) => setDeep("items", i, "due", v)} placeholder="Due date" /></div>
                   <button onClick={() => drop("items", i)} style={{ color: UI.muted, cursor: "pointer" }}><Trash2 size={15} /></button>
                 </div>
