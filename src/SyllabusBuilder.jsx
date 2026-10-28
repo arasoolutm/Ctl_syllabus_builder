@@ -205,7 +205,7 @@ const Lbl = ({ children, hint }) => (
 const inputBase = {
   width: "100%", border: `1px solid ${C.line}`, borderRadius: 4,
   padding: "7px 10px", fontFamily: "Cambria, Georgia, serif",
-  fontSize: 14, color: C.ink, background: "#fff", outline: "none",
+  fontSize: 14, color: C.ink, background: "#fff", outline: "none", boxSizing: "border-box",
 };
 
 const T = ({ value, onChange, placeholder, mono }) => (
@@ -731,16 +731,18 @@ export default function SyllabusBuilder() {
           {tab === 7 && (<>
             <H>University Policies</H>
             <Note>CTL maintains this language and checks it each term. Leave it checked and it stays current. If you edit it in Word after export, you own the accuracy of the edit.</Note>
-            {Object.entries(LOCKED).map(([k, v]) => (
-              <div key={k} className="mb-3 p-3 rounded" style={{ background: "#fff", border: `1px solid ${C.line}` }}>
-                <label className="flex items-center gap-2" style={{ cursor: "pointer" }}>
-                  <input type="checkbox" checked={d.inc[k]} onChange={(e) => set("inc", { ...d.inc, [k]: e.target.checked })} />
-                  <Lock size={12} style={{ color: C.orange }} />
-                  <span style={{ color: C.navy, fontWeight: "bold", fontSize: 13.5 }}>{v.title}</span>
-                </label>
-                <div style={{ fontSize: 12, color: C.slate, marginTop: 6, lineHeight: 1.5, maxHeight: 86, overflow: "auto", whiteSpace: "pre-wrap" }}>{v.text}</div>
-              </div>
-            ))}
+            <div style={{ maxHeight: "60vh", overflowY: "auto", overflowX: "hidden", paddingRight: 8, minWidth: 0 }}>
+              {Object.entries(LOCKED).map(([k, v]) => (
+                <div key={k} className="mb-3 p-3 rounded" style={{ background: "#fff", border: `1px solid ${C.line}`, minWidth: 0 }}>
+                  <label className="flex items-center gap-2" style={{ cursor: "pointer" }}>
+                    <input type="checkbox" checked={d.inc[k]} onChange={(e) => set("inc", { ...d.inc, [k]: e.target.checked })} />
+                    <Lock size={12} style={{ color: C.orange }} />
+                    <span style={{ color: C.navy, fontWeight: "bold", fontSize: 13.5 }}>{v.title}</span>
+                  </label>
+                  <div style={{ fontSize: 12, color: C.slate, marginTop: 6, lineHeight: 1.5, whiteSpace: "pre-wrap" }}>{v.text}</div>
+                </div>
+              ))}
+            </div>
           </>)}
 
           {tab === 8 && (<>
@@ -762,19 +764,21 @@ export default function SyllabusBuilder() {
               <input type="checkbox" checked={d.calNote} onChange={(e) => set("calNote", e.target.checked)} style={{ marginTop: 3 }} />
               <span>Append the Fall 2026 registrar dates: add and drop deadlines, Fall Break, Thanksgiving, finals, and commencement.</span>
             </label>
-            {d.weeks.map((w, i) => (
-              <div key={i} className="p-3 mb-3 rounded" style={{ background: "#fff", border: `1px solid ${C.line}` }}>
+            <div style={{ maxHeight: "60vh", overflowY: "auto", overflowX: "hidden", paddingRight: 8, minWidth: 0 }}>
+              {d.weeks.map((w, i) => (
+                <div key={i} className="p-3 mb-3 rounded" style={{ background: "#fff", border: `1px solid ${C.line}`, minWidth: 0 }}>
                 <div className="flex gap-2 mb-2">
-                  <div style={{ flex: 1 }}><T value={w.label} onChange={(v) => setDeep("weeks", i, "label", v)} placeholder={d.scheduleType === "modular" ? `Module ${i + 1}` : `Week ${i + 1}`} /></div>
-                  <div style={{ flex: 2 }}><T value={w.dates} onChange={(v) => setDeep("weeks", i, "dates", v)} placeholder={d.scheduleType === "modular" ? "Module dates (optional)" : "August 24 to 28"} /></div>
+                  <div style={{ flex: 1, minWidth: 0 }}><T value={w.label} onChange={(v) => setDeep("weeks", i, "label", v)} placeholder={d.scheduleType === "modular" ? `Module ${i + 1}` : `Week ${i + 1}`} /></div>
+                  <div style={{ flex: 2, minWidth: 0 }}><T value={w.dates} onChange={(v) => setDeep("weeks", i, "dates", v)} placeholder={d.scheduleType === "modular" ? "Module dates (optional)" : "August 24 to 28"} /></div>
                   <button onClick={() => drop("weeks", i)} style={{ color: "#9AA5B5", cursor: "pointer" }}><Trash2 size={15} /></button>
                 </div>
                 <div className="flex gap-2">
-                  <div style={{ flex: 2 }}><A rows={3} value={w.topics} onChange={(v) => setDeep("weeks", i, "topics", v)} placeholder="Topic and readings" /></div>
-                  <div style={{ flex: 1 }}><A rows={3} value={w.due} onChange={(v) => setDeep("weeks", i, "due", v)} placeholder="Due" /></div>
+                  <div style={{ flex: 2, minWidth: 0 }}><A rows={3} value={w.topics} onChange={(v) => setDeep("weeks", i, "topics", v)} placeholder="Topic and readings" /></div>
+                  <div style={{ flex: 1, minWidth: 0 }}><A rows={3} value={w.due} onChange={(v) => setDeep("weeks", i, "due", v)} placeholder="Due" /></div>
                 </div>
-              </div>
-            ))}
+                </div>
+              ))}
+            </div>
             <div className="flex gap-2 flex-wrap">
               <Btn onClick={() => push("weeks", { label: `${d.scheduleType === "modular" ? "Module" : "Week"} ${d.weeks.length + 1}`, dates: "", topics: "", due: "" })} icon={Plus}>Add {d.scheduleType === "modular" ? "module" : "week"}</Btn>
               {d.scheduleType !== "modular" && <Btn onClick={() => setD((p) => ({ ...p, weeks: Array.from({ length: 15 }, (_, i) => p.weeks[i] || { label: `Week ${i + 1}`, dates: "", topics: "", due: "" }) }))}>Build 15 weeks</Btn>}
