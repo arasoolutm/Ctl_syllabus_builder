@@ -1,3 +1,27 @@
 @import "tailwindcss";
 
 html, body, #root { margin: 0; padding: 0; }
+
+/* ---------------------------------------------------------------------------
+   Issue #134: independent column scrolling.
+
+   On wide screens the editor is three side-by-side columns (left rail, entry
+   form, live preview). We pin the row to the viewport height and let the entry
+   form scroll on its own, so the left rail and preview stay put while you move
+   through a long form. The preview already scrolls internally.
+
+   Below the three-column width the layout stacks (flex-wrap) and we leave the
+   whole page to scroll naturally, so the caps only apply on wide screens.
+   --------------------------------------------------------------------------- */
+@media (min-width: 900px) {
+  .editor-row {
+    height: calc(100vh - 62px);
+    overflow: hidden;
+  }
+
+  .editor-rail,
+  .editor-form {
+    max-height: calc(100vh - 62px);
+    overflow-y: auto;
+  }
+}

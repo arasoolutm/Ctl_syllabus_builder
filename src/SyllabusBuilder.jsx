@@ -480,9 +480,9 @@ export default function SyllabusBuilder() {
         </div>
       </div>
 
-      <div className="flex flex-wrap" style={{ alignItems: "flex-start" }}>
+      <div className="flex flex-wrap editor-row" style={{ alignItems: "flex-start" }}>
         {/* left rail */}
-        <div style={{ width: 150, background: "#fff", borderRight: `1px solid ${C.line}`, minHeight: "calc(100vh - 62px)" }}>
+        <div className="editor-rail" style={{ width: 150, background: "#fff", borderRight: `1px solid ${C.line}`, minHeight: "calc(100vh - 62px)" }}>
           {TABS.map((t, i) => {
             const on = tab === i; const I = t.i;
             return (
@@ -497,7 +497,7 @@ export default function SyllabusBuilder() {
         </div>
 
         {/* form */}
-        <div className="p-5" style={{ flex: "1 1 420px", minWidth: 340, maxWidth: 620 }}>
+        <div className="p-5 editor-form" style={{ flex: "1 1 420px", minWidth: 340, maxWidth: 620 }}>
           {tab === 0 && (<>
             <H>Course</H>
             <div className="flex gap-3 flex-wrap">
