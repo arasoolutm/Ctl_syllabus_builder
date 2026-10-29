@@ -1493,7 +1493,7 @@ export default function SyllabusBuilder() {
               <A rows={3} value={d.late} onChange={(v) => set("late", v)} placeholder="Describe your late work deadlines, penalties, extensions, and make-up arrangements." />
             </Field>
             {d.lateAdditional.map((policy, i) => (
-              <Field key={i} label={`Additional policy`} hint="choose a sample, then edit as needed">
+              <Field key={i} label="Additional late work policy" hint="choose a sample, then edit as needed">
                 <select value={policy.sample} onChange={(e) => {
                   const sample = LATE_POLICIES.find((option) => option.label === e.target.value);
                   setDeep("lateAdditional", i, "sample", e.target.value);
@@ -1508,7 +1508,7 @@ export default function SyllabusBuilder() {
                 </div>
               </Field>
             ))}
-            <Btn onClick={() => push("lateAdditional", { sample: "", text: "" })} icon={Plus}>Add another policy</Btn>
+            <Btn onClick={() => push("lateAdditional", { sample: "", text: "" })} icon={Plus}>Add additional late work policy/paragraph</Btn>
 
             <div className="mt-6 mb-2" style={{ color: UI.navy, fontWeight: "bold", fontSize: 14 }}>Artificial Intelligence Policy</div>
             <Note>UTM's AI policy, effective July 1, 2025, requires every syllabus to state your expectations for student AI use. This is not optional, so pick a tier below. The three tiers match the policy: unrestricted, mixed, and total prohibition.</Note>
