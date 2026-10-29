@@ -1288,7 +1288,7 @@ export default function SyllabusBuilder() {
             <H>Instructor</H>
             <Note>Office hours are the single most under-used thing on a syllabus. Students who work shifts or commute from Dresden or Union City often cannot make a fixed midday block. Naming an alternative, even just "email me and we will find a time," changes who walks through the door.</Note>
             <Field label="Your name"><T value={d.instructor} onChange={(v) => set("instructor", v)} placeholder="Dr. Jane Doe" /></Field>
-            <Field label="Email"><T value={d.email} onChange={(v) => set("email", v)} onBlur={() => {const username = d.email.trim().split("@")[0]; set("email", username ? `${username}@utm.edu` : "");}} placeholder="jdoe (autofills @utm.edu)" /></Field>
+            <Field label="Email"><T value={d.email} onChange={(v) => set("email", v)} onBlur={() => {const email = d.email.trim(); set("email", email ? (email.endsWith("@") ? `${email}utm.edu` : email.includes("@") ? email : `${email}@utm.edu`) : "");}} placeholder="jdoe (autofills @utm.edu)" /></Field>
             <Field label="Phone"><T type="tel" value={d.phone} onChange={(v) => set("phone", v)} placeholder="731-555-0123" /></Field>
             <Field label="Office"><T value={d.office} onChange={(v) => set("office", v)} placeholder="Humanities 212" /></Field>
             <Field label="Office hours"><A rows={2} value={d.hours} onChange={(v) => set("hours", v)} placeholder="Monday and Wednesday, 10 a.m. to noon, and by appointment. Email me and we will find a time that works." /></Field>
