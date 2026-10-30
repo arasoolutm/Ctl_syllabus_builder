@@ -575,6 +575,7 @@ export default function SyllabusBuilder() {
 	document.documentElement.setAttribute("data-theme", theme);
     }, [theme]);
     const nextTheme = THEMES[(THEMES.findIndex((t) => t.id === theme) + 1) % THEMES.length];
+    const currentTheme = THEMES.find((t) => t.id === theme) || THEMES[0];
     
     const [pendingDelete, setPendingDelete] = useState(null);
     const [weekCount, setWeekCount] = useState("15");
@@ -1120,12 +1121,16 @@ export default function SyllabusBuilder() {
               </button>
             );
           })}
-          <button
-	      onClick={() => setTheme(nextTheme.id)}
-	      style={{ margin: 12, padding: "6px 10px", borderRadius: 4, cursor: "pointer",
-		       background: UI.paper, color: UI.ink, border: `1px solid ${UI.line}` }}>
-	      {nextTheme.label}
-	  </button>
+            <button
+		onClick={() => setTheme(nextTheme.id)}
+		title={`Switch to ${nextTheme.label}`}
+		aria-label={`Current theme: ${currentTheme.label}. Switch to ${nextTheme.label}.`}
+		style={{ margin: 12, padding: "6px 10px", borderRadius: 4, cursor: "pointer",
+			 textAlign: "left", background: UI.paper, color: UI.ink,
+			 border: `1px solid ${UI.line}` }}>
+		<div style={{ fontSize: 10, letterSpacing: 1, color: UI.muted }}>THEME</div>
+		<div style={{ fontSize: 13 }}>{currentTheme.label}</div>
+</button>
 </div>
         {/* form */}
         <div ref={formRef} className="p-5" style={{ flex: "1 1 420px", minWidth: 340, maxWidth: 620 }}>
