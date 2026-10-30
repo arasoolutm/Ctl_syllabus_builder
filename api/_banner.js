@@ -32,6 +32,25 @@ const SESSION_TTL_MS = 8 * 60 * 1000; // conservative vs Banner's actual session
 const termCodeCache = new Map(); // normalized label -> { code, expires }
 const sessionCache = new Map(); // termCode -> { cookie, expires }
 
+// Banner's searchResults endpoint is keyed by query string but, empirically,
+// NOT safely so: two concurrent requests on the same session cookie with
+// different txt_subject/txt_courseNumber params can cross-contaminate, with
+// one request's response actually carrying the other's search criteria's
+// data. (Caught live: a request body asking for "CSCI 220" came back with
+// "CSCI 430"'s CRN, because a CSCI 430 lookup was still in flight on the
+// same session.) Rather than chase Banner's exact session semantics, just
+// never let two searchResults calls on the same cookie be in flight at
+// once - queue them per cookie instead.
+const cookieLocks = new Map(); // cookie -> tail of the queue for that session
+
+function withCookieLock(cookie, fn) {
+  const prior = cookieLocks.get(cookie) || Promise.resolve();
+  const settled = prior.catch(() => {});
+  const run = settled.then(fn);
+  cookieLocks.set(cookie, run.catch(() => {}));
+  return run;
+}
+
 export async function resolveTermCode(termLabel) {
   const label = String(termLabel || "").trim();
   if (!label) return null;
@@ -149,10 +168,12 @@ export async function searchSections(termCode, cookie, { subject, courseNumber }
   if (courseNumber) params.set("txt_courseNumber", courseNumber);
 
   const url = `https://ban9ssb1.utm.edu/StudentRegistrationSsb/ssb/searchResults/searchResults?${params.toString()}`;
-  const response = await fetch(url, { headers: { ...bannerHeaders("application/json, text/javascript, */*; q=0.01"), Cookie: cookie } });
-  if (!response.ok) { await response.text().catch(() => {}); return []; }
-  const json = await response.json();
-  return Array.isArray(json?.data) ? json.data : [];
+  return withCookieLock(cookie, async () => {
+    const response = await fetch(url, { headers: { ...bannerHeaders("application/json, text/javascript, */*; q=0.01"), Cookie: cookie } });
+    if (!response.ok) { await response.text().catch(() => {}); return []; }
+    const json = await response.json();
+    return Array.isArray(json?.data) ? json.data : [];
+  });
 }
 
 // Runs a search using the cached session; if that session turns out to be
