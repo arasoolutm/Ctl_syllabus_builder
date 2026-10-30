@@ -1,118 +1,21 @@
-const SUBJECT_CODES = {
-  "African American Studies": "AAST",
-  Accounting: "ACCT",
-  "Agricultural Economics": "AGEC",
-  "Agricultural Education": "AGED",
-  "Agricultural Engineering Technology": "AGET",
-  Agriculture: "AGRI",
-  "Animal Science": "ANSC",
-  Art: "ART",
-  "Art Education": "ARTE",
-  "Art History": "ARTH",
-  Astronomy: "ASTR",
-  "Athletic Training": "ATRN",
-  Biochemistry: "BCHE",
-  Biology: "BIOL",
-  "Business Communication": "BCOM",
-  "Business Education": "BUED",
-  "Business Law": "BLAW",
-  Botany: "BOT",
-  "Career and Technical Education": "CTE",
-  Chemistry: "CHEM",
-  "Child and Family Studies": "CFS",
-  "Construction Management": "CMGT",
-  "Consumer Resource Management": "CRMG",
-  Counseling: "COUN",
-  "Criminal Justice": "CJ",
-  Cybersecurity: "CYBR",
-  Dance: "DANC",
-  "Dance Education": "DNED",
-  "Driver Safety Education": "DSED",
-  "Early Childhood Education": "ECED",
-  Economics: "ECON",
-  "Educational Foundations": "EDFN",
-  "Educational Studies": "EDST",
-  "Elementary Education": "ELED",
-  Engineering: "ENGR",
-  "Engineering, Civil": "CIEG",
-  English: "ENGL",
-  "Exercise Science": "EXSC",
-  "Family and Consumer Sciences": "FCS",
-  "Family and Consumer Sciences Education": "FCSE",
-  "Fashion Merchandising": "FASH",
-  "Fellows Research Program": "FRP",
-  Finance: "FIN",
-  "Fine Arts": "FA",
-  "Food Science": "FSCI",
-  "Food Service Management": "FSMG",
-  "Food Systems Management": "FSVC",
-  French: "FREN",
-  "General Studies": "GENS",
-  Geography: "GEOG",
-  Geology: "GEOL",
-  Geoscience: "GEOS",
-  German: "GERM",
-  Gerontology: "GERO",
-  "Graphic Design": "GDES",
-  Greek: "GREK",
-  Health: "HLTH",
-  "Health and Human Performance": "HHP",
-  "Health and Physical Education": "HPED",
-  History: "HIST",
-  Honors: "HNRS",
-  "Hospitality Management": "HPMG",
-  "Human Learning": "HLRN",
-  "Human Performance": "HPER",
-  "Information Systems": "INFS",
-  "Interdisciplinary Studies": "IDST",
-  "International Studies": "INST",
-  Japanese: "JAPN",
-  Leadership: "LDSP",
-  "Library Studies": "LIBS",
-  Management: "MGT",
-  Marketing: "MKTG",
-  "Mass Media and Strategic Communication": "MMSC",
-  Mathematics: "MATH",
-  Meteorology: "METR",
-  Microbiology: "MBIO",
-  "Military Science and Leadership": "MSL",
-  Music: "MUS",
-  "Music, Applied": "MUAP",
-  "Music Education": "MUED",
-  "Music Ensembles": "MUEN",
-  "Natural Resources Management": "NRM",
-  Neuroscience: "NEUR",
-  Nursing: "NURS",
-  Nutrition: "NUTR",
-  "Park Administration": "PARK",
-  Philosophy: "PHIL",
-  "Physical Activity": "PACT",
-  Physics: "PHYS",
-  "Plant Science": "PLSC",
-  "Political Science": "POSC",
-  Portuguese: "PORT",
-  Psychology: "PSYC",
-  Reading: "READ",
-  "Religious Studies": "RLST",
-  "Science, Technology, Engineering, Mathematics": "STEM",
-  "Secondary Education": "SEDU",
-  Sociology: "SOC",
-  "Social Work": "SWRK",
-  "Soil Science": "SOIL",
-  Spanish: "SPAN",
-  "Special Education": "SPED",
-  "Sport Business": "SPMG",
-  Statistics: "STAT",
-  "Sustainability Studies": "SUST",
-  "Teacher Education": "TCED",
-  Theatre: "THEA",
-  "Veterinary Health Technology": "VET",
-  "Wildlife Biology": "WBIO",
-  "Women's and Gender Studies": "WMST",
-  "Women’s and Gender Studies": "WMST",
-  Zoology: "ZOOL",
-  "Computer Science": "CSCI",
-};
+import { SUBJECT_CODES } from "../src/subjectCodes.js";
+import { bannerHeaders, resolveTermCode, findSectionRow, fetchCourseDescription, searchWithRetry, decodeEntities, listTermsRaw } from "./_banner.js";
+
+function formatInstructorName(displayName) {
+  if (!displayName) return "";
+  const match = displayName.match(/^([^,]+),\s*([^(]+?)(?:\s*\(([^)]+)\))?$/);
+  if (!match) return decodeEntities(displayName);
+  const last = match[1].trim();
+  const preferred = match[3]?.trim();
+  const firstWord = match[2].trim().split(/\s+/)[0];
+  return decodeEntities(`${preferred || firstWord} ${last}`);
+}
+
+function primaryFaculty(faculty) {
+  return (Array.isArray(faculty) && (faculty.find((f) => f.primaryIndicator) || faculty[0])) || null;
+}
+
+/* ---------- shared text helpers ---------- */
 
 function cleanText(value) {
   return value
@@ -123,6 +26,9 @@ function cleanText(value) {
     .replace(/^\s*:\s*/, "")
     .trim();
 }
+
+/* ---------- action=details: resolve a CRN (directly, or via subject +
+   courseNumber + section) to the full set of syllabus fields ---------- */
 
 function extractMappedText(html, label) {
   const text = cleanText(html)
@@ -254,16 +160,6 @@ function parseSectionPrerequisites(html) {
   return /no prerequisite information available/i.test(text) ? "None" : text;
 }
 
-function bannerHeaders(accept) {
-  return {
-    Accept: accept,
-    Connection: "close",
-    "X-Requested-With": "XMLHttpRequest",
-    "User-Agent": "Mozilla/5.0",
-    ...(process.env.UTM_COOKIE ? { Cookie: process.env.UTM_COOKIE } : {}),
-  };
-}
-
 async function fetchFacultyMeetingTimes(term, crn) {
   const url = `https://ban9ssb1.utm.edu/StudentRegistrationSsb/ssb/searchResults/getFacultyMeetingTimes?term=${encodeURIComponent(term)}&courseReferenceNumber=${encodeURIComponent(crn)}`;
   const response = await fetch(url, { headers: bannerHeaders("application/json, text/javascript, */*; q=0.01") });
@@ -285,24 +181,40 @@ async function fetchSectionPrerequisites(term, crn) {
   return parseSectionPrerequisites(await response.text());
 }
 
-export default async function handler(req, res) {
+async function handleDetails(req, res) {
   if (req.method !== "POST") {
     return res.status(405).json({ error: "Method not allowed" });
   }
 
   try {
-    const { term, courseReferenceNumber } = req.body || {};
-    if (!term || !courseReferenceNumber) {
-      return res.status(400).json({ error: "term and courseReferenceNumber are required" });
+    const { term, courseReferenceNumber, subject, courseNumber, section } = req.body || {};
+    if (!term || (!courseReferenceNumber && !(subject && courseNumber && section))) {
+      return res.status(400).json({ error: "term and either courseReferenceNumber, or subject/courseNumber/section, are required" });
+    }
+
+    const termCode = await resolveTermCode(term);
+    if (!termCode) {
+      return res.status(404).json({ error: `Could not find "${term}" in the registration system's term list` });
+    }
+
+    let crn = courseReferenceNumber ? String(courseReferenceNumber) : null;
+    let faculty = null;
+    if (!crn) {
+      const row = await findSectionRow(termCode, subject, courseNumber, section);
+      if (!row) {
+        return res.status(404).json({ error: `No section ${section} found for ${subject} ${courseNumber} in that term` });
+      }
+      crn = row.courseReferenceNumber;
+      faculty = row.faculty;
     }
 
     const formBody = new URLSearchParams({
-      term: String(term),
-      courseReferenceNumber: String(courseReferenceNumber),
+      term: termCode,
+      courseReferenceNumber: crn,
       first: "first",
     }).toString();
 
-    const [response, meetingInfo, dept, prereq] = await Promise.all([
+    const [response, meetingInfo, dept, prereq, description] = await Promise.all([
       fetch("https://ban9ssb1.utm.edu/StudentRegistrationSsb/ssb/searchResults/getClassDetails", {
         method: "POST",
         headers: {
@@ -311,9 +223,10 @@ export default async function handler(req, res) {
         },
         body: formBody,
       }),
-      fetchFacultyMeetingTimes(term, courseReferenceNumber).catch(() => null),
-      fetchSectionCatalogDetails(term, courseReferenceNumber).catch(() => null),
-      fetchSectionPrerequisites(term, courseReferenceNumber).catch(() => null),
+      fetchFacultyMeetingTimes(termCode, crn).catch(() => null),
+      fetchSectionCatalogDetails(termCode, crn).catch(() => null),
+      fetchSectionPrerequisites(termCode, crn).catch(() => null),
+      (subject && courseNumber) ? fetchCourseDescription(termCode, subject, courseNumber).catch(() => null) : null,
     ]);
 
     const html = await response.text();
@@ -333,9 +246,152 @@ export default async function handler(req, res) {
     }
     if (dept) data.dept = dept;
     if (prereq) data.prereq = prereq;
+    if (description) data.description = description;
+
+    const primary = primaryFaculty(faculty);
+    if (primary?.displayName) data.instructor = formatInstructorName(primary.displayName);
+    if (primary?.emailAddress) data.email = primary.emailAddress;
 
     return res.status(200).json(data);
   } catch (error) {
     return res.status(500).json({ error: error.message || "Failed to fetch class details" });
   }
+}
+
+/* ---------- action=course-search: live autocomplete for the course-code
+   field (exact subject + optional course-number prefix -> matching
+   courses, deduped across sections) ---------- */
+
+async function handleCourseSearch(req, res) {
+  if (req.method !== "GET") {
+    return res.status(405).json({ error: "Method not allowed" });
+  }
+
+  try {
+    const { term, subject, q } = req.query || {};
+    if (!term || !subject) {
+      return res.status(400).json({ error: "term and subject are required" });
+    }
+
+    const termCode = await resolveTermCode(term);
+    if (!termCode) {
+      return res.status(404).json({ error: `Could not find "${term}" in the registration system's term list` });
+    }
+
+    const rows = await searchWithRetry(termCode, { subject: String(subject).toUpperCase() });
+
+    const numberPrefix = String(q || "").trim().toUpperCase();
+    const seen = new Map();
+    for (const row of rows) {
+      const num = String(row.courseNumber || "").toUpperCase();
+      if (numberPrefix && !num.startsWith(numberPrefix)) continue;
+      const code = `${row.subject} ${row.courseNumber}`;
+      if (!seen.has(code)) seen.set(code, { code, title: decodeEntities(row.courseTitle) });
+    }
+
+    const courses = [...seen.values()].sort((a, b) => a.code.localeCompare(b.code, undefined, { numeric: true }));
+    return res.status(200).json({ courses });
+  } catch (error) {
+    return res.status(500).json({ error: error.message || "Course search failed" });
+  }
+}
+
+/* ---------- action=section-search: live list of real sections (with
+   instructor + meeting time) for a known subject + course number ---------- */
+
+const SECTION_DAY_ABBR = [
+  ["monday", "M"], ["tuesday", "T"], ["wednesday", "W"],
+  ["thursday", "Th"], ["friday", "F"], ["saturday", "Sat"], ["sunday", "Sun"],
+];
+
+function sectionClockLabel(hhmm) {
+  if (!hhmm || hhmm.length < 4) return "";
+  const hh = parseInt(hhmm.slice(0, 2), 10);
+  const mm = hhmm.slice(2, 4);
+  const period = hh >= 12 ? "pm" : "am";
+  let h12 = hh % 12;
+  if (h12 === 0) h12 = 12;
+  return mm === "00" ? `${h12}${period}` : `${h12}:${mm}${period}`;
+}
+
+function summarizeMeeting(meetingsFaculty) {
+  const mt = meetingsFaculty?.[0]?.meetingTime;
+  if (!mt) return "Online / TBA";
+  const days = SECTION_DAY_ABBR.filter(([key]) => mt[key]).map(([, abbr]) => abbr).join("");
+  if (!days || !mt.beginTime) return "Online / asynchronous";
+  return `${days} ${sectionClockLabel(mt.beginTime)}-${sectionClockLabel(mt.endTime)}`;
+}
+
+function summarizeInstructor(faculty) {
+  const primary = (Array.isArray(faculty) && (faculty.find((f) => f.primaryIndicator) || faculty[0])) || null;
+  if (!primary?.displayName) return "Staff";
+  return decodeEntities(primary.displayName.split(",")[0].trim());
+}
+
+async function handleSectionSearch(req, res) {
+  if (req.method !== "GET") {
+    return res.status(405).json({ error: "Method not allowed" });
+  }
+
+  try {
+    const { term, subject, courseNumber } = req.query || {};
+    if (!term || !subject || !courseNumber) {
+      return res.status(400).json({ error: "term, subject, and courseNumber are required" });
+    }
+
+    const termCode = await resolveTermCode(term);
+    if (!termCode) {
+      return res.status(404).json({ error: `Could not find "${term}" in the registration system's term list` });
+    }
+
+    const rows = await searchWithRetry(termCode, {
+      subject: String(subject).toUpperCase(),
+      courseNumber: String(courseNumber).toUpperCase(),
+    });
+
+    const sections = rows
+      .map((r) => ({
+        section: r.sequenceNumber,
+        crn: r.courseReferenceNumber,
+        instructor: summarizeInstructor(r.faculty),
+        meeting: summarizeMeeting(r.meetingsFaculty),
+        seatsAvailable: r.seatsAvailable,
+      }))
+      .sort((a, b) => a.section.localeCompare(b.section, undefined, { numeric: true }));
+
+    return res.status(200).json({ sections });
+  } catch (error) {
+    return res.status(500).json({ error: error.message || "Section search failed" });
+  }
+}
+
+/* ---------- action=terms: real terms UTM's registration system currently
+   offers, for the Term field's picker ---------- */
+
+async function handleTerms(req, res) {
+  if (req.method !== "GET") {
+    return res.status(405).json({ error: "Method not allowed" });
+  }
+
+  try {
+    const raw = await listTermsRaw();
+    const terms = raw
+      .map((t) => String(t.description || "").replace(/\s*\(View Only\)\s*$/i, "").trim())
+      .filter(Boolean)
+      .slice(0, 8); // newest-first; a handful of recent + upcoming terms is plenty for a picker
+    return res.status(200).json({ terms });
+  } catch (error) {
+    return res.status(500).json({ error: error.message || "Could not load terms" });
+  }
+}
+
+/* ---------- dispatch ---------- */
+
+export default async function handler(req, res) {
+  const action = req.query?.action;
+  if (action === "course-search") return handleCourseSearch(req, res);
+  if (action === "section-search") return handleSectionSearch(req, res);
+  if (action === "details") return handleDetails(req, res);
+  if (action === "terms") return handleTerms(req, res);
+  return res.status(400).json({ error: "Unknown or missing action" });
 }

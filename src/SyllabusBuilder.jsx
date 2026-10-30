@@ -4,6 +4,7 @@ import {
   ShieldCheck, CalendarDays, FileDown, Check, AlertTriangle, Plus, Trash2,
   Save, Upload, Printer, Lock, Info, ChevronRight, ChevronDown, X, Loader2
 } from "lucide-react";
+import { SUBJECTS } from "./subjectCodes.js";
 
 /* ============================================================
    UTM SYLLABUS BUILDER  ·  Center for Teaching and Learning
@@ -176,8 +177,28 @@ const FALL_2026 = [
 
 /* ---------- initial state ---------- */
 
+// Self-updating default term: approximates each semester's start date (no
+// per-year table to keep current) and switches to the next one 2 weeks
+// early, since that's when a professor is realistically starting to prep it.
+function defaultTermLabel(today = new Date()) {
+  const approxStart = (year, monthIndex, day) => new Date(year, monthIndex, day);
+  const year = today.getFullYear();
+  const candidates = [
+    { label: `Spring ${year}`, start: approxStart(year, 0, 13) },
+    { label: `Summer ${year}`, start: approxStart(year, 4, 25) },
+    { label: `Fall ${year}`, start: approxStart(year, 7, 22) },
+    { label: `Spring ${year + 1}`, start: approxStart(year + 1, 0, 13) },
+  ];
+  const earlySwitch = 14 * 24 * 60 * 60 * 1000;
+  let chosen = candidates[0].label;
+  for (const c of candidates) {
+    if (c.start.getTime() - earlySwitch <= today.getTime()) chosen = c.label;
+  }
+  return chosen;
+}
+
 const blank = {
-  code: "", title: "", crn: "", section: "", term: "Fall 2026", modality: "In person",
+  code: "", title: "", crn: "", section: "", term: defaultTermLabel(), modality: "In person",
   credits: "3", meeting: "", location: "", dept: "", prereq: "",
   instructor: "", email: "", office: "", hours: "", address: "",
   subjectLine: "", responseTime: "48 hours on business days",
@@ -252,16 +273,172 @@ export default function SyllabusBuilder() {
       document.removeEventListener("keydown", onKey);
     };
   }, [deliveryOpen]);
+
+  const [termOptions, setTermOptions] = useState([]);
+  const [termOpen, setTermOpen] = useState(false);
+  const termRef = useRef(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/banner?action=terms")
+      .then((r) => (r.ok ? r.json() : { terms: [] }))
+      .then((payload) => { if (!cancelled) setTermOptions(payload.terms || []); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, []);
+
+  useEffect(() => {
+    if (!termOpen) return undefined;
+    const onDocClick = (e) => {
+      if (termRef.current && !termRef.current.contains(e.target)) setTermOpen(false);
+    };
+    const onKey = (e) => { if (e.key === "Escape") setTermOpen(false); };
+    document.addEventListener("mousedown", onDocClick);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDocClick);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [termOpen]);
+
+  const [codeSuggestions, setCodeSuggestions] = useState([]);
+  const [codeSuggestOpen, setCodeSuggestOpen] = useState(false);
+  const [codeSuggestLoading, setCodeSuggestLoading] = useState(false);
+  const codeSuggestRef = useRef(null);
+  const codeJustSelectedRef = useRef(false);
+
+  useEffect(() => {
+    if (!codeSuggestOpen) return undefined;
+    const onDocClick = (e) => {
+      if (codeSuggestRef.current && !codeSuggestRef.current.contains(e.target)) setCodeSuggestOpen(false);
+    };
+    const onKey = (e) => { if (e.key === "Escape") setCodeSuggestOpen(false); };
+    document.addEventListener("mousedown", onDocClick);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDocClick);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [codeSuggestOpen]);
+
+  const pickCodeSuggestion = (s) => {
+    codeJustSelectedRef.current = true;
+    if (s.type === "subject") {
+      setD((p) => ({ ...p, code: `${s.code} ` }));
+    } else {
+      setD((p) => ({ ...p, code: s.code, title: s.title || p.title }));
+    }
+    setCodeSuggestOpen(false);
+  };
+
+  // Live "as you type" course lookup: just letters shows matching subjects
+  // (bundled, no network); a subject code followed by digits searches the
+  // live Banner catalog for matching course numbers in that subject.
+  useEffect(() => {
+    if (codeJustSelectedRef.current) { codeJustSelectedRef.current = false; return undefined; }
+
+    const raw = String(d.code || "");
+    const match = raw.match(/^\s*([A-Za-z]*)\s*(\d*)/);
+    const subjectPart = (match?.[1] || "").toUpperCase();
+    const numberPart = match?.[2] || "";
+
+    if (!subjectPart) { setCodeSuggestLoading(false); setCodeSuggestions([]); setCodeSuggestOpen(false); return undefined; }
+
+    if (!numberPart) {
+      const matches = SUBJECTS.filter((s) => s.code.startsWith(subjectPart)).slice(0, 8)
+        .map((s) => ({ type: "subject", code: s.code, description: s.description }));
+      setCodeSuggestLoading(false);
+      setCodeSuggestions(matches);
+      setCodeSuggestOpen(matches.length > 0);
+      return undefined;
+    }
+
+    const knownSubject = SUBJECTS.some((s) => s.code === subjectPart);
+    if (!knownSubject) { setCodeSuggestLoading(false); setCodeSuggestions([]); setCodeSuggestOpen(false); return undefined; }
+
+    // Clear the stale (subject-list) suggestions right away instead of leaving
+    // them showing while the live course search is still in flight.
+    setCodeSuggestions([]);
+    setCodeSuggestLoading(true);
+    setCodeSuggestOpen(true);
+
+    const controller = new AbortController();
+    const timer = setTimeout(async () => {
+      try {
+        const url = `/api/banner?action=course-search&term=${encodeURIComponent(d.term)}&subject=${encodeURIComponent(subjectPart)}&q=${encodeURIComponent(numberPart)}`;
+        const res = await fetch(url, { signal: controller.signal });
+        if (!res.ok) throw new Error("search failed");
+        const payload = await res.json();
+        const matches = (payload.courses || []).slice(0, 8).map((c) => ({ type: "course", code: c.code, title: c.title }));
+        setCodeSuggestLoading(false);
+        setCodeSuggestions(matches);
+        setCodeSuggestOpen(matches.length > 0);
+      } catch (error) {
+        if (error.name !== "AbortError") { setCodeSuggestLoading(false); setCodeSuggestions([]); setCodeSuggestOpen(false); }
+      }
+    }, 250);
+
+    return () => { clearTimeout(timer); controller.abort(); };
+  }, [d.code, d.term]);
+
+  const [sectionSuggestions, setSectionSuggestions] = useState([]);
+  const [sectionSuggestOpen, setSectionSuggestOpen] = useState(false);
+  const sectionSuggestRef = useRef(null);
+
+  useEffect(() => {
+    if (!sectionSuggestOpen) return undefined;
+    const onDocClick = (e) => {
+      if (sectionSuggestRef.current && !sectionSuggestRef.current.contains(e.target)) setSectionSuggestOpen(false);
+    };
+    const onKey = (e) => { if (e.key === "Escape") setSectionSuggestOpen(false); };
+    document.addEventListener("mousedown", onDocClick);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDocClick);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [sectionSuggestOpen]);
+
+  const pickSectionSuggestion = (s) => {
+    setD((p) => ({ ...p, section: s.section }));
+    setSectionSuggestOpen(false);
+  };
+
+  // Once the course code is a complete, valid "SUBJ 000" code, proactively
+  // surface the real sections offered that term so the professor sees what
+  // to put in Section next, instead of having to already know it.
+  useEffect(() => {
+    const code = String(d.code || "").trim();
+    const parsed = code.match(/^([A-Za-z]{2,5})\s*-?\s*(\d{3,4}[A-Za-z]?)$/);
+    if (!parsed) { setSectionSuggestions([]); setSectionSuggestOpen(false); return undefined; }
+
+    const controller = new AbortController();
+    const timer = setTimeout(async () => {
+      try {
+        const url = `/api/banner?action=section-search&term=${encodeURIComponent(d.term)}&subject=${encodeURIComponent(parsed[1].toUpperCase())}&courseNumber=${encodeURIComponent(parsed[2].toUpperCase())}`;
+        const res = await fetch(url, { signal: controller.signal });
+        if (!res.ok) throw new Error("search failed");
+        const payload = await res.json();
+        const sections = payload.sections || [];
+        setSectionSuggestions(sections);
+        if (sections.length && !String(d.section || "").trim()) setSectionSuggestOpen(true);
+      } catch (error) {
+        if (error.name !== "AbortError") setSectionSuggestions([]);
+      }
+    }, 450);
+
+    return () => { clearTimeout(timer); controller.abort(); };
+  }, [d.code, d.term]);
   const frameRef = useRef(null);
 
   const set = (k, v) => setD((p) => ({ ...p, [k]: v }));
 
-  const lookupCourseByCrn = async (raw, signal) => {
+  const lookupCourseBySection = async (term, subject, courseNumber, section, signal) => {
     try {
-      const res = await fetch("/api/class-details", {
+      const res = await fetch("/api/banner?action=details", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ term: "202640", courseReferenceNumber: raw }),
+        body: JSON.stringify({ term, subject, courseNumber, section }),
         signal,
       });
 
@@ -285,6 +462,9 @@ export default function SyllabusBuilder() {
         location: payload.location || p.location,
         dept: payload.dept || p.dept,
         prereq: payload.prereq || p.prereq,
+        instructor: payload.instructor || p.instructor,
+        email: payload.email || p.email,
+        description: payload.description || p.description,
       }));
       setCrnStatus("ok");
     } catch (error) {
@@ -293,14 +473,28 @@ export default function SyllabusBuilder() {
   };
 
   useEffect(() => {
-    const raw = String(d.crn || "").trim();
-    if (raw.length !== 5) { setCrnStatus(null); return undefined; }
+    const code = String(d.code || "").trim();
+    const section = String(d.section || "").trim();
+    const term = String(d.term || "").trim();
+    const parsed = code.match(/^([A-Za-z]{2,5})\s*-?\s*(\d{3,4}[A-Za-z]?)$/);
+    if (!parsed || !section || !term) { setCrnStatus(null); return undefined; }
 
     const controller = new AbortController();
     setCrnStatus("loading");
-    lookupCourseByCrn(raw, controller.signal);
-    return () => controller.abort();
-  }, [d.crn]);
+    const timer = setTimeout(() => {
+      lookupCourseBySection(term, parsed[1].toUpperCase(), parsed[2].toUpperCase(), section, controller.signal);
+    }, 450);
+    return () => { clearTimeout(timer); controller.abort(); };
+  }, [d.code, d.section, d.term]);
+
+  // Not Banner data — just a sensible default for a field we invented,
+  // derived from the course code once it's valid. Never overwrites
+  // something already typed.
+  useEffect(() => {
+    const code = String(d.code || "").trim();
+    if (!/^[A-Za-z]{2,5}\s*-?\s*\d{3,4}[A-Za-z]?$/.test(code)) return;
+    setD((p) => (p.subjectLine.trim() ? p : { ...p, subjectLine: `${code} - [your question]` }));
+  }, [d.code]);
   const setDeep = (k, i, key, v) =>
     setD((p) => { const a = [...p[k]]; a[i] = { ...a[i], [key]: v }; return { ...p, [k]: a }; });
   const push = (k, obj) => setD((p) => ({ ...p, [k]: [...p[k], obj] }));
@@ -563,19 +757,56 @@ export default function SyllabusBuilder() {
         <div className="p-5" style={{ flex: "1 1 420px", minWidth: 340, maxWidth: 620 }}>
           {tab === 0 && (<>
             <H>Course</H>
-            <div className="flex gap-3 flex-wrap">
-              <div style={{ flex: "1 1 150px" }}><Field label="Course code" hint="POSC 322"><T value={d.code} onChange={(v) => set("code", v)} placeholder="POSC 322" /></Field></div>
-              <div style={{ flex: "2 1 240px" }}><Field label="Course title"><T value={d.title} onChange={(v) => set("title", v)} placeholder="American Foreign Policy" /></Field></div>
-            </div>
             <div className="flex gap-3 flex-wrap items-end">
+              <div style={{ flex: "1 1 150px" }}>
+                <Field label="Course code" hint="POSC 322">
+                  <div ref={codeSuggestRef} style={{ position: "relative" }}>
+                    <input
+                      style={inputBase}
+                      value={d.code}
+                      placeholder="POSC 322"
+                      autoComplete="off"
+                      onChange={(e) => set("code", e.target.value)}
+                      onFocus={() => { if (codeSuggestions.length) setCodeSuggestOpen(true); }}
+                    />
+                    <div role="listbox" className="transition-all duration-200"
+                      style={{
+                        position: "absolute", left: 0, right: 0, top: "calc(100% + 4px)", zIndex: 30,
+                        background: "#fff", border: `1px solid ${C.line}`, borderRadius: 4,
+                        boxShadow: "0 6px 16px rgba(0,0,0,.12)", overflow: "hidden", maxHeight: 220, overflowY: "auto",
+                        opacity: codeSuggestOpen ? 1 : 0,
+                        transform: codeSuggestOpen ? "translateY(0) scaleY(1)" : "translateY(-4px) scaleY(0.96)",
+                        transformOrigin: "top", pointerEvents: codeSuggestOpen ? "auto" : "none",
+                      }}>
+                      {codeSuggestLoading && codeSuggestions.length === 0 && (
+                        <div className="flex items-center gap-2" style={{ padding: "8px 10px", fontSize: 12.5, color: C.slate }}>
+                          <Loader2 size={13} className="animate-spin" />Searching live course catalog&hellip;
+                        </div>
+                      )}
+                      {codeSuggestions.map((s) => (
+                        <div key={s.type + s.code} role="option"
+                          onClick={() => pickCodeSuggestion(s)}
+                          onMouseEnter={(e) => { e.currentTarget.style.background = "#F4F6F9"; }}
+                          onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
+                          style={{ padding: "7px 10px", fontSize: 13, cursor: "pointer" }}>
+                          <div style={{ fontWeight: "bold", color: C.navy }}>{s.code}</div>
+                          <div style={{ fontSize: 11.5, color: C.slate }}>{s.type === "subject" ? s.description : s.title}</div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </Field>
+              </div>
               <div style={{ flex: "1 1 130px" }}>
-                <Field label="CRN" hint="the 5-digit registration number">
-                  <div style={{ position: "relative" }}>
+                <Field label="Section" hint="e.g. 001">
+                  <div ref={sectionSuggestRef} style={{ position: "relative" }}>
                     <input
                       style={{ ...inputBase, paddingRight: 30 }}
-                      value={d.crn}
-                      placeholder="12345"
-                      onChange={(e) => set("crn", e.target.value.replace(/\D/g, "").slice(0, 5))}
+                      value={d.section}
+                      placeholder="001"
+                      autoComplete="off"
+                      onChange={(e) => set("section", e.target.value)}
+                      onFocus={() => { if (sectionSuggestions.length) setSectionSuggestOpen(true); }}
                     />
                     {crnStatus === "loading" &&
                       <div style={{ position: "absolute", right: 9, top: 0, bottom: 0, display: "flex", alignItems: "center" }}>
@@ -585,13 +816,86 @@ export default function SyllabusBuilder() {
                       <Check size={15} style={{ position: "absolute", right: 9, top: "50%", transform: "translateY(-50%)", color: C.good }} />}
                     {crnStatus === "error" &&
                       <X size={15} style={{ position: "absolute", right: 9, top: "50%", transform: "translateY(-50%)", color: C.bad }} />}
+                    <div role="listbox" className="transition-all duration-200"
+                      style={{
+                        position: "absolute", left: 0, right: 0, top: "calc(100% + 4px)", zIndex: 30,
+                        background: "#fff", border: `1px solid ${C.line}`, borderRadius: 4,
+                        boxShadow: "0 6px 16px rgba(0,0,0,.12)", overflow: "hidden", maxHeight: 220, overflowY: "auto",
+                        opacity: sectionSuggestOpen ? 1 : 0,
+                        transform: sectionSuggestOpen ? "translateY(0) scaleY(1)" : "translateY(-4px) scaleY(0.96)",
+                        transformOrigin: "top", pointerEvents: sectionSuggestOpen ? "auto" : "none",
+                      }}>
+                      {sectionSuggestions.map((s) => (
+                        <div key={s.crn} role="option"
+                          onClick={() => pickSectionSuggestion(s)}
+                          onMouseEnter={(e) => { e.currentTarget.style.background = "#F4F6F9"; }}
+                          onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
+                          style={{ padding: "7px 10px", fontSize: 13, cursor: "pointer" }}>
+                          <div style={{ fontWeight: "bold", color: C.navy }}>Section {s.section}</div>
+                          <div style={{ fontSize: 11.5, color: C.slate }}>{s.meeting} &middot; {s.instructor}</div>
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 </Field>
               </div>
-              <div style={{ flex: "1 1 130px" }}><Field label="Section"><T value={d.section} onChange={(v) => set("section", v)} placeholder="001" /></Field></div>
             </div>
             <div className="flex gap-3 flex-wrap">
-              <div style={{ flex: "1 1 130px" }}><Field label="Term"><T value={d.term} onChange={(v) => set("term", v)} /></Field></div>
+              <div style={{ flex: "2 1 240px" }}><Field label="Course title"><T value={d.title} onChange={(v) => set("title", v)} placeholder="American Foreign Policy" /></Field></div>
+              <div style={{ flex: "0 0 100px" }}>
+                <Field label="CRN"><T value={d.crn} onChange={(v) => set("crn", v.replace(/\D/g, "").slice(0, 5))} placeholder="12345" /></Field>
+              </div>
+            </div>
+            <div className="flex gap-3 flex-wrap">
+              <div style={{ flex: "1 1 130px" }}>
+                <Field label="Term" hint="used for the lookup too">
+                  <div ref={termRef} style={{ position: "relative" }}>
+                    <input
+                      style={{ ...inputBase, paddingRight: 30 }}
+                      value={d.term}
+                      placeholder="Fall 2026"
+                      autoComplete="off"
+                      onChange={(e) => set("term", e.target.value)}
+                      onFocus={() => { if (termOptions.length) setTermOpen(true); }}
+                    />
+                    {termOptions.length > 0 && (
+                      <button type="button" onClick={() => setTermOpen((o) => !o)}
+                        aria-haspopup="listbox" aria-expanded={termOpen} aria-label="Choose a term"
+                        style={{
+                          position: "absolute", right: 0, top: 0, bottom: 0, width: 28,
+                          display: "flex", alignItems: "center", justifyContent: "center",
+                          background: "transparent", cursor: "pointer",
+                        }}>
+                        <ChevronDown size={14} className="transition-transform duration-200"
+                          style={{ color: C.slate, transform: termOpen ? "rotate(180deg)" : "none" }} />
+                      </button>
+                    )}
+                    <div role="listbox" className="transition-all duration-200"
+                      style={{
+                        position: "absolute", left: 0, right: 0, top: "calc(100% + 4px)", zIndex: 30,
+                        background: "#fff", border: `1px solid ${C.line}`, borderRadius: 4,
+                        boxShadow: "0 6px 16px rgba(0,0,0,.12)", overflow: "hidden", maxHeight: 220, overflowY: "auto",
+                        opacity: termOpen ? 1 : 0,
+                        transform: termOpen ? "translateY(0) scaleY(1)" : "translateY(-4px) scaleY(0.96)",
+                        transformOrigin: "top", pointerEvents: termOpen ? "auto" : "none",
+                      }}>
+                      {termOptions.map((t) => (
+                        <div key={t} role="option" aria-selected={d.term === t}
+                          onClick={() => { set("term", t); setTermOpen(false); }}
+                          onMouseEnter={(e) => { e.currentTarget.style.background = "#F4F6F9"; }}
+                          onMouseLeave={(e) => { e.currentTarget.style.background = d.term === t ? "#EEF2F7" : "transparent"; }}
+                          style={{
+                            padding: "7px 10px", fontSize: 13.5, cursor: "pointer",
+                            color: d.term === t ? C.navy : C.ink, fontWeight: d.term === t ? "bold" : "normal",
+                            background: d.term === t ? "#EEF2F7" : "transparent",
+                          }}>
+                          {t}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </Field>
+              </div>
               <div style={{ flex: "1 1 130px" }}><Field label="Credit hours"><T value={d.credits} onChange={(v) => set("credits", v)} /></Field></div>
             </div>
             <Field label="Delivery" hint="students read this before they register">
