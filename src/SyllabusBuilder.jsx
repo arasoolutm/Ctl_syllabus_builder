@@ -52,6 +52,13 @@ const UI = {
   warnBg: "var(--warnBg)",
 };
 
+const THEMES = [
+    { id: "light", label: "Light Mode" },
+    { id: "dark", label: "Dark Mode" },
+    { id: "blue", label: "Blue Light Mode" },
+    { id: "blue+", label: "Blue Light+ Mode" },
+];
+
 /* ---------- Institutional content maintained by CTL ---------- */
 
 const SLO_PRIMER = `A student learning outcome describes what a student will be able to DO by the end of this course. It is not a list of what you will cover. That difference is the whole thing. "We will cover the causes of the Cold War" is a topic. "Students will evaluate competing explanations for the outbreak of the Cold War using primary sources" is an outcome, because you can point to a specific assignment that shows whether a student did it or not.
@@ -561,18 +568,21 @@ export default function SyllabusBuilder() {
     window.addEventListener("beforeunload", warnBeforeUnload);
     return () => window.removeEventListener("beforeunload", warnBeforeUnload);
   }, [hasUnsavedChanges]);
-  const [tab, setTab] = useState(0);
-  const [theme,setTheme] = useState('light');
-  useEffect(() => {
-    document.documentElement.setAttribute("data-theme", theme);
-  }, [theme]);
-  const [pendingDelete, setPendingDelete] = useState(null);
-  const [weekCount, setWeekCount] = useState("15");
-  const [weekCountWarning, setWeekCountWarning] = useState(false);
-  const [previewFullscreen, setPreviewFullscreen] = useState(false);
-  const frameRef = useRef(null);
-  const previewRef = useRef(null);
-  const formRef = useRef(null);
+    const [tab, setTab] = useState(0);
+    
+    const [theme,setTheme] = useState('light');
+    useEffect(() => {
+	document.documentElement.setAttribute("data-theme", theme);
+    }, [theme]);
+    const nextTheme = THEMES[(THEMES.findIndex((t) => t.id === theme) + 1) % THEMES.length];
+    
+    const [pendingDelete, setPendingDelete] = useState(null);
+    const [weekCount, setWeekCount] = useState("15");
+    const [weekCountWarning, setWeekCountWarning] = useState(false);
+    const [previewFullscreen, setPreviewFullscreen] = useState(false);
+    const frameRef = useRef(null);
+    const previewRef = useRef(null);
+    const formRef = useRef(null);
 
   useEffect(() => {
     if (!previewFullscreen) return;
@@ -1111,13 +1121,12 @@ export default function SyllabusBuilder() {
             );
           })}
           <button
-              onClick={() => setTheme(theme === "light" ? "dark" : "light" )}
-          style={{margin: 12, padding: "6px 10px", borderRadius: 4, cursor: "pointer",
-            background: UI.paper, color: UI.ink, border: `1px solid ${UI.line}`}}>
-          {theme === "light" ? "Dark mode" : "Light mode"}
-            </button>
-        </div>
-
+	      onClick={() => setTheme(nextTheme.id)}
+	      style={{ margin: 12, padding: "6px 10px", borderRadius: 4, cursor: "pointer",
+		       background: UI.paper, color: UI.ink, border: `1px solid ${UI.line}` }}>
+	      {nextTheme.label}
+	  </button>
+</div>
         {/* form */}
         <div ref={formRef} className="p-5" style={{ flex: "1 1 420px", minWidth: 340, maxWidth: 620 }}>
           {tab === 0 && (<>
