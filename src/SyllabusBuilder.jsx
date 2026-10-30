@@ -1111,9 +1111,9 @@ export default function SyllabusBuilder() {
             );
           })}
           <button
-          onClick={() => setTheme(theme === "light" ? "dark" : "light")}
+              onClick={() => setTheme(theme === "light" ? "dark" : "light" )}
           style={{margin: 12, padding: "6px 10px", borderRadius: 4, cursor: "pointer",
-            background: UI.paper, color: UI.ink, border: '1px solid ${UI.line}'}}>
+            background: UI.paper, color: UI.ink, border: `1px solid ${UI.line}`}}>
           {theme === "light" ? "Dark mode" : "Light mode"}
             </button>
         </div>
