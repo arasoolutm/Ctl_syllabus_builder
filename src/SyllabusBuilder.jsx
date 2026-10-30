@@ -188,6 +188,7 @@ const blank = {
   attendance: "", late: "", participation: "",
   aiTier: "mixed", aiCustom: "", profNote: "",
   inc: { integrity: true, accessibility: true, support: true, crisis: true, changes: true },
+  scheduleType: "weekly",
   weeks: [{ label: "Week 1", dates: "", topics: "", due: "" }],
   calNote: true,
 };
@@ -369,7 +370,7 @@ export default function SyllabusBuilder() {
     const wk = d.weeks.filter((w) => w.label || w.topics || w.dates);
     if (wk.length) {
       sec("Course Schedule");
-      h.push(`<table class="grid"><tr><th class="wk">Week</th><th>Topics and Readings</th><th class="due">Due</th></tr>${
+      h.push(`<table class="grid"><tr><th class="wk">${d.scheduleType === "modular" ? "Module" : "Week"}</th><th>Topics and Readings</th><th class="due">Due</th></tr>${
         wk.map((w) => `<tr><td class="wk"><strong>${esc(w.label)}</strong>${w.dates ? `<br/><span class="soft">${esc(w.dates)}</span>` : ""}</td><td>${esc(w.topics).replace(/\n/g, "<br/>")}</td><td class="due">${esc(w.due).replace(/\n/g, "<br/>")}</td></tr>`).join("")
       }</table>`);
     }
@@ -525,8 +526,87 @@ export default function SyllabusBuilder() {
             </Field>
             <Field label="Meeting time" hint="leave blank if fully asynchronous"><T value={d.meeting} onChange={(v) => set("meeting", v)} placeholder="Tuesday and Thursday, 9:30 to 10:45 a.m." /></Field>
             <Field label="Room"><T value={d.location} onChange={(v) => set("location", v)} placeholder="Humanities 407" /></Field>
-            <Field label="Department"><T value={d.dept} onChange={(v) => set("dept", v)} placeholder="Department of Political Science and Global Studies" /></Field>
-            <Field label="Prerequisites"><T value={d.prereq} onChange={(v) => set("prereq", v)} placeholder="None" /></Field>
+<Field label="Department">
+  <select
+    style={inputBase}
+    value={d.dept}
+    onChange={(e) => set("dept", e.target.value)}
+  >
+    <option value="">Select a department...</option>
+
+    <optgroup label="College of Agriculture and Applied Sciences">
+      <option value="Agriculture, Geosciences, and Natural Resources">
+        Agriculture, Geosciences, and Natural Resources
+      </option>
+      <option value="Family and Consumer Sciences">
+        Family and Consumer Sciences
+      </option>
+    </optgroup>
+
+    <optgroup label="College of Business and Global Affairs">
+      <option value="Accounting, Finance, Economics, and Political Science">
+        Accounting, Finance, Economics, and Political Science
+      </option>
+      <option value="Management, Marketing, and Information Systems">
+        Management, Marketing, and Information Systems
+      </option>
+    </optgroup>
+
+    <optgroup label="College of Education, Health, and Behavioral Sciences">
+      <option value="Behavioral Sciences">
+        Behavioral Sciences
+      </option>
+      <option value="Educational Studies">
+        Educational Studies
+      </option>
+      <option value="Health and Human Performance">
+        Health and Human Performance
+      </option>
+      <option value="Nursing">
+        Nursing
+      </option>
+      <option value="Psychology">
+        Psychology
+      </option>
+    </optgroup>
+
+    <optgroup label="College of Engineering and Natural Sciences">
+      <option value="Biological Sciences">
+        Biological Sciences
+      </option>
+      <option value="Chemistry and Physics">
+        Chemistry and Physics
+      </option>
+      <option value="Computer Science">
+        Computer Science
+      </option>
+      <option value="Engineering">
+        Engineering
+      </option>
+      <option value="Mathematics and Statistics">
+        Mathematics and Statistics
+      </option>
+    </optgroup>
+
+    <optgroup label="College of Humanities and Fine Arts">
+      <option value="Communications">
+        Communications
+      </option>
+      <option value="English and Modern Foreign Languages">
+        English and Modern Foreign Languages
+      </option>
+      <option value="History and Philosophy">
+        History and Philosophy
+      </option>
+      <option value="Music">
+        Music
+      </option>
+      <option value="Visual and Theatre Arts">
+        Visual and Theatre Arts
+      </option>
+    </optgroup>
+  </select>
+</Field>            <Field label="Prerequisites"><T value={d.prereq} onChange={(v) => set("prereq", v)} placeholder="None" /></Field>
           </>)}
 
           {tab === 1 && (<>
@@ -672,6 +752,19 @@ export default function SyllabusBuilder() {
 
           {tab === 8 && (<>
             <H>Schedule</H>
+            <Field label="Schedule format">
+              <select style={inputBase} value={d.scheduleType || "weekly"} onChange={(e) => {
+                const next = e.target.value;
+                setD((p) => ({ ...p, scheduleType: next, weeks: p.weeks.map((w) => ({
+                  ...w,
+                  label: /^(Week|Module) \d+$/.test(w.label)
+                    ? w.label.replace(/^(Week|Module)/, next === "modular" ? "Module" : "Week") : w.label,
+                })) }));
+              }}>
+                <option value="weekly">Weekly</option>
+                <option value="modular">Modular</option>
+              </select>
+            </Field>
             <label className="flex items-start gap-2 mb-4 text-sm" style={{ color: C.slate, cursor: "pointer" }}>
               <input type="checkbox" checked={d.calNote} onChange={(e) => set("calNote", e.target.checked)} style={{ marginTop: 3 }} />
               <span>Append the Fall 2026 registrar dates: add and drop deadlines, Fall Break, Thanksgiving, finals, and commencement.</span>
@@ -679,8 +772,8 @@ export default function SyllabusBuilder() {
             {d.weeks.map((w, i) => (
               <div key={i} className="p-3 mb-3 rounded" style={{ background: "#fff", border: `1px solid ${C.line}` }}>
                 <div className="flex gap-2 mb-2">
-                  <div style={{ flex: 1 }}><T value={w.label} onChange={(v) => setDeep("weeks", i, "label", v)} placeholder="Week 1" /></div>
-                  <div style={{ flex: 2 }}><T value={w.dates} onChange={(v) => setDeep("weeks", i, "dates", v)} placeholder="August 24 to 28" /></div>
+                  <div style={{ flex: 1 }}><T value={w.label} onChange={(v) => setDeep("weeks", i, "label", v)} placeholder={d.scheduleType === "modular" ? `Module ${i + 1}` : `Week ${i + 1}`} /></div>
+                  <div style={{ flex: 2 }}><T value={w.dates} onChange={(v) => setDeep("weeks", i, "dates", v)} placeholder={d.scheduleType === "modular" ? "Module dates (optional)" : "August 24 to 28"} /></div>
                   <button onClick={() => drop("weeks", i)} style={{ color: "#9AA5B5", cursor: "pointer" }}><Trash2 size={15} /></button>
                 </div>
                 <div className="flex gap-2">
@@ -690,8 +783,8 @@ export default function SyllabusBuilder() {
               </div>
             ))}
             <div className="flex gap-2 flex-wrap">
-              <Btn onClick={() => push("weeks", { label: `Week ${d.weeks.length + 1}`, dates: "", topics: "", due: "" })} icon={Plus}>Add week</Btn>
-              <Btn onClick={() => setD((p) => ({ ...p, weeks: Array.from({ length: 15 }, (_, i) => p.weeks[i] || { label: `Week ${i + 1}`, dates: "", topics: "", due: "" }) }))}>Build 15 weeks</Btn>
+              <Btn onClick={() => push("weeks", { label: `${d.scheduleType === "modular" ? "Module" : "Week"} ${d.weeks.length + 1}`, dates: "", topics: "", due: "" })} icon={Plus}>Add {d.scheduleType === "modular" ? "module" : "week"}</Btn>
+              {d.scheduleType !== "modular" && <Btn onClick={() => setD((p) => ({ ...p, weeks: Array.from({ length: 15 }, (_, i) => p.weeks[i] || { label: `Week ${i + 1}`, dates: "", topics: "", due: "" }) }))}>Build 15 weeks</Btn>}
             </div>
           </>)}
 
