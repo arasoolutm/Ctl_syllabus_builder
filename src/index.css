@@ -1,96 +1,76 @@
 @import "tailwindcss";
 
-html, body, #root { margin: 0; padding: 0; }
+html, body, #root {
+  margin: 0;
+  padding: 0;
+}
 
+/* Default theme */
 :root {
-    --wash: #F4F6F9;
+  --wash: #F4F6F9;
+  --paper: #FFFFFF;
+  --tint: #F0F5FA;
+  --line: #D8DEE7;
+  --ink: #1A1A1A;
+  --slate: #4A5568;
+  --muted: #8894A8;
+  --navy: #0B2240;
+  --orange: #FF8300;
+  --good: #1E7A46;
+  --goodBg: #EAF6EF;
+  --warn: #B45309;
+  --warnBg: #FEF6E7;
 }
+
+[data-theme="light"] { /* uses :root values */ }
+
+/* Dark theme */
 [data-theme="dark"] {
-    --wash: #0F1724;
+  --wash: #0F1724;
+  --paper: #1A2333;
+  --tint: #243049;
+  --line: #334155;
+  --ink: #E5E7EB;
+  --slate: #CBD5E1;
+  --muted: #94A3B8;
+  --navy: #93C5FD;
+  --orange: #FF8300;
+  --good: #4ADE80;
+  --goodBg: #12301F;
+  --warn: #FBBF24;
+  --warnBg: #3A2A10;
 }
 
-:root {
-    --paper: #FFFFFF; 
-}
-[data-theme="dark"] {
-    --paper: #1a2333;
-}
-
-:root {
-    --tint: #f0f5fa;
-}
-[data-theme="dark"] {
-    --tint: #243049;
-}
-
-:root {
-    --line: #d8dee7;
-}
-[data-theme="dark"] {
-    --line: #334155;
+/* Blue theme — PALETTE.warm from issue#98 */
+[data-theme="blue"] {
+  --wash: #F6EBD6;
+  --paper: #FBF4E6;
+  --tint: #F7EEDC;
+  --line: #E3D6BC;
+  --ink: #2A2318;
+  --slate: #5A4F3C;
+  --muted: #8E8068;
+  --navy: #0B2240;
+  --orange: #FF8300;
+  --good: #1E7A46;
+  --goodBg: #EDF2DF;
+  --warn: #B45309;
+  --warnBg: #FAEFD6;
 }
 
-:root {
-    --ink: #1a1a1a;
+/* Blue+ theme — PALETTES.amber from issue#98 */
+[data-theme="blue+"] {
+  --wash: #F1DEBB;
+  --paper: #F7E8CC;
+  --tint: #F3E4C6;
+  --line: #DCC49A;
+  --ink: #2E2415;
+  --slate: #5C4A2E;
+  --muted: #8A7854;
+  --navy: #0B2240;
+  --orange: #FF8300;
+  --good: #1E7A46;
+  --goodBg: #E9EDCD;
+  --warn: #9A4A08;
+  --warnBg: #F6E3BE;
 }
-[data-theme="dark"] {
-    --ink: #e5e7eb;
-}
-
-:root {
-    --slate: #4a5568;
-}
-[data-theme="dark"] {
-    --slate: #cbd5e1;
-}
-
-:root {
-    --muted: #8894a8;
-}
-[data-theme="dark"] {
-    --muted: #94a3b8;
-}
-
-:root {
-    --navy: #0B2240;
-}
-[data-theme="dark"] {
-    --navy: #93c5fd;
-}
-
-:root {
-    --orange: #ff8300;
-}
-[data-theme="dark"] {
-    --orange: #ff8300;
-}
-
-:root {
-    --good: #1e7a46;
-}
-[data-theme="dark"] {
-    --good: #4ADE80;
-}
-
-:root {
-    --goodBg: #EAF6EF;
-}
-[data-theme="dark"] {
-    --goodBg: #12301f;
-}
-
-:root {
-    --warn: #b45309;
-}
-[data-theme="dark"] {
-    --warn: #fbbf24;
-}
-
-:root {
-    --warnBg: #FEF6E7;
-}
-[data-theme="dark"] {
-    --warnBg: #3a2a10;
-}
-
-
