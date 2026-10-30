@@ -118,14 +118,24 @@ async function openFreshSearchSession(termCode) {
 // for that term. Opening one costs three sequential round trips to UTM's
 // server, so we keep it around (per warm function instance) instead of
 // redoing it for every keystroke.
-export async function openSearchSession(termCode, { forceNew = false } = {}) {
-  const cached = sessionCache.get(termCode);
+//
+// cacheKey defaults to termCode, but callers that would otherwise share a
+// session with unrelated concurrent searches (notably the bulk catalog
+// warm-up, which runs several parallel unfiltered requests right as a
+// professor might be typing a subject-filtered one) pass a distinct key so
+// their session cookie is never reused by - or reused for - a different
+// kind of search. Sharing one proved unsafe: Banner's search appears to key
+// in-flight concurrent requests on the session's state, not just the query
+// string, so an unfiltered bulk request racing a filtered one on the same
+// cookie could return the wrong (unfiltered) results for the filtered one.
+export async function openSearchSession(termCode, { forceNew = false, cacheKey = termCode } = {}) {
+  const cached = sessionCache.get(cacheKey);
   if (!forceNew && cached && cached.expires > Date.now()) return cached.cookie;
 
   const cookie = await openFreshSearchSession(termCode);
   if (!cookie) return null;
 
-  sessionCache.set(termCode, { cookie, expires: Date.now() + SESSION_TTL_MS });
+  sessionCache.set(cacheKey, { cookie, expires: Date.now() + SESSION_TTL_MS });
   return cookie;
 }
 
@@ -164,7 +174,8 @@ export async function searchWithRetry(termCode, filters) {
 // cache "warm up" pass: no subject/course filter, just raw pagination
 // through everything so later keystroke lookups hit cache instead of Banner.
 export async function fetchCatalogPage(termCode, { pageOffset = 0, pageMaxSize = 500 } = {}) {
-  const cookie = await openSearchSession(termCode);
+  // Isolated session namespace - see the comment on openSearchSession for why.
+  const cookie = await openSearchSession(termCode, { cacheKey: `${termCode}:bulk` });
   if (!cookie) return { rows: [], totalCount: 0 };
 
   const params = new URLSearchParams({
