@@ -1595,7 +1595,9 @@ export default function SyllabusBuilder() {
                     <T type="date" value={d.semesterStart} onChange={(v) => set("semesterStart", v)} />
                   </div>
                   <Btn onClick={autofillScheduleDates} icon={CalendarDays}>Autofill dates</Btn>
-                  <Btn onClick={buildSemesterSchedule} icon={CalendarDays}>Build 15 weeks with dates</Btn>
+                  {d.scheduleType !== "modular" && (
+                    <Btn onClick={buildSemesterSchedule} icon={CalendarDays}>Build 15 weeks with dates</Btn>
+                  )}
                 </div>
               </>
             )}
@@ -1634,13 +1636,13 @@ export default function SyllabusBuilder() {
                 const dates = buildWeekDates(d.semesterStart, i + 1);
                 push("weeks", { label: `${d.scheduleType === "modular" ? "Module" : "Week"} ${i + 1}`, dates: dates[i] || "", topics: "", due: "" });
               }} icon={Plus}>Add {d.scheduleType === "modular" ? "module" : "week"}</Btn>
-              {d.scheduleType !== "modular" && (<div style={{ flex: "0 0 250px" }}>
+              <div style={{ flex: "0 0 250px" }}>
                 <div className="flex gap-2">
                   <input //text box
                     type="text" 
                     inputMode="numeric"
                     pattern="[0-9]*"
-                    aria-label="Number of weeks"
+                    aria-label={`Number of ${d.scheduleType === "modular" ? "modules" : "weeks"}`}
                     aria-invalid={weekCountWarning}
                     placeholder="1-15"
                     style={{ ...inputBase, width: 110 }}
@@ -1662,13 +1664,21 @@ export default function SyllabusBuilder() {
                       return;
                     }
                     setWeekCountWarning(false); 
-                    setD((p) => ({ ...p, weeks: Array.from({ length: count }, (_, i) => p.weeks[i] || { label: `Week ${i + 1}`, dates: "", topics: "", due: "" }) }));
-                  }}>Build weeks</Btn>
+                    setD((p) => ({
+                      ...p,
+                      weeks: Array.from({ length: count }, (_, i) => p.weeks[i] || {
+                        label: `${p.scheduleType === "modular" ? "Module" : "Week"} ${i + 1}`,
+                        dates: "",
+                        topics: "",
+                        due: "",
+                      }),
+                    }));
+                  }}>{d.scheduleType === "modular" ? "Build modules" : "Build weeks"}</Btn>
                 </div>
                 <div role="alert" className="mt-1 text-xs" style={{ color: C.warn, minHeight: 32 }}>
                   {weekCountWarning ? "Enter a whole number between 1-15." : ""/* displays a warning if the week count is invalid */}
                 </div>
-              </div>)}
+              </div>
             </div>)}
           </>)}
 
