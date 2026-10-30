@@ -530,12 +530,33 @@ export default function SyllabusBuilder() {
       setTab(0);
     }
   };
-  const exportPdf = () => {
-    const f = frameRef.current; if (!f) return;
-    const doc = f.contentWindow.document;
-    doc.open(); doc.write(fullHtml()); doc.close();
-    doc.title = pdfFilename();
-    setTimeout(() => { f.contentWindow.focus(); f.contentWindow.print(); }, 250);
+const loadHtml2Pdf = () =>
+    new Promise((resolve, reject) => {
+      if (window.html2pdf) return resolve(window.html2pdf);
+      const s = document.createElement("script");
+      s.src = "https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js";
+      s.onload = () => resolve(window.html2pdf);
+      s.onerror = () => reject(new Error("Could not load the PDF library"));
+      document.head.appendChild(s);
+    });
+
+  const exportPdf = async () => {
+    try {
+      const html2pdf = await loadHtml2Pdf();
+      const blob = await html2pdf()
+        .set({
+          margin: 0.8,
+          html2canvas: { scale: 2 },
+          jsPDF: { unit: "in", format: "letter" },
+          pagebreak: { avoid: ["tr", "h2", "h3"] },
+        })
+        .from(`<style>${DOC_CSS}</style>${docBody}`, "string")
+        .outputPdf("blob");
+      dl(new Blob([blob], { type: "application/octet-stream" }), `${pdfFilename()}.pdf`);
+    } catch (err) {
+      console.error(err);
+      alert("The PDF could not be created. Please try again or use Export to Word.");
+    }
   };
 
   /* ---------- sections ---------- */
