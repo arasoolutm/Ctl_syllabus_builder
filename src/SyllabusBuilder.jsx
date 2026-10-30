@@ -482,14 +482,21 @@ export default function SyllabusBuilder() {
 
       <div className="flex flex-wrap" style={{ alignItems: "flex-start" }}>
         {/* left rail */}
-        <div style={{ width: 150, background: "#fff", borderRight: `1px solid ${C.line}`, minHeight: "calc(100vh - 62px)" }}>
+        <div style={{ width: 150, background: "#fff", borderRight: `1px solid ${C.line}`, minHeight: "calc(100vh - 62px)", position: "relative" }}>
+          <div style={{
+            position: "absolute", left: 0, top: 0, width: "100%", height: 40,
+            background: "#EEF2F7", borderLeft: `3px solid ${C.orange}`,
+            transform: `translateY(${tab * 40}px)`,
+            transition: "transform 0.25s ease",
+            pointerEvents: "none",
+          }} />
           {TABS.map((t, i) => {
             const on = tab === i; const I = t.i;
             return (
               <button key={t.n} onClick={() => setTab(i)}
-                className="flex items-center gap-2 w-full px-3 py-2 text-sm text-left"
-                style={{ background: on ? "#EEF2F7" : "transparent", color: on ? C.navy : C.slate,
-                  borderLeft: `3px solid ${on ? C.orange : "transparent"}`, fontWeight: on ? "bold" : "normal", cursor: "pointer" }}>
+                className="relative flex items-center gap-2 w-full px-3 text-sm text-left"
+                style={{ height: 40, background: "transparent", color: on ? C.navy : C.slate,
+                  fontWeight: on ? "bold" : "normal", cursor: "pointer" }}>
                 <I size={15} />{t.n}
               </button>
             );
