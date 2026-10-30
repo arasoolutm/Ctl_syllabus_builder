@@ -1,9 +1,10 @@
-import React, { useState, useMemo, useRef } from "react";
+import React, { useEffect, useState, useMemo, useRef } from "react";
 import {
   BookOpen, User, MessageSquare, Target, Library, Scale, Gavel,
   ShieldCheck, CalendarDays, FileDown, Check, AlertTriangle, Plus, Trash2,
-  Save, Upload, Printer, Lock, Info, ChevronRight
+  Save, Upload, Printer, Lock, Info, ChevronRight, ChevronDown, X, Loader2
 } from "lucide-react";
+import { SUBJECTS } from "./subjectCodes.js";
 
 /* ============================================================
    UTM SYLLABUS BUILDER  ·  Center for Teaching and Learning
@@ -23,6 +24,7 @@ const C = {
   wash: "#F4F6F9",
   good: "#1E7A46",
   warn: "#B45309",
+  bad: "#C0392B",
 };
 
 /* ---------- Institutional content maintained by CTL ---------- */
@@ -175,8 +177,49 @@ const FALL_2026 = [
 
 /* ---------- initial state ---------- */
 
+// Self-updating default term: approximates each semester's start date (no
+// per-year table to keep current) and switches to the next one 2 weeks
+// early, since that's when a professor is realistically starting to prep it.
+function defaultTermLabel(today = new Date()) {
+  const approxStart = (year, monthIndex, day) => new Date(year, monthIndex, day);
+  const year = today.getFullYear();
+  const candidates = [
+    { label: `Spring ${year}`, start: approxStart(year, 0, 13) },
+    { label: `Summer ${year}`, start: approxStart(year, 4, 25) },
+    { label: `Fall ${year}`, start: approxStart(year, 7, 22) },
+    { label: `Spring ${year + 1}`, start: approxStart(year + 1, 0, 13) },
+  ];
+  const earlySwitch = 14 * 24 * 60 * 60 * 1000;
+  let chosen = candidates[0].label;
+  for (const c of candidates) {
+    if (c.start.getTime() - earlySwitch <= today.getTime()) chosen = c.label;
+  }
+  return chosen;
+}
+
+// Values carry the "Department of " prefix so they match what the live
+// CRN/section lookup autofills (Banner's own department text), rather than
+// a native <select> whose fixed option values could never match live data.
+const DEPARTMENTS = [
+  { college: "College of Agriculture and Applied Sciences", names: [
+    "Agriculture, Geosciences, and Natural Resources", "Family and Consumer Sciences",
+  ] },
+  { college: "College of Business and Global Affairs", names: [
+    "Accounting, Finance, Economics, and Political Science", "Management, Marketing, and Information Systems",
+  ] },
+  { college: "College of Education, Health, and Behavioral Sciences", names: [
+    "Behavioral Sciences", "Educational Studies", "Health and Human Performance", "Nursing", "Psychology",
+  ] },
+  { college: "College of Engineering and Natural Sciences", names: [
+    "Biological Sciences", "Chemistry and Physics", "Computer Science", "Engineering", "Mathematics and Statistics",
+  ] },
+  { college: "College of Humanities and Fine Arts", names: [
+    "Communications", "English and Modern Foreign Languages", "History and Philosophy", "Music", "Visual and Theatre Arts",
+  ] },
+];
+
 const blank = {
-  code: "", title: "", crn: "", section: "", term: "Fall 2026", modality: "In person",
+  code: "", title: "", crn: "", section: "", term: defaultTermLabel(), modality: "In person",
   credits: "3", meeting: "", location: "", dept: "", prereq: "",
   instructor: "", email: "", office: "", hours: "", address: "",
   subjectLine: "", responseTime: "48 hours on business days",
@@ -234,10 +277,380 @@ const Note = ({ children }) => (
 export default function SyllabusBuilder() {
   const [d, setD] = useState(blank);
   const [tab, setTab] = useState(0);
+  const [crnStatus, setCrnStatus] = useState(null);
+  const [deliveryOpen, setDeliveryOpen] = useState(false);
+  const deliveryRef = useRef(null);
   const fileRef = useRef(null);
+
+  useEffect(() => {
+    if (!deliveryOpen) return undefined;
+    const onDocClick = (e) => {
+      if (deliveryRef.current && !deliveryRef.current.contains(e.target)) setDeliveryOpen(false);
+    };
+    const onKey = (e) => { if (e.key === "Escape") setDeliveryOpen(false); };
+    document.addEventListener("mousedown", onDocClick);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDocClick);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [deliveryOpen]);
+
+  const [termOptions, setTermOptions] = useState([]);
+  const [termOpen, setTermOpen] = useState(false);
+  const termRef = useRef(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/banner?action=terms")
+      .then((r) => (r.ok ? r.json() : { terms: [] }))
+      .then((payload) => { if (!cancelled) setTermOptions(payload.terms || []); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, []);
+
+  useEffect(() => {
+    if (!termOpen) return undefined;
+    const onDocClick = (e) => {
+      if (termRef.current && !termRef.current.contains(e.target)) setTermOpen(false);
+    };
+    const onKey = (e) => { if (e.key === "Escape") setTermOpen(false); };
+    document.addEventListener("mousedown", onDocClick);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDocClick);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [termOpen]);
+
+  const [deptOpen, setDeptOpen] = useState(false);
+  const deptRef = useRef(null);
+
+  useEffect(() => {
+    if (!deptOpen) return undefined;
+    const onDocClick = (e) => {
+      if (deptRef.current && !deptRef.current.contains(e.target)) setDeptOpen(false);
+    };
+    const onKey = (e) => { if (e.key === "Escape") setDeptOpen(false); };
+    document.addEventListener("mousedown", onDocClick);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDocClick);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [deptOpen]);
+
+  const [codeSuggestions, setCodeSuggestions] = useState([]);
+  const [codeSuggestOpen, setCodeSuggestOpen] = useState(false);
+  const [codeSuggestLoading, setCodeSuggestLoading] = useState(false);
+  const codeSuggestRef = useRef(null);
+  const codeJustSelectedRef = useRef(false);
+  // In-memory cache of course-search results, keyed by term|subject|q, so
+  // retyping/backspacing within the same subject (or revisiting it) doesn't
+  // re-hit Banner for a result we already have from this session.
+  const courseListCacheRef = useRef(new Map());
+
+  useEffect(() => {
+    if (!codeSuggestOpen) return undefined;
+    const onDocClick = (e) => {
+      if (codeSuggestRef.current && !codeSuggestRef.current.contains(e.target)) setCodeSuggestOpen(false);
+    };
+    const onKey = (e) => { if (e.key === "Escape") setCodeSuggestOpen(false); };
+    document.addEventListener("mousedown", onDocClick);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDocClick);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [codeSuggestOpen]);
+
+  const pickCodeSuggestion = (s) => {
+    codeJustSelectedRef.current = true;
+    if (s.type === "subject") {
+      setD((p) => ({ ...p, code: `${s.code} ` }));
+    } else {
+      setD((p) => ({ ...p, code: s.code, title: s.title || p.title }));
+    }
+    setCodeSuggestOpen(false);
+  };
+
+  // Live "as you type" course lookup: just letters shows matching subjects
+  // (bundled, no network); a subject code followed by digits searches the
+  // live Banner catalog for matching course numbers in that subject.
+  useEffect(() => {
+    if (codeJustSelectedRef.current) { codeJustSelectedRef.current = false; return undefined; }
+
+    const raw = String(d.code || "");
+    const match = raw.match(/^\s*([A-Za-z]*)\s*(\d*)/);
+    const subjectPart = (match?.[1] || "").toUpperCase();
+    const numberPart = match?.[2] || "";
+
+    if (!subjectPart) { setCodeSuggestLoading(false); setCodeSuggestions([]); setCodeSuggestOpen(false); return undefined; }
+
+    const knownSubject = SUBJECTS.some((s) => s.code === subjectPart);
+
+    if (!knownSubject) {
+      // Still narrowing down the subject itself (e.g. "C", "CS").
+      const matches = SUBJECTS.filter((s) => s.code.startsWith(subjectPart)).slice(0, 8)
+        .map((s) => ({ type: "subject", code: s.code, description: s.description }));
+      setCodeSuggestLoading(false);
+      setCodeSuggestions(matches);
+      setCodeSuggestOpen(matches.length > 0);
+      return undefined;
+    }
+
+    // subjectPart is already a complete, known subject code (e.g. "CSCI") -
+    // no need to wait for a space or a digit before showing its courses.
+
+    // If the catalog "warm up" pass already pulled this subject's full,
+    // unfiltered course list, filter it client-side instead of hitting the
+    // network again for every digit typed after the subject.
+    const warmedList = courseListCacheRef.current.get(`${d.term}|${subjectPart}|`);
+    if (warmedList) {
+      const filtered = numberPart
+        ? warmedList.filter((c) => c.code.slice(subjectPart.length).trim().startsWith(numberPart))
+        : warmedList;
+      setCodeSuggestLoading(false);
+      setCodeSuggestions(filtered.slice(0, 8));
+      setCodeSuggestOpen(filtered.length > 0);
+      return undefined;
+    }
+
+    const cacheKey = `${d.term}|${subjectPart}|${numberPart}`;
+    const cached = courseListCacheRef.current.get(cacheKey);
+    if (cached) {
+      setCodeSuggestLoading(false);
+      setCodeSuggestions(cached);
+      setCodeSuggestOpen(cached.length > 0);
+      return undefined;
+    }
+
+    // Clear the stale (subject-list) suggestions right away instead of leaving
+    // them showing while the live course search is still in flight.
+    setCodeSuggestions([]);
+    setCodeSuggestLoading(true);
+    setCodeSuggestOpen(true);
+
+    const controller = new AbortController();
+    const timer = setTimeout(async () => {
+      try {
+        const url = `/api/banner?action=course-search&term=${encodeURIComponent(d.term)}&subject=${encodeURIComponent(subjectPart)}&q=${encodeURIComponent(numberPart)}`;
+        const res = await fetch(url, { signal: controller.signal });
+        if (!res.ok) throw new Error("search failed");
+        const payload = await res.json();
+        const matches = (payload.courses || []).slice(0, 8).map((c) => ({ type: "course", code: c.code, title: c.title }));
+        courseListCacheRef.current.set(cacheKey, matches);
+        setCodeSuggestLoading(false);
+        setCodeSuggestions(matches);
+        setCodeSuggestOpen(matches.length > 0);
+      } catch (error) {
+        if (error.name !== "AbortError") { setCodeSuggestLoading(false); setCodeSuggestions([]); setCodeSuggestOpen(false); }
+      }
+    }, 250);
+
+    return () => { clearTimeout(timer); controller.abort(); };
+  }, [d.code, d.term]);
+
+  const [sectionSuggestions, setSectionSuggestions] = useState([]);
+  const [sectionSuggestOpen, setSectionSuggestOpen] = useState(false);
+  const sectionSuggestRef = useRef(null);
+  // Mirrors courseListCacheRef for section-search, keyed by term|subject|courseNumber.
+  const sectionListCacheRef = useRef(new Map());
+
+  useEffect(() => {
+    if (!sectionSuggestOpen) return undefined;
+    const onDocClick = (e) => {
+      if (sectionSuggestRef.current && !sectionSuggestRef.current.contains(e.target)) setSectionSuggestOpen(false);
+    };
+    const onKey = (e) => { if (e.key === "Escape") setSectionSuggestOpen(false); };
+    document.addEventListener("mousedown", onDocClick);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDocClick);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [sectionSuggestOpen]);
+
+  const pickSectionSuggestion = (s) => {
+    setD((p) => ({ ...p, section: s.section }));
+    setSectionSuggestOpen(false);
+  };
+
+  // Once the course code is a complete, valid "SUBJ 000" code, proactively
+  // surface the real sections offered that term so the professor sees what
+  // to put in Section next, instead of having to already know it.
+  useEffect(() => {
+    const code = String(d.code || "").trim();
+    const parsed = code.match(/^([A-Za-z]{2,5})\s*-?\s*(\d{3,4}[A-Za-z]?)$/);
+    if (!parsed) { setSectionSuggestions([]); setSectionSuggestOpen(false); return undefined; }
+
+    const subject = parsed[1].toUpperCase();
+    const courseNumber = parsed[2].toUpperCase();
+    const cacheKey = `${d.term}|${subject}|${courseNumber}`;
+    const cached = sectionListCacheRef.current.get(cacheKey);
+    if (cached) {
+      setSectionSuggestions(cached);
+      if (cached.length && !String(d.section || "").trim()) setSectionSuggestOpen(true);
+      return undefined;
+    }
+
+    const controller = new AbortController();
+    const timer = setTimeout(async () => {
+      try {
+        const url = `/api/banner?action=section-search&term=${encodeURIComponent(d.term)}&subject=${encodeURIComponent(subject)}&courseNumber=${encodeURIComponent(courseNumber)}`;
+        const res = await fetch(url, { signal: controller.signal });
+        if (!res.ok) throw new Error("search failed");
+        const payload = await res.json();
+        const sections = payload.sections || [];
+        sectionListCacheRef.current.set(cacheKey, sections);
+        setSectionSuggestions(sections);
+        if (sections.length && !String(d.section || "").trim()) setSectionSuggestOpen(true);
+      } catch (error) {
+        if (error.name !== "AbortError") setSectionSuggestions([]);
+      }
+    }, 450);
+
+    return () => { clearTimeout(timer); controller.abort(); };
+  }, [d.code, d.term]);
+  // "Warm up" the whole term's catalog into the course/section caches above,
+  // once per term, paging through Banner's unfiltered search results in
+  // parallel (it caps each page at 500 rows). Runs silently in the
+  // background - lets later typing hit the in-memory cache instead of
+  // waiting on a live lookup, with no loading UI of its own.
+  const warmedTermsRef = useRef(new Set());
+
+  useEffect(() => {
+    const term = String(d.term || "").trim();
+    if (!term || warmedTermsRef.current.has(term)) return undefined;
+
+    const PAGE_SIZE = 500;
+    const controller = new AbortController();
+
+    const applyPage = (payload) => {
+      for (const course of payload.courses || []) {
+        const subject = course.code.split(" ")[0];
+        const key = `${term}|${subject}|`;
+        const list = courseListCacheRef.current.get(key) || [];
+        if (!list.some((c) => c.code === course.code)) list.push({ type: "course", code: course.code, title: course.title });
+        courseListCacheRef.current.set(key, list);
+      }
+      for (const [code, sections] of Object.entries(payload.sectionsByCode || {})) {
+        const [subject, courseNumber] = code.split(" ");
+        sectionListCacheRef.current.set(`${term}|${subject}|${courseNumber}`, sections);
+      }
+    };
+
+    const fetchPage = async (pageOffset) => {
+      const url = `/api/banner?action=catalog-page&term=${encodeURIComponent(term)}&offset=${pageOffset}&size=${PAGE_SIZE}`;
+      const res = await fetch(url, { signal: controller.signal });
+      if (!res.ok) throw new Error("warm-up page failed");
+      return res.json();
+    };
+
+    // Debounced the same way the other term-driven lookups are, so typing
+    // out a term doesn't fire (and immediately abort) a warm-up per keystroke.
+    const timer = setTimeout(() => {
+      warmedTermsRef.current.add(term);
+      (async () => {
+        try {
+          const first = await fetchPage(0);
+          applyPage(first);
+
+          const totalCount = first.totalCount || 0;
+          const remainingOffsets = [];
+          for (let o = PAGE_SIZE; o < totalCount; o += PAGE_SIZE) remainingOffsets.push(o);
+
+          await Promise.all(remainingOffsets.map(async (offset) => {
+            const payload = await fetchPage(offset);
+            applyPage(payload);
+          }));
+        } catch {
+          // Aborted (term changed again, or a real tab/unmount) or a real
+          // failure - either way, un-mark the term so a later mount retries
+          // instead of silently leaving its cache empty forever.
+          warmedTermsRef.current.delete(term);
+        }
+      })();
+    }, 450);
+
+    return () => { clearTimeout(timer); controller.abort(); };
+  }, [d.term]);
+
   const frameRef = useRef(null);
 
   const set = (k, v) => setD((p) => ({ ...p, [k]: v }));
+
+  const lookupCourseBySection = async (triggerCode, term, subject, courseNumber, section, signal) => {
+    try {
+      const res = await fetch("/api/banner?action=details", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ term, subject, courseNumber, section }),
+        signal,
+      });
+
+      if (!res.ok) {
+        const errorText = await res.text();
+        throw new Error(errorText || "Lookup failed");
+      }
+
+      const payload = await res.json();
+      if (!payload.crn || !payload.title) throw new Error("The portal returned no course details");
+      setD((p) => {
+        // The request's own code/section/term may have been superseded by
+        // further edits while this was in flight (AbortController can lose
+        // that race if the response had already arrived) - if what's on
+        // screen no longer matches what this response is actually for,
+        // drop it instead of clobbering the user's newer input.
+        const stillCurrent = p.code.trim() === triggerCode && p.section.trim() === section && p.term.trim() === term;
+        if (!stillCurrent) return p;
+        return {
+          ...p,
+          crn: payload.crn || p.crn,
+          code: payload.code || p.code,
+          title: payload.title || p.title,
+          section: payload.section || p.section,
+          term: payload.term || p.term,
+          credits: payload.credits || p.credits,
+          modality: payload.modality || p.modality,
+          meeting: payload.meeting || p.meeting,
+          location: payload.location || p.location,
+          dept: payload.dept || p.dept,
+          prereq: payload.prereq || p.prereq,
+          instructor: payload.instructor || p.instructor,
+          email: payload.email || p.email,
+          description: payload.description || p.description,
+        };
+      });
+      setCrnStatus("ok");
+    } catch (error) {
+      if (error.name !== "AbortError") setCrnStatus("error");
+    }
+  };
+
+  useEffect(() => {
+    const code = String(d.code || "").trim();
+    const section = String(d.section || "").trim();
+    const term = String(d.term || "").trim();
+    const parsed = code.match(/^([A-Za-z]{2,5})\s*-?\s*(\d{3,4}[A-Za-z]?)$/);
+    if (!parsed || !section || !term) { setCrnStatus(null); return undefined; }
+
+    const controller = new AbortController();
+    setCrnStatus("loading");
+    const timer = setTimeout(() => {
+      lookupCourseBySection(code, term, parsed[1].toUpperCase(), parsed[2].toUpperCase(), section, controller.signal);
+    }, 450);
+    return () => { clearTimeout(timer); controller.abort(); };
+  }, [d.code, d.section, d.term]);
+
+  // Not Banner data — just a sensible default for a field we invented,
+  // derived from the course code once it's valid. Never overwrites
+  // something already typed.
+  useEffect(() => {
+    const code = String(d.code || "").trim();
+    if (!/^[A-Za-z]{2,5}\s*-?\s*\d{3,4}[A-Za-z]?$/.test(code)) return;
+    setD((p) => (p.subjectLine.trim() ? p : { ...p, subjectLine: `${code} - [your question]` }));
+  }, [d.code]);
   const setDeep = (k, i, key, v) =>
     setD((p) => { const a = [...p[k]]; a[i] = { ...a[i], [key]: v }; return { ...p, [k]: a }; });
   const push = (k, obj) => setD((p) => ({ ...p, [k]: [...p[k], obj] }));
@@ -500,106 +913,240 @@ export default function SyllabusBuilder() {
         <div className="p-5" style={{ flex: "1 1 420px", minWidth: 340, maxWidth: 620 }}>
           {tab === 0 && (<>
             <H>Course</H>
+            <div className="flex gap-3 flex-wrap items-end">
+              <div style={{ flex: "1 1 150px" }}>
+                <Field label="Course code" hint="POSC 322">
+                  <div ref={codeSuggestRef} style={{ position: "relative" }}>
+                    <input
+                      style={inputBase}
+                      value={d.code}
+                      placeholder="POSC 322"
+                      autoComplete="off"
+                      onChange={(e) => set("code", e.target.value)}
+                      onFocus={() => { if (codeSuggestions.length) setCodeSuggestOpen(true); }}
+                    />
+                    <div role="listbox" className="transition-all duration-200"
+                      style={{
+                        position: "absolute", left: 0, right: 0, top: "calc(100% + 4px)", zIndex: 30,
+                        background: "#fff", border: `1px solid ${C.line}`, borderRadius: 4,
+                        boxShadow: "0 6px 16px rgba(0,0,0,.12)", overflow: "hidden", maxHeight: 220, overflowY: "auto",
+                        opacity: codeSuggestOpen ? 1 : 0,
+                        transform: codeSuggestOpen ? "translateY(0) scaleY(1)" : "translateY(-4px) scaleY(0.96)",
+                        transformOrigin: "top", pointerEvents: codeSuggestOpen ? "auto" : "none",
+                      }}>
+                      {codeSuggestLoading && codeSuggestions.length === 0 && (
+                        <div className="flex items-center gap-2" style={{ padding: "8px 10px", fontSize: 12.5, color: C.slate }}>
+                          <Loader2 size={13} className="animate-spin" />Searching live course catalog&hellip;
+                        </div>
+                      )}
+                      {codeSuggestions.map((s) => (
+                        <div key={s.type + s.code} role="option"
+                          onClick={() => pickCodeSuggestion(s)}
+                          onMouseEnter={(e) => { e.currentTarget.style.background = "#F4F6F9"; }}
+                          onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
+                          style={{ padding: "7px 10px", fontSize: 13, cursor: "pointer" }}>
+                          <div style={{ fontWeight: "bold", color: C.navy }}>{s.code}</div>
+                          <div style={{ fontSize: 11.5, color: C.slate }}>{s.type === "subject" ? s.description : s.title}</div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </Field>
+              </div>
+              <div style={{ flex: "1 1 130px" }}>
+                <Field label="Section" hint="e.g. 001">
+                  <div ref={sectionSuggestRef} style={{ position: "relative" }}>
+                    <input
+                      style={{ ...inputBase, paddingRight: 30 }}
+                      value={d.section}
+                      placeholder="001"
+                      autoComplete="off"
+                      onChange={(e) => set("section", e.target.value)}
+                      onFocus={() => { if (sectionSuggestions.length) setSectionSuggestOpen(true); }}
+                    />
+                    {crnStatus === "loading" &&
+                      <div style={{ position: "absolute", right: 9, top: 0, bottom: 0, display: "flex", alignItems: "center" }}>
+                        <Loader2 size={15} className="animate-spin" style={{ color: C.slate }} />
+                      </div>}
+                    {crnStatus === "ok" &&
+                      <Check size={15} style={{ position: "absolute", right: 9, top: "50%", transform: "translateY(-50%)", color: C.good }} />}
+                    {crnStatus === "error" &&
+                      <X size={15} style={{ position: "absolute", right: 9, top: "50%", transform: "translateY(-50%)", color: C.bad }} />}
+                    <div role="listbox" className="transition-all duration-200"
+                      style={{
+                        position: "absolute", left: 0, right: 0, top: "calc(100% + 4px)", zIndex: 30,
+                        background: "#fff", border: `1px solid ${C.line}`, borderRadius: 4,
+                        boxShadow: "0 6px 16px rgba(0,0,0,.12)", overflow: "hidden", maxHeight: 220, overflowY: "auto",
+                        opacity: sectionSuggestOpen ? 1 : 0,
+                        transform: sectionSuggestOpen ? "translateY(0) scaleY(1)" : "translateY(-4px) scaleY(0.96)",
+                        transformOrigin: "top", pointerEvents: sectionSuggestOpen ? "auto" : "none",
+                      }}>
+                      {sectionSuggestions.map((s) => (
+                        <div key={s.crn} role="option"
+                          onClick={() => pickSectionSuggestion(s)}
+                          onMouseEnter={(e) => { e.currentTarget.style.background = "#F4F6F9"; }}
+                          onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
+                          style={{ padding: "7px 10px", fontSize: 13, cursor: "pointer" }}>
+                          <div style={{ fontWeight: "bold", color: C.navy }}>Section {s.section}</div>
+                          <div style={{ fontSize: 11.5, color: C.slate }}>{s.meeting} &middot; {s.instructor}</div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </Field>
+              </div>
+            </div>
             <div className="flex gap-3 flex-wrap">
-              <div style={{ flex: "1 1 150px" }}><Field label="Course code" hint="POSC 322"><T value={d.code} onChange={(v) => set("code", v)} placeholder="POSC 322" /></Field></div>
               <div style={{ flex: "2 1 240px" }}><Field label="Course title"><T value={d.title} onChange={(v) => set("title", v)} placeholder="American Foreign Policy" /></Field></div>
+              <div style={{ flex: "0 0 100px" }}>
+                <Field label="CRN"><T value={d.crn} onChange={(v) => set("crn", v.replace(/\D/g, "").slice(0, 5))} placeholder="12345" /></Field>
+              </div>
             </div>
             <div className="flex gap-3 flex-wrap">
-              <div style={{ flex: "1 1 130px" }}><Field label="CRN" hint="the 5-digit registration number"><T value={d.crn} onChange={(v) => set("crn", v)} placeholder="12345" /></Field></div>
-              <div style={{ flex: "1 1 130px" }}><Field label="Section"><T value={d.section} onChange={(v) => set("section", v)} placeholder="001" /></Field></div>
-            </div>
-            <div className="flex gap-3 flex-wrap">
-              <div style={{ flex: "1 1 130px" }}><Field label="Term"><T value={d.term} onChange={(v) => set("term", v)} /></Field></div>
+              <div style={{ flex: "1 1 130px" }}>
+                <Field label="Term" hint="used for the lookup too">
+                  <div ref={termRef} style={{ position: "relative" }}>
+                    <input
+                      style={{ ...inputBase, paddingRight: 30 }}
+                      value={d.term}
+                      placeholder="Fall 2026"
+                      autoComplete="off"
+                      onChange={(e) => set("term", e.target.value)}
+                      onFocus={() => { if (termOptions.length) setTermOpen(true); }}
+                    />
+                    {termOptions.length > 0 && (
+                      <button type="button" onClick={() => setTermOpen((o) => !o)}
+                        aria-haspopup="listbox" aria-expanded={termOpen} aria-label="Choose a term"
+                        style={{
+                          position: "absolute", right: 0, top: 0, bottom: 0, width: 28,
+                          display: "flex", alignItems: "center", justifyContent: "center",
+                          background: "transparent", cursor: "pointer",
+                        }}>
+                        <ChevronDown size={14} className="transition-transform duration-200"
+                          style={{ color: C.slate, transform: termOpen ? "rotate(180deg)" : "none" }} />
+                      </button>
+                    )}
+                    <div role="listbox" className="transition-all duration-200"
+                      style={{
+                        position: "absolute", left: 0, right: 0, top: "calc(100% + 4px)", zIndex: 30,
+                        background: "#fff", border: `1px solid ${C.line}`, borderRadius: 4,
+                        boxShadow: "0 6px 16px rgba(0,0,0,.12)", overflow: "hidden", maxHeight: 220, overflowY: "auto",
+                        opacity: termOpen ? 1 : 0,
+                        transform: termOpen ? "translateY(0) scaleY(1)" : "translateY(-4px) scaleY(0.96)",
+                        transformOrigin: "top", pointerEvents: termOpen ? "auto" : "none",
+                      }}>
+                      {termOptions.map((t) => (
+                        <div key={t} role="option" aria-selected={d.term === t}
+                          onClick={() => { set("term", t); setTermOpen(false); }}
+                          onMouseEnter={(e) => { e.currentTarget.style.background = "#F4F6F9"; }}
+                          onMouseLeave={(e) => { e.currentTarget.style.background = d.term === t ? "#EEF2F7" : "transparent"; }}
+                          style={{
+                            padding: "7px 10px", fontSize: 13.5, cursor: "pointer",
+                            color: d.term === t ? C.navy : C.ink, fontWeight: d.term === t ? "bold" : "normal",
+                            background: d.term === t ? "#EEF2F7" : "transparent",
+                          }}>
+                          {t}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </Field>
+              </div>
               <div style={{ flex: "1 1 130px" }}><Field label="Credit hours"><T value={d.credits} onChange={(v) => set("credits", v)} /></Field></div>
             </div>
             <Field label="Delivery" hint="students read this before they register">
-              <select style={inputBase} value={d.modality} onChange={(e) => set("modality", e.target.value)}>
-                {["In person", "Hybrid", "Online synchronous", "Online asynchronous"].map((m) => <option key={m}>{m}</option>)}
-              </select>
+              <div ref={deliveryRef} style={{ position: "relative" }}>
+                <button type="button" onClick={() => setDeliveryOpen((o) => !o)}
+                  aria-haspopup="listbox" aria-expanded={deliveryOpen}
+                  style={{ ...inputBase, display: "flex", alignItems: "center", justifyContent: "space-between", cursor: "pointer" }}>
+                  <span>{d.modality}</span>
+                  <ChevronDown size={14} className="transition-transform duration-200"
+                    style={{ color: C.slate, flexShrink: 0, marginLeft: 8, transform: deliveryOpen ? "rotate(180deg)" : "none" }} />
+                </button>
+                <div role="listbox" className="transition-all duration-200"
+                  style={{
+                    position: "absolute", left: 0, right: 0, top: "calc(100% + 4px)", zIndex: 20,
+                    background: "#fff", border: `1px solid ${C.line}`, borderRadius: 4,
+                    boxShadow: "0 6px 16px rgba(0,0,0,.12)", overflow: "hidden",
+                    opacity: deliveryOpen ? 1 : 0,
+                    transform: deliveryOpen ? "translateY(0) scaleY(1)" : "translateY(-4px) scaleY(0.96)",
+                    transformOrigin: "top", pointerEvents: deliveryOpen ? "auto" : "none",
+                  }}>
+                  {["In person", "Hybrid", "Online synchronous", "Online asynchronous"].map((m) => (
+                    <div key={m} role="option" aria-selected={d.modality === m}
+                      onClick={() => { set("modality", m); setDeliveryOpen(false); }}
+                      onMouseEnter={(e) => { e.currentTarget.style.background = "#F4F6F9"; }}
+                      onMouseLeave={(e) => { e.currentTarget.style.background = d.modality === m ? "#EEF2F7" : "transparent"; }}
+                      style={{
+                        padding: "8px 10px", fontSize: 14, cursor: "pointer",
+                        color: d.modality === m ? C.navy : C.ink, fontWeight: d.modality === m ? "bold" : "normal",
+                        background: d.modality === m ? "#EEF2F7" : "transparent",
+                      }}>
+                      {m}
+                    </div>
+                  ))}
+                </div>
+              </div>
             </Field>
             <Field label="Meeting time" hint="leave blank if fully asynchronous"><T value={d.meeting} onChange={(v) => set("meeting", v)} placeholder="Tuesday and Thursday, 9:30 to 10:45 a.m." /></Field>
             <Field label="Room"><T value={d.location} onChange={(v) => set("location", v)} placeholder="Humanities 407" /></Field>
-<Field label="Department">
-  <select
-    style={inputBase}
-    value={d.dept}
-    onChange={(e) => set("dept", e.target.value)}
-  >
-    <option value="">Select a department...</option>
-
-    <optgroup label="College of Agriculture and Applied Sciences">
-      <option value="Agriculture, Geosciences, and Natural Resources">
-        Agriculture, Geosciences, and Natural Resources
-      </option>
-      <option value="Family and Consumer Sciences">
-        Family and Consumer Sciences
-      </option>
-    </optgroup>
-
-    <optgroup label="College of Business and Global Affairs">
-      <option value="Accounting, Finance, Economics, and Political Science">
-        Accounting, Finance, Economics, and Political Science
-      </option>
-      <option value="Management, Marketing, and Information Systems">
-        Management, Marketing, and Information Systems
-      </option>
-    </optgroup>
-
-    <optgroup label="College of Education, Health, and Behavioral Sciences">
-      <option value="Behavioral Sciences">
-        Behavioral Sciences
-      </option>
-      <option value="Educational Studies">
-        Educational Studies
-      </option>
-      <option value="Health and Human Performance">
-        Health and Human Performance
-      </option>
-      <option value="Nursing">
-        Nursing
-      </option>
-      <option value="Psychology">
-        Psychology
-      </option>
-    </optgroup>
-
-    <optgroup label="College of Engineering and Natural Sciences">
-      <option value="Biological Sciences">
-        Biological Sciences
-      </option>
-      <option value="Chemistry and Physics">
-        Chemistry and Physics
-      </option>
-      <option value="Computer Science">
-        Computer Science
-      </option>
-      <option value="Engineering">
-        Engineering
-      </option>
-      <option value="Mathematics and Statistics">
-        Mathematics and Statistics
-      </option>
-    </optgroup>
-
-    <optgroup label="College of Humanities and Fine Arts">
-      <option value="Communications">
-        Communications
-      </option>
-      <option value="English and Modern Foreign Languages">
-        English and Modern Foreign Languages
-      </option>
-      <option value="History and Philosophy">
-        History and Philosophy
-      </option>
-      <option value="Music">
-        Music
-      </option>
-      <option value="Visual and Theatre Arts">
-        Visual and Theatre Arts
-      </option>
-    </optgroup>
-  </select>
-</Field>            <Field label="Prerequisites"><T value={d.prereq} onChange={(v) => set("prereq", v)} placeholder="None" /></Field>
+            <Field label="Department" hint="type freely, or pick from the list">
+              <div ref={deptRef} style={{ position: "relative" }}>
+                <input
+                  style={{ ...inputBase, paddingRight: 30 }}
+                  value={d.dept}
+                  placeholder="Department of Computer Science"
+                  autoComplete="off"
+                  onChange={(e) => set("dept", e.target.value)}
+                  onFocus={() => setDeptOpen(true)}
+                />
+                <button type="button" onClick={() => setDeptOpen((o) => !o)}
+                  aria-haspopup="listbox" aria-expanded={deptOpen} aria-label="Choose a department"
+                  style={{
+                    position: "absolute", right: 0, top: 0, bottom: 0, width: 28,
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    background: "transparent", cursor: "pointer",
+                  }}>
+                  <ChevronDown size={14} className="transition-transform duration-200"
+                    style={{ color: C.slate, transform: deptOpen ? "rotate(180deg)" : "none" }} />
+                </button>
+                <div role="listbox" className="transition-all duration-200"
+                  style={{
+                    position: "absolute", left: 0, right: 0, top: "calc(100% + 4px)", zIndex: 30,
+                    background: "#fff", border: `1px solid ${C.line}`, borderRadius: 4,
+                    boxShadow: "0 6px 16px rgba(0,0,0,.12)", overflow: "hidden", maxHeight: 260, overflowY: "auto",
+                    opacity: deptOpen ? 1 : 0,
+                    transform: deptOpen ? "translateY(0) scaleY(1)" : "translateY(-4px) scaleY(0.96)",
+                    transformOrigin: "top", pointerEvents: deptOpen ? "auto" : "none",
+                  }}>
+                  {DEPARTMENTS.map((g) => (
+                    <div key={g.college}>
+                      <div style={{ padding: "8px 10px 4px", fontSize: 12, fontWeight: "bold", textTransform: "uppercase", letterSpacing: .4, color: C.slate }}>
+                        {g.college}
+                      </div>
+                      {g.names.map((name) => {
+                        const value = `Department of ${name}`;
+                        const on = d.dept === value;
+                        return (
+                          <div key={name} role="option" aria-selected={on}
+                            onClick={() => { set("dept", value); setDeptOpen(false); }}
+                            onMouseEnter={(e) => { e.currentTarget.style.background = "#F4F6F9"; }}
+                            onMouseLeave={(e) => { e.currentTarget.style.background = on ? "#EEF2F7" : "transparent"; }}
+                            style={{
+                              padding: "7px 10px 7px 20px", fontSize: 13.5, cursor: "pointer",
+                              color: on ? C.navy : C.ink, fontWeight: on ? "bold" : "normal",
+                              background: on ? "#EEF2F7" : "transparent",
+                            }}>
+                            {name}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </Field>
+            <Field label="Prerequisites"><T value={d.prereq} onChange={(v) => set("prereq", v)} placeholder="None" /></Field>
           </>)}
 
           {tab === 1 && (<>
