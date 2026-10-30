@@ -1,5 +1,5 @@
 import { SUBJECT_CODES } from "../src/subjectCodes.js";
-import { bannerHeaders, resolveTermCode, findSectionRow, fetchCourseDescription, searchWithRetry, decodeEntities, listTermsRaw } from "./_banner.js";
+import { bannerHeaders, resolveTermCode, findSectionRow, fetchCourseDescription, searchWithRetry, decodeEntities, listTermsRaw, fetchCatalogPage } from "./_banner.js";
 
 function formatInstructorName(displayName) {
   if (!displayName) return "";
@@ -365,6 +365,53 @@ async function handleSectionSearch(req, res) {
   }
 }
 
+/* ---------- action=catalog-page: one raw, unfiltered page of a term's
+   entire section list (Banner caps pages at 500 rows), shaped the same way
+   as course-search/section-search so the client can drop it straight into
+   its autocomplete caches. Paging through every page this way "warms" the
+   client cache for the whole catalog instead of per-keystroke. ---------- */
+
+async function handleCatalogPage(req, res) {
+  if (req.method !== "GET") {
+    return res.status(405).json({ error: "Method not allowed" });
+  }
+
+  try {
+    const { term, offset, size } = req.query || {};
+    if (!term) {
+      return res.status(400).json({ error: "term is required" });
+    }
+
+    const termCode = await resolveTermCode(term);
+    if (!termCode) {
+      return res.status(404).json({ error: `Could not find "${term}" in the registration system's term list` });
+    }
+
+    const pageOffset = Math.max(0, parseInt(offset, 10) || 0);
+    const pageMaxSize = Math.min(500, Math.max(1, parseInt(size, 10) || 500));
+    const { rows, totalCount } = await fetchCatalogPage(termCode, { pageOffset, pageMaxSize });
+
+    const courseMap = new Map(); // code -> title
+    const sectionsByCode = {};
+    for (const row of rows) {
+      const code = `${row.subject} ${row.courseNumber}`;
+      if (!courseMap.has(code)) courseMap.set(code, decodeEntities(row.courseTitle));
+      (sectionsByCode[code] ||= []).push({
+        section: row.sequenceNumber,
+        crn: row.courseReferenceNumber,
+        instructor: summarizeInstructor(row.faculty),
+        meeting: summarizeMeeting(row.meetingsFaculty),
+        seatsAvailable: row.seatsAvailable,
+      });
+    }
+    const courses = [...courseMap.entries()].map(([code, title]) => ({ code, title }));
+
+    return res.status(200).json({ totalCount, courses, sectionsByCode });
+  } catch (error) {
+    return res.status(500).json({ error: error.message || "Catalog page fetch failed" });
+  }
+}
+
 /* ---------- action=terms: real terms UTM's registration system currently
    offers, for the Term field's picker ---------- */
 
@@ -393,5 +440,6 @@ export default async function handler(req, res) {
   if (action === "section-search") return handleSectionSearch(req, res);
   if (action === "details") return handleDetails(req, res);
   if (action === "terms") return handleTerms(req, res);
+  if (action === "catalog-page") return handleCatalogPage(req, res);
   return res.status(400).json({ error: "Unknown or missing action" });
 }

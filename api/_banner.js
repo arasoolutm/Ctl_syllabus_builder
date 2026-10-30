@@ -159,6 +159,26 @@ export async function searchWithRetry(termCode, filters) {
   return searchSections(termCode, freshCookie, filters);
 }
 
+// A full term's worth of sections, paged (Banner caps pageMaxSize at 500
+// server-side regardless of what's requested). Used by the client-side
+// cache "warm up" pass: no subject/course filter, just raw pagination
+// through everything so later keystroke lookups hit cache instead of Banner.
+export async function fetchCatalogPage(termCode, { pageOffset = 0, pageMaxSize = 500 } = {}) {
+  const cookie = await openSearchSession(termCode);
+  if (!cookie) return { rows: [], totalCount: 0 };
+
+  const params = new URLSearchParams({
+    txt_term: termCode,
+    pageOffset: String(pageOffset),
+    pageMaxSize: String(pageMaxSize),
+  });
+  const url = `https://ban9ssb1.utm.edu/StudentRegistrationSsb/ssb/searchResults/searchResults?${params.toString()}`;
+  const response = await fetch(url, { headers: { ...bannerHeaders("application/json, text/javascript, */*; q=0.01"), Cookie: cookie } });
+  if (!response.ok) { await response.text().catch(() => {}); return { rows: [], totalCount: 0 }; }
+  const json = await response.json();
+  return { rows: Array.isArray(json?.data) ? json.data : [], totalCount: json?.totalCount || 0 };
+}
+
 // Returns the full matched search-result row (not just the CRN) so callers
 // can also pull faculty info etc. off it without a second request.
 export async function findSectionRow(termCode, subject, courseNumber, section) {
