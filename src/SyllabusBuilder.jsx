@@ -366,7 +366,7 @@ const MEETING_PATTERNS = [
 // Builds a fresh blank draft. Returning a new object each time keeps the
 // initial state and every reset independent of each other.
 const createBlank = () => ({
-  code: "", title: "", crn: "", section: "", term: "Fall 2026", modality: "In person",
+  code: "", title: "", crn: "", section: "", term: "Spring 2027", modality: "In person",
   credits: "3", meetingPattern: "", meeting: "", meetingTime: "",
   location: "", exlocation: "", dept: "", prereq: "",
   instructor: "", email: "", phone: "", office: "", hours: "", address: "",
@@ -950,8 +950,8 @@ export default function SyllabusBuilder() {
       }</table>`);
     }
 
-    if (d.calNote && d.term === "Fall 2026") {
-      sec("Fall 2026 Dates You Should Know");
+    if (d.calNote && d.term === "Spring 2027") {
+      sec("Spring 2027 Dates You Should Know");
       h.push(`<table class="grid">${FALL_2026.map((r) =>
         `<tr><th class="wk">${esc(r[0])}</th><td>${esc(r[1])}</td></tr>`).join("")}</table>
         <p class="soft">Registrar's calendar, subject to change. Confirm at utm.edu/academics/academic-calendar/</p>`);
