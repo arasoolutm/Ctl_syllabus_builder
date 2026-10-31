@@ -9,7 +9,6 @@ import {
    UTM SYLLABUS BUILDER  ·  Center for Teaching and Learning
    Fill in the left. Watch the right. Export to Word or PDF.
    No accounts, no server, no stored data.
-   commit branch check
    ============================================================ */
 
 
@@ -204,6 +203,120 @@ Emergency: 911`,
   },
 };
 
+const COURSE_PREFIX_TO_DEPT = {
+  "AGEC": "Agriculture, Geosciences, and Natural Resources",
+  "AGED": "Agriculture, Geosciences, and Natural Resources",
+  "AGET": "Agriculture, Geosciences, and Natural Resources",
+  "AGRI": "Agriculture, Geosciences, and Natural Resources",
+  "GEOL": "Agriculture, Geosciences, and Natural Resources",
+  "GEOS": "Agriculture, Geosciences, and Natural Resources",
+  "GEOG": "Agriculture, Geosciences, and Natural Resources",
+  "METR": "Agriculture, Geosciences, and Natural Resources",
+  "SOIL": "Agriculture, Geosciences, and Natural Resources",
+  "NRM": "Agriculture, Geosciences, and Natural Resources",
+  "WBIO": "Agriculture, Geosciences, and Natural Resources",
+  "ANSC": "Agriculture, Geosciences, and Natural Resources",
+  "PLSC": "Agriculture, Geosciences, and Natural Resources",
+  "VET": "Agriculture, Geosciences, and Natural Resources",
+
+  "CFS": "Family and Consumer Sciences",
+  "CRMG": "Family and Consumer Sciences",
+  "FASH": "Family and Consumer Sciences",
+  "FCS": "Family and Consumer Sciences",
+  "FSCI": "Family and Consumer Sciences",
+  "FSVC": "Family and Consumer Sciences",
+  "FSMG": "Family and Consumer Sciences",
+  "HPMG": "Family and Consumer Sciences",
+  "NUTR": "Family and Consumer Sciences",
+  "GERO": "Family and Consumer Sciences",
+
+  "ACCT": "Accounting, Finance, Economics, and Political Science",
+  "POSC": "Accounting, Finance, Economics, and Political Science",
+  "ECON": "Accounting, Finance, Economics, and Political Science",
+  "FIN": "Accounting, Finance, Economics, and Political Science",
+  "GLST": "Accounting, Finance, Economics, and Political Science",
+
+  "MGT": "Management, Marketing, and Information Systems",
+  "MKTG": "Management, Marketing, and Information Systems",
+  "INFS": "Management, Marketing, and Information Systems",
+  "BADM": "Management, Marketing, and Information Systems",
+  "BCOM": "Management, Marketing, and Information Systems",
+  "SPMG": "Management, Marketing, and Information Systems",
+
+  "CJ": "Behavioral Sciences",
+  "SOC": "Behavioral Sciences",
+  "SWRK": "Behavioral Sciences",
+
+  "TCED": "Educational Studies",
+  "SPED": "Educational Studies",
+  "READ": "Educational Studies",
+  "SEDU": "Educational Studies",
+  "ECED": "Educational Studies",
+  "BUED": "Educational Studies",
+  "ELED": "Educational Studies",
+  "EDST": "Educational Studies",
+  "FCSE": "Educational Studies",
+
+  "EXSC": "Health and Human Performance",
+  "HLTH": "Health and Human Performance",
+  "HPED": "Health and Human Performance",
+  "ATRN": "Health and Human Performance",
+  "PACT": "Health and Human Performance",
+  "HHP": "Health and Human Performance",
+  "HPER": "Health and Human Performance",
+
+  "NURS": "Nursing",
+
+  "PSYC": "Psychology",
+  "NEUR": "Psychology",
+
+  "BIOL": "Biological Sciences",
+  "BOT": "Biological Sciences",
+  "MBIO": "Biological Sciences",
+  "ZOOL": "Biological Sciences",
+
+  "CHEM": "Chemistry and Physics",
+  "PHYS": "Chemistry and Physics",
+  "ASTR": "Chemistry and Physics",
+  "BCHE": "Chemistry and Physics",
+
+  "CSCI": "Computer Science",
+  "CYBR": "Computer Science",
+
+  "AMAE": "Engineering",
+  "ENGR": "Engineering",
+  "CIEG": "Engineering",
+  "CMGT": "Engineering",
+
+  "MATH": "Mathematics and Statistics",
+  "STAT": "Mathematics and Statistics",
+
+  "MMSC": "Communications",
+
+  "ENGL": "English and Modern Foreign Languages",
+  "FREN": "English and Modern Foreign Languages",
+  "GERM": "English and Modern Foreign Languages",
+  "JAPN": "English and Modern Foreign Languages",
+  "PORT": "English and Modern Foreign Languages",
+  "SPAN": "English and Modern Foreign Languages",
+
+  "HIST": "History and Philosophy",
+  "PHIL": "History and Philosophy",
+  "RLST": "History and Philosophy",
+
+  "MUS": "Music",
+  "MUAP": "Music",
+  "MUED": "Music",
+  "MUEN": "Music",
+
+  "THEA": "Visual and Theatre Arts",
+  "ART": "Visual and Theatre Arts",
+  "ARTH": "Visual and Theatre Arts",
+  "FA": "Visual and Theatre Arts",
+  "GDES": "Visual and Theatre Arts",
+  "DANC": "Visual and Theatre Arts"
+};
+
 const FALL_2026 = [
   ["August 24", "First day of classes"],
   ["August 24 to 30", "Late registration"],
@@ -368,7 +481,7 @@ const MEETING_PATTERNS = [
 const createBlank = () => ({
   code: "", title: "", crn: "", section: "", term: "Fall 2026", modality: "In person",
   credits: "3", meetingPattern: "", meeting: "", meetingTime: "",
-  location: "", exlocation: "", dept: "", prereq: "",
+  location: "", exlocation: "", dept: "Select a department...", prereq: "",
   instructor: "", email: "", phone: "", office: "", hours: "", address: "",
   subjectLine: "", responseTime: "48 hours on business days",
   description: "", welcome: "", customDescriptions: [],
@@ -516,6 +629,10 @@ export default function SyllabusBuilder() {
         formattedCode = `${match[1]} ${match[2]}`; // Constructs clean "POSC 322" layout
       }
 
+      // 2. Extract Prefix for Department autofill lookup
+      const prefix = match ? match[1] : "";
+      const inferredDept = COURSE_PREFIX_TO_DEPT[prefix] || "";
+
       setD((prev) => {
         const isDefaultCredits = prev.credits === "3";
 
@@ -530,8 +647,8 @@ export default function SyllabusBuilder() {
           title: (!prev.title.trim() || isSwitchingCourse) ? (course.courseTitle || "") : prev.title,
           description: (!prev.description.trim() || isSwitchingCourse) ? (course.description || "") : prev.description,
           prereq: (!prev.prereq.trim() || isSwitchingCourse) ? (course.prerequisites || "") : prev.prereq,
-          credits: (!prev.credits.trim() || isDefaultCredits || isSwitchingCourse) ? (course.creditHours || "3") : prev.credits
-          // Department is safely omitted here so the manual dropdown menu remains completely in control
+          credits: (!prev.credits.trim() || isDefaultCredits || isSwitchingCourse) ? (course.creditHours || "3") : prev.credits,
+          dept: (inferredDept && (!prev.dept.trim() || prev.dept === "Select a department..." || isSwitchingCourse)) ? inferredDept : prev.dept
         };
       });
 
@@ -811,7 +928,7 @@ export default function SyllabusBuilder() {
       <td class="hdr-l"><img src="${LOGO}" alt="The University of Tennessee at Martin" width="230"/></td>
       <td class="hdr-r"><div class="ct">${esc(d.code || "COURSE 000")}</div>
       <h1 class="tt">${esc(d.title || "Course Title")}</h1>
-      <div class="st">${esc(d.term)}${d.modality ? " &nbsp;|&nbsp; " + esc(d.modality) : ""}${d.dept ? " &nbsp;|&nbsp; " + esc(d.dept) : ""}</div></td></tr></table>`);
+      <div class="st">${esc(d.term)}${d.modality ? " &nbsp;|&nbsp; " + esc(d.modality) : ""}${d.dept && d.dept !== "Select a department..." ? " &nbsp;|&nbsp; " + esc(d.dept) : ""}</div></td></tr></table>`);
 
     // Course facts
     const facts = [
@@ -1200,87 +1317,123 @@ export default function SyllabusBuilder() {
             </Field>
             <Field label="Room"><T value={d.location} onChange={(v) => set("location", v)} placeholder="Humanities 407" /></Field>
             <Field label="Other Meeting Room" hint="Only fill this if some classes take place in other room during the week"><T value={d.exlocation} onChange={(v) => set("exlocation", v)} placeholder="Humanities 409 on Fridays" /></Field>
-<Field label="Department">
-  <select
-    style={inputBase}
-    value={d.dept}
-    onChange={(e) => set("dept", e.target.value)}
-  >
-    <option value="">Select a department...</option>
+            <Field label="Department">
+              <select
+                style={inputBase}
+                value={
+                  [
+                    "Select a department...",
+                    "Agriculture, Geosciences, and Natural Resources", "Family and Consumer Sciences",
+                    "Accounting, Finance, Economics, and Political Science", "Management, Marketing, and Information Systems",
+                    "Behavioral Sciences", "Educational Studies", "Health and Human Performance", "Nursing", "Psychology",
+                    "Biological Sciences", "Chemistry and Physics", "Computer Science", "Engineering", "Mathematics and Statistics",
+                    "Communications", "English and Modern Foreign Languages", "History and Philosophy", "Music", "Visual and Theatre Arts"
+                  ].includes(d.dept)
+                    ? d.dept
+                    : "Custom Department"
+                }
+                onChange={(e) => {
+                  const val = e.target.value;
+                  set("dept", val === "Custom Department" ? "" : val);
+                }}
+              >
+                <option value="Select a department...">Select a department...</option>
 
-    <optgroup label="College of Agriculture and Applied Sciences">
-      <option value="Agriculture, Geosciences, and Natural Resources">
-        Agriculture, Geosciences, and Natural Resources
-      </option>
-      <option value="Family and Consumer Sciences">
-        Family and Consumer Sciences
-      </option>
-    </optgroup>
+                <optgroup label="College of Agriculture and Applied Sciences">
+                  <option value="Agriculture, Geosciences, and Natural Resources">
+                    Agriculture, Geosciences, and Natural Resources
+                  </option>
+                  <option value="Family and Consumer Sciences">
+                    Family and Consumer Sciences
+                  </option>
+                </optgroup>
 
-    <optgroup label="College of Business and Global Affairs">
-      <option value="Accounting, Finance, Economics, and Political Science">
-        Accounting, Finance, Economics, and Political Science
-      </option>
-      <option value="Management, Marketing, and Information Systems">
-        Management, Marketing, and Information Systems
-      </option>
-    </optgroup>
+                <optgroup label="College of Business and Global Affairs">
+                  <option value="Accounting, Finance, Economics, and Political Science">
+                    Accounting, Finance, Economics, and Political Science
+                  </option>
+                  <option value="Management, Marketing, and Information Systems">
+                    Management, Marketing, and Information Systems
+                  </option>
+                </optgroup>
 
-    <optgroup label="College of Education, Health, and Behavioral Sciences">
-      <option value="Behavioral Sciences">
-        Behavioral Sciences
-      </option>
-      <option value="Educational Studies">
-        Educational Studies
-      </option>
-      <option value="Health and Human Performance">
-        Health and Human Performance
-      </option>
-      <option value="Nursing">
-        Nursing
-      </option>
-      <option value="Psychology">
-        Psychology
-      </option>
-    </optgroup>
+                <optgroup label="College of Education, Health, and Behavioral Sciences">
+                  <option value="Behavioral Sciences">
+                    Behavioral Sciences
+                  </option>
+                  <option value="Educational Studies">
+                    Educational Studies
+                  </option>
+                  <option value="Health and Human Performance">
+                    Health and Human Performance
+                  </option>
+                  <option value="Nursing">
+                    Nursing
+                  </option>
+                  <option value="Psychology">
+                    Psychology
+                  </option>
+                </optgroup>
 
-    <optgroup label="College of Engineering and Natural Sciences">
-      <option value="Biological Sciences">
-        Biological Sciences
-      </option>
-      <option value="Chemistry and Physics">
-        Chemistry and Physics
-      </option>
-      <option value="Computer Science">
-        Computer Science
-      </option>
-      <option value="Engineering">
-        Engineering
-      </option>
-      <option value="Mathematics and Statistics">
-        Mathematics and Statistics
-      </option>
-    </optgroup>
+                <optgroup label="College of Engineering and Natural Sciences">
+                  <option value="Biological Sciences">
+                    Biological Sciences
+                  </option>
+                  <option value="Chemistry and Physics">
+                    Chemistry and Physics
+                  </option>
+                  <option value="Computer Science">
+                    Computer Science
+                  </option>
+                  <option value="Engineering">
+                    Engineering
+                  </option>
+                  <option value="Mathematics and Statistics">
+                    Mathematics and Statistics
+                  </option>
+                </optgroup>
 
-    <optgroup label="College of Humanities and Fine Arts">
-      <option value="Communications">
-        Communications
-      </option>
-      <option value="English and Modern Foreign Languages">
-        English and Modern Foreign Languages
-      </option>
-      <option value="History and Philosophy">
-        History and Philosophy
-      </option>
-      <option value="Music">
-        Music
-      </option>
-      <option value="Visual and Theatre Arts">
-        Visual and Theatre Arts
-      </option>
-    </optgroup>
-  </select>
-</Field>
+                <optgroup label="College of Humanities and Fine Arts">
+                  <option value="Communications">
+                    Communications
+                  </option>
+                  <option value="English and Modern Foreign Languages">
+                    English and Modern Foreign Languages
+                  </option>
+                  <option value="History and Philosophy">
+                    History and Philosophy
+                  </option>
+                  <option value="Music">
+                    Music
+                  </option>
+                  <option value="Visual and Theatre Arts">
+                    Visual and Theatre Arts
+                  </option>
+                </optgroup>
+
+                <option value="Custom Department">Custom Department</option>
+              </select>
+            </Field>
+
+            {/* Custom Input dynamically renders when d.dept has been edited away from standard predefined options */}
+            {![
+              "Select a department...",
+              "Agriculture, Geosciences, and Natural Resources", "Family and Consumer Sciences",
+              "Accounting, Finance, Economics, and Political Science", "Management, Marketing, and Information Systems",
+              "Behavioral Sciences", "Educational Studies", "Health and Human Performance", "Nursing", "Psychology",
+              "Biological Sciences", "Chemistry and Physics", "Computer Science", "Engineering", "Mathematics and Statistics",
+              "Communications", "English and Modern Foreign Languages", "History and Philosophy", "Music", "Visual and Theatre Arts"
+            ].includes(d.dept) && (
+              <div className="mt-[-8px] mb-4">
+                <Field label="Custom Department Name">
+                  <T 
+                    value={d.dept} 
+                    onChange={(v) => set("dept", v)} 
+                    placeholder="Enter custom department name" 
+                  />
+                </Field>
+              </div>
+            )}
             <Field label="Prerequisites"><T value={d.prereq} onChange={(v) => set("prereq", v)} placeholder="None" /></Field>
           </>)}
 
