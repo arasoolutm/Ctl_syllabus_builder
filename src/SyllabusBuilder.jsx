@@ -288,7 +288,7 @@ const longRange = (a, b) => {
 // Holidays are only listed when they land on a day this class meets.
 function buildWeeks(cal, days) {
   if (!cal || !days.length) return [];
-  const start = parseDate(cal.start), end = parseDate(cal.end);6
+  const start = parseDate(cal.start), end = parseDate(cal.end);
   const sunday = new Date(start.getFullYear(), start.getMonth(), start.getDate() - start.getDay());
   const weeks = new Map();
   for (const dt = new Date(start); dt <= end; dt.setDate(dt.getDate() + 1)) {
