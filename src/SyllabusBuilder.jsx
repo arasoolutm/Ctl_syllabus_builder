@@ -197,26 +197,61 @@ function defaultTermLabel(today = new Date()) {
   return chosen;
 }
 
-// Values carry the "Department of " prefix so they match what the live
-// CRN/section lookup autofills (Banner's own department text), rather than
-// a native <select> whose fixed option values could never match live data.
-const DEPARTMENTS = [
-  { college: "College of Agriculture and Applied Sciences", names: [
-    "Agriculture, Geosciences, and Natural Resources", "Family and Consumer Sciences",
+// Verified against each department's own page at utm.edu/academics/departments
+// (not guessed) - also doubles as a client-side fallback for autofilling
+// Department when Banner's own department lookup fails (fetchSectionCatalogDetails
+// has been unreliable - see lookupCourseBySection). Business is genuinely one
+// department ("School of Business"), not the two this used to show, and
+// Political Science belongs under Humanities, not Business.
+const DEPARTMENT_DATA = [
+  { college: "College of Agriculture and Applied Sciences", departments: [
+    { name: "Agriculture, Geosciences, and Natural Resources", subjects: ["AGEC", "AGED", "AGET", "AGRI", "ANSC", "GEOL", "GEOS", "METR", "NRM", "PARK", "PLSC", "SOIL", "VET", "WBIO"] },
+    { name: "Family and Consumer Sciences", subjects: ["FCS", "CFS", "FCSE", "FASH", "GERO", "HPMG", "FSMG", "NUTR"] },
+    { name: "Military Science and Leadership", subjects: ["MSL"] },
   ] },
-  { college: "College of Business and Global Affairs", names: [
-    "Accounting, Finance, Economics, and Political Science", "Management, Marketing, and Information Systems",
+  { college: "College of Business and Global Affairs", departments: [
+    { name: "School of Business", subjects: ["ACCT", "ECON", "FIN", "MGT", "MKTG", "BCOM", "INFS", "SPMG", "BLAW"] },
   ] },
-  { college: "College of Education, Health, and Behavioral Sciences", names: [
-    "Behavioral Sciences", "Educational Studies", "Health and Human Performance", "Nursing", "Psychology",
+  { college: "College of Education, Health, and Behavioral Sciences", departments: [
+    { name: "Behavioral Sciences", subjects: ["CJ", "SWRK", "SOC"] },
+    { name: "Educational Studies", subjects: ["EDST", "ELED", "ECED", "SEDU", "SPED", "COUN", "TCED", "EDFN", "READ"] },
+    { name: "Health and Human Performance", subjects: ["HHP", "EXSC", "HPER", "ATRN", "HPED", "HLTH", "PACT"] },
+    { name: "Interdisciplinary Studies", subjects: ["IDST"] },
+    { name: "Nursing", subjects: ["NURS"] },
+    { name: "Psychology", subjects: ["PSYC"] },
   ] },
-  { college: "College of Engineering and Natural Sciences", names: [
-    "Biological Sciences", "Chemistry and Physics", "Computer Science", "Engineering", "Mathematics and Statistics",
+  { college: "College of Engineering and Natural Sciences", departments: [
+    { name: "Biological Sciences", subjects: ["BIOL", "ZOOL", "BOT", "MBIO", "BCHE"] },
+    { name: "Chemistry and Physics", subjects: ["CHEM", "PHYS", "ASTR"] },
+    { name: "Computer Science", subjects: ["CSCI", "CYBR"] },
+    { name: "Engineering", subjects: ["ENGR", "CIEG", "CMGT"] },
+    { name: "Mathematics and Statistics", subjects: ["MATH", "STAT"] },
   ] },
-  { college: "College of Humanities and Fine Arts", names: [
-    "Communications", "English and Modern Foreign Languages", "History and Philosophy", "Music", "Visual and Theatre Arts",
+  { college: "College of Humanities and Fine Arts", departments: [
+    { name: "English and Modern Foreign Languages", subjects: ["ENGL", "FREN", "GERM", "JAPN", "SPAN"] },
+    { name: "History and Philosophy", subjects: ["AAST", "HIST", "PHIL", "RLST", "WMST"] },
+    { name: "Mass Media and Strategic Communication", subjects: ["MMSC"] },
+    { name: "Music", subjects: ["MUS", "MUAP", "MUED", "MUEN"] },
+    { name: "Political Science and Global Studies", subjects: ["POSC", "INST"] },
+    { name: "Visual and Theatre Arts", subjects: ["ART", "ARTE", "ARTH", "DANC", "DNED", "THEA", "GDES"] },
   ] },
 ];
+
+// For the Department combo-box's grouped option list.
+const DEPARTMENTS = DEPARTMENT_DATA.map(({ college, departments }) => ({
+  college, names: departments.map((d) => d.name),
+}));
+
+// Subject code -> "Department of X", for the Banner-lookup-failed fallback.
+// A handful of subject codes (mostly university-wide/general-ed ones like
+// GENS, HNRS, or genuinely ambiguous ones like NEUR) have no confident
+// department match and are intentionally left out rather than guessed.
+const SUBJECT_DEPARTMENTS = new Map();
+for (const { departments } of DEPARTMENT_DATA) {
+  for (const { name, subjects } of departments) {
+    for (const code of subjects) SUBJECT_DEPARTMENTS.set(code, `Department of ${name}`);
+  }
+}
 
 const blank = {
   code: "", title: "", crn: "", section: "", term: defaultTermLabel(), modality: "In person",
@@ -647,7 +682,10 @@ export default function SyllabusBuilder() {
           modality: payload.modality || p.modality,
           meeting: payload.meeting || p.meeting,
           location: payload.location || p.location,
-          dept: payload.dept || p.dept,
+          // Banner's own department lookup (fetchSectionCatalogDetails) has
+          // been unreliable - fall back to our verified subject->department
+          // table rather than leaving the field blank when it fails.
+          dept: payload.dept || SUBJECT_DEPARTMENTS.get(subject) || p.dept,
           prereq: payload.prereq || p.prereq,
           instructor: payload.instructor || p.instructor,
           email: payload.email || p.email,
