@@ -365,10 +365,16 @@ export default function SyllabusBuilder() {
   }, [codeSuggestOpen]);
 
   const pickCodeSuggestion = (s) => {
-    codeJustSelectedRef.current = true;
     if (s.type === "subject") {
+      // Code is now a complete subject ("CSCI ") - let the next effect run
+      // normally so it shows that subject's course list, same as if the
+      // subject had been typed out by hand instead of clicked.
       setD((p) => ({ ...p, code: `${s.code} ` }));
     } else {
+      // Picking a full course needs no further narrowing - skip the next
+      // effect run instead of having it immediately re-search for courses
+      // matching the course code that was just selected.
+      codeJustSelectedRef.current = true;
       setD((p) => ({ ...p, code: s.code, title: s.title || p.title }));
     }
     setCodeSuggestOpen(false);
