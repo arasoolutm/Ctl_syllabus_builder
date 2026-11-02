@@ -694,10 +694,14 @@ export default function SyllabusBuilder() {
           // value on screen looking like it belongs to this one.
           meeting: payload.meeting || "",
           location: payload.location || "",
-          // Banner's own department lookup (fetchSectionCatalogDetails) has
-          // been unreliable - fall back to our verified subject->department
-          // table rather than leaving the field blank when it fails.
-          dept: payload.dept || SUBJECT_DEPARTMENTS.get(subject) || "",
+          // Prefer our verified subject->department table over Banner's own
+          // lookup (fetchSectionCatalogDetails): that endpoint has been
+          // unreliable (sometimes down outright), and even when it works it
+          // returns Banner's own abbreviated text (e.g. "Department of Pol
+          // Sci and Global Studies") that doesn't match the canonical name
+          // in our Department combo-box's option list. Only fall back to
+          // Banner's text for a subject we don't have verified ourselves.
+          dept: SUBJECT_DEPARTMENTS.get(subject) || payload.dept || "",
           prereq: payload.prereq || "",
           instructor: payload.instructor || "",
           email: payload.email || "",
