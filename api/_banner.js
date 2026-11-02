@@ -48,7 +48,13 @@ function withCookieLock(cookie, fn) {
   const prior = cookieLocks.get(cookie) || Promise.resolve();
   const settled = prior.catch(() => {});
   const run = settled.then(fn);
-  cookieLocks.set(cookie, run.catch(() => {}));
+  const tracked = run.catch(() => {});
+  cookieLocks.set(cookie, tracked);
+  // Interactive lookups now open a fresh, never-reused cookie per call (see
+  // searchFreshSession), so without this cleanup every request would leave
+  // a dead entry in this map for the lifetime of the warm instance. Only
+  // remove it if nothing newer queued behind us in the meantime.
+  tracked.finally(() => { if (cookieLocks.get(cookie) === tracked) cookieLocks.delete(cookie); });
   return run;
 }
 
@@ -159,10 +165,16 @@ async function openFreshSearchSession(termCode) {
 const sessionOpening = new Map();
 
 export async function openSearchSession(termCode, { forceNew = false, cacheKey = termCode } = {}) {
-  const cached = sessionCache.get(cacheKey);
-  if (!forceNew && cached && cached.expires > Date.now()) return cached.cookie;
+  // forceNew callers (every interactive lookup - see searchFreshSession)
+  // never read the cache, so skip all the cache/dedup bookkeeping for them
+  // entirely instead of reading a value we ignore and writing one nothing
+  // will ever read back.
+  if (forceNew) return openFreshSearchSession(termCode);
 
-  if (!forceNew && sessionOpening.has(cacheKey)) return sessionOpening.get(cacheKey);
+  const cached = sessionCache.get(cacheKey);
+  if (cached && cached.expires > Date.now()) return cached.cookie;
+
+  if (sessionOpening.has(cacheKey)) return sessionOpening.get(cacheKey);
 
   const opening = (async () => {
     const cookie = await openFreshSearchSession(termCode);
