@@ -402,10 +402,15 @@ export default function SyllabusBuilder() {
     // subjectPart is already a complete, known subject code (e.g. "CSCI") -
     // no need to wait for a space or a digit before showing its courses.
 
-    // If the catalog "warm up" pass already pulled this subject's full,
-    // unfiltered course list, filter it client-side instead of hitting the
-    // network again for every digit typed after the subject.
-    const warmedList = courseListCacheRef.current.get(`${d.term}|${subjectPart}|`);
+    // If the catalog "warm up" pass has FULLY finished for this term,
+    // filter its cached full course list client-side instead of hitting
+    // the network again for every digit typed after the subject. Must
+    // gate on the pass being fully done, not just "this subject has some
+    // entry" - the 5 pages land at different times, so a subject's entry
+    // can exist while still missing courses from a page still in flight.
+    const warmedList = warmCompleteRef.current.has(d.term)
+      ? courseListCacheRef.current.get(`${d.term}|${subjectPart}|`)
+      : null;
     if (warmedList) {
       const filtered = numberPart
         ? warmedList.filter((c) => c.code.slice(subjectPart.length).trim().startsWith(numberPart))
@@ -494,6 +499,11 @@ export default function SyllabusBuilder() {
       return undefined;
     }
 
+    // Not cached - clear the previous course's sections right away instead
+    // of leaving them on screen (looking like they belong to the new course)
+    // while the live search for this one is still in flight.
+    setSectionSuggestions([]);
+
     const controller = new AbortController();
     const timer = setTimeout(async () => {
       try {
@@ -518,6 +528,14 @@ export default function SyllabusBuilder() {
   // background - lets later typing hit the in-memory cache instead of
   // waiting on a live lookup, with no loading UI of its own.
   const warmedTermsRef = useRef(new Set());
+  // Separate from warmedTermsRef, which marks a term as "being warmed" the
+  // moment the pass starts (so it isn't restarted). This one only gets set
+  // once every page has actually landed - callers must check it before
+  // trusting a courseListCacheRef/sectionListCacheRef entry as the complete
+  // picture for a subject, since the 5 pages land at different times and a
+  // subject's entry can exist but still be missing courses from a page
+  // that hasn't resolved yet.
+  const warmCompleteRef = useRef(new Set());
 
   useEffect(() => {
     const term = String(d.term || "").trim();
@@ -560,10 +578,18 @@ export default function SyllabusBuilder() {
           const remainingOffsets = [];
           for (let o = PAGE_SIZE; o < totalCount; o += PAGE_SIZE) remainingOffsets.push(o);
 
-          await Promise.all(remainingOffsets.map(async (offset) => {
+          // Sequential, not Promise.all: on real (serverless, multi-instance)
+          // Vercel, firing all pages at once can land them on different
+          // function instances, each with its own in-memory session state -
+          // the server-side lock can't help across instances. One in-flight
+          // request at a time removes the concurrency entirely instead of
+          // relying on shared memory that isn't actually shared.
+          for (const offset of remainingOffsets) {
             const payload = await fetchPage(offset);
             applyPage(payload);
-          }));
+          }
+
+          warmCompleteRef.current.add(term);
         } catch {
           // Aborted (term changed again, or a real tab/unmount) or a real
           // failure - either way, un-mark the term so a later mount retries

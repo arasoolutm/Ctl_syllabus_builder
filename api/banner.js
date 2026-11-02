@@ -1,5 +1,5 @@
 import { SUBJECT_CODES } from "../src/subjectCodes.js";
-import { bannerHeaders, resolveTermCode, findSectionRow, fetchCourseDescription, searchWithRetry, decodeEntities, listTermsRaw, fetchCatalogPage } from "./_banner.js";
+import { bannerHeaders, resolveTermCode, findSectionRow, fetchCourseDescription, searchFreshSession, decodeEntities, listTermsRaw, fetchCatalogPage } from "./_banner.js";
 
 function formatInstructorName(displayName) {
   if (!displayName) return "";
@@ -112,7 +112,14 @@ function formatMeetingRange(beginTime, endTime) {
 }
 
 function isPhysicalMeeting(mt) {
-  return Boolean(mt.building) && !/^(onl|web|tba)/i.test(mt.building);
+  // The building CODE alone isn't reliable - UTM's online sections use "XX"
+  // for it, which doesn't match an "onl"/"web"/"tba" prefix check. Caught
+  // live: CSCI 220 OL1 (building "XX", buildingDescription "Online Courses
+  // (THEC)", campusDescription "UT Online") was coming back "In person".
+  // Check the readable description fields too, not just the code.
+  const text = `${mt.building || ""} ${mt.buildingDescription || ""} ${mt.campusDescription || ""}`;
+  if (/online|\bweb\b|\btba\b/i.test(text)) return false;
+  return Boolean(mt.building) && mt.building.toUpperCase() !== "XX";
 }
 
 function formatMeetingEntry(mt) {
@@ -278,7 +285,7 @@ async function handleCourseSearch(req, res) {
       return res.status(404).json({ error: `Could not find "${term}" in the registration system's term list` });
     }
 
-    const rows = await searchWithRetry(termCode, { subject: String(subject).toUpperCase() });
+    const rows = await searchFreshSession(termCode, { subject: String(subject).toUpperCase() });
 
     const numberPrefix = String(q || "").trim().toUpperCase();
     const seen = new Map();
@@ -344,7 +351,7 @@ async function handleSectionSearch(req, res) {
       return res.status(404).json({ error: `Could not find "${term}" in the registration system's term list` });
     }
 
-    const rows = await searchWithRetry(termCode, {
+    const rows = await searchFreshSession(termCode, {
       subject: String(subject).toUpperCase(),
       courseNumber: String(courseNumber).toUpperCase(),
     });
