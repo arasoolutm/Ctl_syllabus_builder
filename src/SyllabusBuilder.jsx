@@ -686,21 +686,51 @@ export default function SyllabusBuilder() {
           term: payload.term || p.term,
           credits: payload.credits || p.credits,
           modality: payload.modality || p.modality,
-          meeting: payload.meeting || p.meeting,
-          location: payload.location || p.location,
+          // These are the fields Banner usually supplies but sometimes
+          // genuinely doesn't for a given section (TBA instructor, no
+          // meeting time for an async course, no prereqs, etc.) - blank
+          // them rather than falling back to p.X, which would silently
+          // leave a DIFFERENT, previously-looked-up course's leftover
+          // value on screen looking like it belongs to this one.
+          meeting: payload.meeting || "",
+          location: payload.location || "",
           // Banner's own department lookup (fetchSectionCatalogDetails) has
           // been unreliable - fall back to our verified subject->department
           // table rather than leaving the field blank when it fails.
-          dept: payload.dept || SUBJECT_DEPARTMENTS.get(subject) || p.dept,
-          prereq: payload.prereq || p.prereq,
-          instructor: payload.instructor || p.instructor,
-          email: payload.email || p.email,
-          description: payload.description || p.description,
+          dept: payload.dept || SUBJECT_DEPARTMENTS.get(subject) || "",
+          prereq: payload.prereq || "",
+          instructor: payload.instructor || "",
+          email: payload.email || "",
+          description: payload.description || "",
         };
       });
       setCrnStatus("ok");
     } catch (error) {
-      if (error.name !== "AbortError") setCrnStatus("error");
+      if (error.name !== "AbortError") {
+        setCrnStatus("error");
+        // No CRN resolved for this code+section (e.g. it isn't actually
+        // offered this term) - clear the lookup-sourced fields instead of
+        // leaving a DIFFERENT course's leftover title/instructor/etc. on
+        // screen looking like it belongs to this one. Department keeps the
+        // subject-level fallback since that doesn't depend on the section
+        // having actually resolved.
+        setD((p) => {
+          const stillCurrent = p.code.trim() === triggerCode && p.section.trim() === section && p.term.trim() === term;
+          if (!stillCurrent) return p;
+          return {
+            ...p,
+            crn: "",
+            title: "",
+            meeting: "",
+            location: "",
+            dept: SUBJECT_DEPARTMENTS.get(subject) || "",
+            prereq: "",
+            instructor: "",
+            email: "",
+            description: "",
+          };
+        });
+      }
     }
   };
 
