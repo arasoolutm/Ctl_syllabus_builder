@@ -457,12 +457,18 @@ export default function SyllabusBuilder() {
         ? warmedList.filter((c) => c.code.slice(subjectPart.length).trim().startsWith(numberPart))
         : warmedList;
       setCodeSuggestLoading(false);
-      setCodeSuggestions(filtered.slice(0, 8));
+      setCodeSuggestions(filtered);
       setCodeSuggestOpen(filtered.length > 0);
       return undefined;
     }
 
-    const cacheKey = `${d.term}|${subjectPart}|${numberPart}`;
+    // "q:" prefix keeps this distinct from the warm-up accumulator's key
+    // above (${term}|${subject}|, no prefix) - they used to collide on an
+    // empty numberPart, so once warm-up had partially (or fully, but not
+    // yet warmCompleteRef-flagged) filled that key with its full, unsliced
+    // subject list, this read picked it up too and displayed all of it
+    // instead of the capped-at-8 live-search result it was meant to cache.
+    const cacheKey = `q:${d.term}|${subjectPart}|${numberPart}`;
     const cached = courseListCacheRef.current.get(cacheKey);
     if (cached) {
       setCodeSuggestLoading(false);
@@ -484,7 +490,7 @@ export default function SyllabusBuilder() {
         const res = await fetch(url, { signal: controller.signal });
         if (!res.ok) throw new Error("search failed");
         const payload = await res.json();
-        const matches = (payload.courses || []).slice(0, 8).map((c) => ({ type: "course", code: c.code, title: c.title }));
+        const matches = (payload.courses || []).map((c) => ({ type: "course", code: c.code, title: c.title }));
         courseListCacheRef.current.set(cacheKey, matches);
         setCodeSuggestLoading(false);
         setCodeSuggestions(matches);
