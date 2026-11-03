@@ -197,12 +197,8 @@ function defaultTermLabel(today = new Date()) {
   return chosen;
 }
 
-// Verified against each department's own page at utm.edu/academics/departments
-// (not guessed) - also doubles as a client-side fallback for autofilling
-// Department when Banner's own department lookup fails (fetchSectionCatalogDetails
-// has been unreliable - see lookupCourseBySection). Business is genuinely one
-// department ("School of Business"), not the two this used to show, and
-// Political Science belongs under Humanities, not Business.
+// Verified against each department's own page at utm.edu (not guessed); also
+// used as a fallback when Banner's own department lookup fails or is unreliable.
 const DEPARTMENT_DATA = [
   { college: "College of Agriculture and Applied Sciences", departments: [
     { name: "Agriculture, Geosciences, and Natural Resources", subjects: ["AGEC", "AGED", "AGET", "AGRI", "ANSC", "GEOL", "GEOS", "METR", "NRM", "PARK", "PLSC", "SOIL", "VET", "WBIO"] },
@@ -242,10 +238,8 @@ const DEPARTMENTS = DEPARTMENT_DATA.map(({ college, departments }) => ({
   college, names: departments.map((d) => d.name),
 }));
 
-// Subject code -> "Department of X", for the Banner-lookup-failed fallback.
-// A handful of subject codes (mostly university-wide/general-ed ones like
-// GENS, HNRS, or genuinely ambiguous ones like NEUR) have no confident
-// department match and are intentionally left out rather than guessed.
+// Subject code -> "Department of X", used when Banner's own lookup fails.
+// Ambiguous/general-ed codes (GENS, HNRS, NEUR, ...) are left out rather than guessed.
 const SUBJECT_DEPARTMENTS = new Map();
 for (const { departments } of DEPARTMENT_DATA) {
   for (const { name, subjects } of departments) {
@@ -312,7 +306,7 @@ const Note = ({ children }) => (
 export default function SyllabusBuilder() {
   const [d, setD] = useState(blank);
   const [tab, setTab] = useState(0);
-  const [crnStatus, setCrnStatus] = useState(null);
+  const [lookupStatus, setLookupStatus] = useState(null);
   const [deliveryOpen, setDeliveryOpen] = useState(false);
   const deliveryRef = useRef(null);
   const fileRef = useRef(null);
@@ -380,9 +374,7 @@ export default function SyllabusBuilder() {
   const [codeSuggestLoading, setCodeSuggestLoading] = useState(false);
   const codeSuggestRef = useRef(null);
   const codeJustSelectedRef = useRef(false);
-  // In-memory cache of course-search results, keyed by term|subject|q, so
-  // retyping/backspacing within the same subject (or revisiting it) doesn't
-  // re-hit Banner for a result we already have from this session.
+  // Caches course-search results by term|subject|q so retyping doesn't re-hit Banner.
   const courseListCacheRef = useRef(new Map());
 
   useEffect(() => {
@@ -401,23 +393,18 @@ export default function SyllabusBuilder() {
 
   const pickCodeSuggestion = (s) => {
     if (s.type === "subject") {
-      // Code is now a complete subject ("CSCI ") - let the next effect run
-      // normally so it shows that subject's course list, same as if the
-      // subject had been typed out by hand instead of clicked.
+      // Let the search effect run normally so it shows this subject's course list.
       setD((p) => ({ ...p, code: `${s.code} ` }));
     } else {
-      // Picking a full course needs no further narrowing - skip the next
-      // effect run instead of having it immediately re-search for courses
-      // matching the course code that was just selected.
+      // Skip the next search effect - a full course pick needs no further narrowing.
       codeJustSelectedRef.current = true;
       setD((p) => ({ ...p, code: s.code, title: s.title || p.title }));
     }
     setCodeSuggestOpen(false);
   };
 
-  // Live "as you type" course lookup: just letters shows matching subjects
-  // (bundled, no network); a subject code followed by digits searches the
-  // live Banner catalog for matching course numbers in that subject.
+  // Live "as you type" lookup: letters alone show matching subjects (no
+  // network); a subject + digits searches Banner for matching course numbers.
   useEffect(() => {
     if (codeJustSelectedRef.current) { codeJustSelectedRef.current = false; return undefined; }
 
@@ -443,12 +430,9 @@ export default function SyllabusBuilder() {
     // subjectPart is already a complete, known subject code (e.g. "CSCI") -
     // no need to wait for a space or a digit before showing its courses.
 
-    // If the catalog "warm up" pass has FULLY finished for this term,
-    // filter its cached full course list client-side instead of hitting
-    // the network again for every digit typed after the subject. Must
-    // gate on the pass being fully done, not just "this subject has some
-    // entry" - the 5 pages land at different times, so a subject's entry
-    // can exist while still missing courses from a page still in flight.
+    // Only trust this cache once the warm-up pass has FULLY finished for this
+    // term - pages land at different times, so a subject's entry can exist
+    // while still missing courses from a page still in flight.
     const warmedList = warmCompleteRef.current.has(d.term)
       ? courseListCacheRef.current.get(`${d.term}|${subjectPart}|`)
       : null;
@@ -462,12 +446,9 @@ export default function SyllabusBuilder() {
       return undefined;
     }
 
-    // "q:" prefix keeps this distinct from the warm-up accumulator's key
-    // above (${term}|${subject}|, no prefix) - they used to collide on an
-    // empty numberPart, so once warm-up had partially (or fully, but not
-    // yet warmCompleteRef-flagged) filled that key with its full, unsliced
-    // subject list, this read picked it up too and displayed all of it
-    // instead of the capped-at-8 live-search result it was meant to cache.
+    // "q:" prefix keeps this distinct from the warm-up accumulator's key above
+    // (same key minus prefix) - they used to collide and leak the full warm-up
+    // list into what should've been a narrow live-search result.
     const cacheKey = `q:${d.term}|${subjectPart}|${numberPart}`;
     const cached = courseListCacheRef.current.get(cacheKey);
     if (cached) {
@@ -528,9 +509,8 @@ export default function SyllabusBuilder() {
     setSectionSuggestOpen(false);
   };
 
-  // Once the course code is a complete, valid "SUBJ 000" code, proactively
-  // surface the real sections offered that term so the professor sees what
-  // to put in Section next, instead of having to already know it.
+  // Once the code is a complete "SUBJ 000", proactively surface the real
+  // sections offered that term so the professor doesn't have to already know one.
   useEffect(() => {
     const code = String(d.code || "").trim();
     const parsed = code.match(/^([A-Za-z]{2,5})\s*-?\s*(\d{3,4}[A-Za-z]?)$/);
@@ -546,9 +526,8 @@ export default function SyllabusBuilder() {
       return undefined;
     }
 
-    // Not cached - clear the previous course's sections right away instead
-    // of leaving them on screen (looking like they belong to the new course)
-    // while the live search for this one is still in flight.
+    // Not cached - clear stale sections immediately rather than leaving them
+    // looking like they belong to the new course while the search is in flight.
     setSectionSuggestions([]);
 
     const controller = new AbortController();
@@ -570,18 +549,11 @@ export default function SyllabusBuilder() {
     return () => { clearTimeout(timer); controller.abort(); };
   }, [d.code, d.term]);
   // "Warm up" the whole term's catalog into the course/section caches above,
-  // once per term, paging through Banner's unfiltered search results in
-  // parallel (it caps each page at 500 rows). Runs silently in the
-  // background - lets later typing hit the in-memory cache instead of
-  // waiting on a live lookup, with no loading UI of its own.
+  // once per term, paging through Banner's results in the background so
+  // later typing hits cache instead of a live lookup.
   const warmedTermsRef = useRef(new Set());
-  // Separate from warmedTermsRef, which marks a term as "being warmed" the
-  // moment the pass starts (so it isn't restarted). This one only gets set
-  // once every page has actually landed - callers must check it before
-  // trusting a courseListCacheRef/sectionListCacheRef entry as the complete
-  // picture for a subject, since the 5 pages land at different times and a
-  // subject's entry can exist but still be missing courses from a page
-  // that hasn't resolved yet.
+  // Set only once every page has landed, unlike warmedTermsRef (set when the
+  // pass starts). Callers must check this before trusting a cache entry as complete.
   const warmCompleteRef = useRef(new Set());
 
   useEffect(() => {
@@ -625,12 +597,9 @@ export default function SyllabusBuilder() {
           const remainingOffsets = [];
           for (let o = PAGE_SIZE; o < totalCount; o += PAGE_SIZE) remainingOffsets.push(o);
 
-          // Sequential, not Promise.all: on real (serverless, multi-instance)
-          // Vercel, firing all pages at once can land them on different
-          // function instances, each with its own in-memory session state -
-          // the server-side lock can't help across instances. One in-flight
-          // request at a time removes the concurrency entirely instead of
-          // relying on shared memory that isn't actually shared.
+          // Sequential, not Promise.all: on multi-instance Vercel, parallel pages
+          // can land on different instances with separate session state, which
+          // the server-side lock can't protect against across instances.
           for (const offset of remainingOffsets) {
             const payload = await fetchPage(offset);
             applyPage(payload);
@@ -638,9 +607,8 @@ export default function SyllabusBuilder() {
 
           warmCompleteRef.current.add(term);
         } catch {
-          // Aborted (term changed again, or a real tab/unmount) or a real
-          // failure - either way, un-mark the term so a later mount retries
-          // instead of silently leaving its cache empty forever.
+          // Aborted or failed - un-mark the term so a later mount retries instead
+          // of leaving its cache empty forever.
           warmedTermsRef.current.delete(term);
         }
       })();
@@ -670,11 +638,9 @@ export default function SyllabusBuilder() {
       const payload = await res.json();
       if (!payload.crn || !payload.title) throw new Error("The portal returned no course details");
       setD((p) => {
-        // The request's own code/section/term may have been superseded by
-        // further edits while this was in flight (AbortController can lose
-        // that race if the response had already arrived) - if what's on
-        // screen no longer matches what this response is actually for,
-        // drop it instead of clobbering the user's newer input.
+        // The response may have been superseded by further edits while in flight
+        // (AbortController can lose that race) - drop it if it no longer matches
+        // what's on screen instead of clobbering newer input.
         const stillCurrent = p.code.trim() === triggerCode && p.section.trim() === section && p.term.trim() === term;
         if (!stillCurrent) return p;
         return {
@@ -686,21 +652,13 @@ export default function SyllabusBuilder() {
           term: payload.term || p.term,
           credits: payload.credits || p.credits,
           modality: payload.modality || p.modality,
-          // These are the fields Banner usually supplies but sometimes
-          // genuinely doesn't for a given section (TBA instructor, no
-          // meeting time for an async course, no prereqs, etc.) - blank
-          // them rather than falling back to p.X, which would silently
-          // leave a DIFFERENT, previously-looked-up course's leftover
-          // value on screen looking like it belongs to this one.
+          // Blank these rather than falling back to p.X - a fallback would silently
+          // leave a different, previously-looked-up course's value on screen.
           meeting: payload.meeting || "",
           location: payload.location || "",
-          // Prefer our verified subject->department table over Banner's own
-          // lookup (fetchSectionCatalogDetails): that endpoint has been
-          // unreliable (sometimes down outright), and even when it works it
-          // returns Banner's own abbreviated text (e.g. "Department of Pol
-          // Sci and Global Studies") that doesn't match the canonical name
-          // in our Department combo-box's option list. Only fall back to
-          // Banner's text for a subject we don't have verified ourselves.
+          // Prefer our verified SUBJECT_DEPARTMENTS table over Banner's own lookup,
+          // which is unreliable and returns abbreviated text that doesn't match
+          // our Department dropdown's canonical names.
           dept: SUBJECT_DEPARTMENTS.get(subject) || payload.dept || "",
           prereq: payload.prereq || "",
           instructor: payload.instructor || "",
@@ -708,16 +666,13 @@ export default function SyllabusBuilder() {
           description: payload.description || "",
         };
       });
-      setCrnStatus("ok");
+      setLookupStatus("ok");
     } catch (error) {
       if (error.name !== "AbortError") {
-        setCrnStatus("error");
-        // No CRN resolved for this code+section (e.g. it isn't actually
-        // offered this term) - clear the lookup-sourced fields instead of
-        // leaving a DIFFERENT course's leftover title/instructor/etc. on
-        // screen looking like it belongs to this one. Department keeps the
-        // subject-level fallback since that doesn't depend on the section
-        // having actually resolved.
+        setLookupStatus("error");
+        // No CRN resolved - clear lookup-sourced fields instead of leaving a
+        // different course's leftover data on screen. Department keeps its
+        // subject-level fallback since that doesn't need the section to resolve.
         setD((p) => {
           const stillCurrent = p.code.trim() === triggerCode && p.section.trim() === section && p.term.trim() === term;
           if (!stillCurrent) return p;
@@ -743,10 +698,10 @@ export default function SyllabusBuilder() {
     const section = String(d.section || "").trim();
     const term = String(d.term || "").trim();
     const parsed = code.match(/^([A-Za-z]{2,5})\s*-?\s*(\d{3,4}[A-Za-z]?)$/);
-    if (!parsed || !section || !term) { setCrnStatus(null); return undefined; }
+    if (!parsed || !section || !term) { setLookupStatus(null); return undefined; }
 
     const controller = new AbortController();
-    setCrnStatus("loading");
+    setLookupStatus("loading");
     const timer = setTimeout(() => {
       lookupCourseBySection(code, term, parsed[1].toUpperCase(), parsed[2].toUpperCase(), section, controller.signal);
     }, 450);
@@ -1074,13 +1029,13 @@ export default function SyllabusBuilder() {
                       onChange={(e) => set("section", e.target.value)}
                       onFocus={() => { if (sectionSuggestions.length) setSectionSuggestOpen(true); }}
                     />
-                    {crnStatus === "loading" &&
+                    {lookupStatus === "loading" &&
                       <div style={{ position: "absolute", right: 9, top: 0, bottom: 0, display: "flex", alignItems: "center" }}>
                         <Loader2 size={15} className="animate-spin" style={{ color: C.slate }} />
                       </div>}
-                    {crnStatus === "ok" &&
+                    {lookupStatus === "ok" &&
                       <Check size={15} style={{ position: "absolute", right: 9, top: "50%", transform: "translateY(-50%)", color: C.good }} />}
-                    {crnStatus === "error" &&
+                    {lookupStatus === "error" &&
                       <X size={15} style={{ position: "absolute", right: 9, top: "50%", transform: "translateY(-50%)", color: C.bad }} />}
                     <div role="listbox" className="transition-all duration-200"
                       style={{

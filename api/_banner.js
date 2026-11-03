@@ -1,7 +1,7 @@
 // Shared helpers for talking to UTM's public (anonymous, no student login
-// involved) Banner 9 Self-Service "Browse Classes" endpoints. Used by both
-// class-details.js (resolve a CRN to full section info) and
-// course-search.js (live autocomplete).
+// involved) Banner 9 Self-Service "Browse Classes" endpoints. Used by
+// banner.js's "details" (resolve a section to full info) and
+// "course-search"/"section-search" (live autocomplete) actions.
 
 export function decodeEntities(value) {
   return String(value || "")
@@ -32,16 +32,10 @@ const SESSION_TTL_MS = 8 * 60 * 1000; // conservative vs Banner's actual session
 const termCodeCache = new Map(); // normalized label -> { code, expires }
 const sessionCache = new Map(); // termCode -> { cookie, expires }
 
-// Banner's searchResults endpoint is keyed by query string but, empirically,
-// NOT safely so: two concurrent requests on the same session cookie can
-// cross-contaminate, with one request's response actually carrying a
-// different request's data - caught live two different ways: a request
-// body asking for "CSCI 220" coming back with "CSCI 430"'s CRN (different
-// txt_subject/txt_courseNumber), and the bulk catalog warm-up's parallel
-// pages (which only differ by pageOffset) producing sections that belonged
-// to the wrong course entirely. Rather than chase Banner's exact session
-// semantics, just never let two searchResults calls on the same cookie be
-// in flight at once - queue them per cookie instead.
+// Banner's searchResults endpoint cross-contaminates under concurrent requests
+// on the same session cookie (one request's response can carry a different
+// request's data). Rather than chase Banner's exact session semantics, just
+// never let two searchResults calls on the same cookie be in flight at once.
 const cookieLocks = new Map(); // cookie -> tail of the queue for that session
 
 function withCookieLock(cookie, fn) {
@@ -50,10 +44,8 @@ function withCookieLock(cookie, fn) {
   const run = settled.then(fn);
   const tracked = run.catch(() => {});
   cookieLocks.set(cookie, tracked);
-  // Interactive lookups now open a fresh, never-reused cookie per call (see
-  // searchFreshSession), so without this cleanup every request would leave
-  // a dead entry in this map for the lifetime of the warm instance. Only
-  // remove it if nothing newer queued behind us in the meantime.
+  // Every interactive call gets a never-reused cookie (see searchFreshSession),
+  // so without this cleanup each one would leave a dead entry here forever.
   tracked.finally(() => { if (cookieLocks.get(cookie) === tracked) cookieLocks.delete(cookie); });
   return run;
 }
@@ -139,36 +131,23 @@ async function openFreshSearchSession(termCode) {
   return cookie;
 }
 
-// Banner's class search is anonymous but stateful: a search session has to
-// be opened and pointed at a term before searchResults will return anything
-// for that term. Opening one costs three sequential round trips to UTM's
-// server, so we keep it around (per warm function instance) instead of
-// redoing it for every keystroke.
+// Banner's class search is anonymous but stateful: a session has to be opened
+// and pointed at a term before searchResults returns anything. Opening one
+// costs three round trips, so we keep it around per warm function instance
+// instead of redoing it per keystroke.
 //
 // cacheKey defaults to termCode, but callers that would otherwise share a
 // session with unrelated concurrent searches (notably the bulk catalog
-// warm-up, which runs several parallel unfiltered requests right as a
-// professor might be typing a subject-filtered one) pass a distinct key so
-// their session cookie is never reused by - or reused for - a different
-// kind of search. Sharing one proved unsafe: Banner's search appears to key
-// in-flight concurrent requests on the session's state, not just the query
-// string, so an unfiltered bulk request racing a filtered one on the same
-// cookie could return the wrong (unfiltered) results for the filtered one.
-// In-flight session opens, keyed the same as sessionCache. Without this,
-// several calls for the same cacheKey arriving before anything is cached
-// yet (e.g. the warm-up's 5 pages firing at once) would each independently
-// open their OWN fresh session - several different cookies all live for
-// the same term/purpose at once, which defeats withCookieLock entirely
-// (it only serializes requests that already share one cookie) and was
-// still producing cross-contaminated results. Concurrent callers now all
-// await the same in-flight open instead of starting their own.
+// warm-up) pass a distinct key, since sharing let an unfiltered bulk request
+// return wrong results for a filtered one racing it on the same cookie.
+//
+// In-flight opens for the same cacheKey, so concurrent callers await one
+// shared open instead of each starting their own cookie.
 const sessionOpening = new Map();
 
-export async function openSearchSession(termCode, { forceNew = false, cacheKey = termCode } = {}) {
-  // forceNew callers (every interactive lookup - see searchFreshSession)
-  // never read the cache, so skip all the cache/dedup bookkeeping for them
-  // entirely instead of reading a value we ignore and writing one nothing
-  // will ever read back.
+async function openSearchSession(termCode, { forceNew = false, cacheKey = termCode } = {}) {
+  // forceNew callers (every interactive lookup) never read the cache, so
+  // skip the cache/dedup bookkeeping entirely for them.
   if (forceNew) return openFreshSearchSession(termCode);
 
   const cached = sessionCache.get(cacheKey);
@@ -190,7 +169,7 @@ export async function openSearchSession(termCode, { forceNew = false, cacheKey =
   }
 }
 
-export async function searchSections(termCode, cookie, { subject, courseNumber } = {}) {
+async function searchSections(termCode, cookie, { subject, courseNumber } = {}) {
   const params = new URLSearchParams({
     txt_term: termCode,
     pageOffset: "0",
@@ -208,15 +187,10 @@ export async function searchSections(termCode, cookie, { subject, courseNumber }
   });
 }
 
-// Always opens its own fresh session rather than reusing a cached one.
-// This used to reuse sessionCache (retrying once on a stale/dead session),
-// but on real multi-instance serverless Vercel, two interactive lookups
-// reusing the same cached cookie can land on different function instances
-// and race each other on Banner's side with no shared memory to prevent
-// it - withCookieLock only serializes requests that already share a
-// cookie, and the cross-instance race is exactly what produces a fresh
-// cookie to begin with. Never sharing a session here removes that
-// possibility entirely, at the cost of the ~1-3s handshake on every call.
+// Always opens its own fresh session rather than reusing a cached one - on
+// multi-instance Vercel, two lookups sharing a cached cookie can land on
+// different instances and race each other with no shared memory to prevent
+// it. Costs a ~1-3s handshake per call, but removes that race entirely.
 export async function searchFreshSession(termCode, filters) {
   const cookie = await openSearchSession(termCode, { forceNew: true });
   if (!cookie) return [];
@@ -224,9 +198,8 @@ export async function searchFreshSession(termCode, filters) {
 }
 
 // A full term's worth of sections, paged (Banner caps pageMaxSize at 500
-// server-side regardless of what's requested). Used by the client-side
-// cache "warm up" pass: no subject/course filter, just raw pagination
-// through everything so later keystroke lookups hit cache instead of Banner.
+// server-side). Used by the client-side cache "warm up" pass: no filter,
+// just raw pagination so later keystroke lookups hit cache instead of Banner.
 export async function fetchCatalogPage(termCode, { pageOffset = 0, pageMaxSize = 500 } = {}) {
   // Isolated session namespace - see the comment on openSearchSession for why.
   const cookie = await openSearchSession(termCode, { cacheKey: `${termCode}:bulk` });
@@ -238,12 +211,9 @@ export async function fetchCatalogPage(termCode, { pageOffset = 0, pageMaxSize =
     pageMaxSize: String(pageMaxSize),
   });
   const url = `https://ban9ssb1.utm.edu/StudentRegistrationSsb/ssb/searchResults/searchResults?${params.toString()}`;
-  // Same cookie lock as searchSections - turns out concurrent requests on
-  // one session can cross-contaminate even when they only differ by
-  // pageOffset (not just subject/courseNumber), based on a live catalog
-  // warm-up producing sections that belonged to the wrong course. The 5
-  // warm-up pages now run serialized instead of parallel; correctness
-  // matters more than shaving the warm-up's (invisible, background) time.
+  // Same cookie lock as searchSections - concurrent requests on one session
+  // cross-contaminate even when they only differ by pageOffset, so warm-up
+  // pages run serialized instead of parallel.
   return withCookieLock(cookie, async () => {
     const response = await fetch(url, { headers: { ...bannerHeaders("application/json, text/javascript, */*; q=0.01"), Cookie: cookie } });
     if (!response.ok) { await response.text().catch(() => {}); return { rows: [], totalCount: 0 }; }

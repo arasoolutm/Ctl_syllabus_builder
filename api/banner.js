@@ -27,8 +27,8 @@ function cleanText(value) {
     .trim();
 }
 
-/* ---------- action=details: resolve a CRN (directly, or via subject +
-   courseNumber + section) to the full set of syllabus fields ---------- */
+/* ---------- action=details: resolve a subject + courseNumber + section
+   to the full set of syllabus fields ---------- */
 
 function extractMappedText(html, label) {
   const text = cleanText(html)
@@ -112,11 +112,9 @@ function formatMeetingRange(beginTime, endTime) {
 }
 
 function isPhysicalMeeting(mt) {
-  // The building CODE alone isn't reliable - UTM's online sections use "XX"
-  // for it, which doesn't match an "onl"/"web"/"tba" prefix check. Caught
-  // live: CSCI 220 OL1 (building "XX", buildingDescription "Online Courses
-  // (THEC)", campusDescription "UT Online") was coming back "In person".
-  // Check the readable description fields too, not just the code.
+  // Building CODE alone isn't reliable - UTM uses "XX" for online sections,
+  // which doesn't match an "onl"/"web"/"tba" prefix check. Check the readable
+  // description fields too, not just the code.
   const text = `${mt.building || ""} ${mt.buildingDescription || ""} ${mt.campusDescription || ""}`;
   if (/online|\bweb\b|\btba\b/i.test(text)) return false;
   return Boolean(mt.building) && mt.building.toUpperCase() !== "XX";
@@ -194,9 +192,9 @@ async function handleDetails(req, res) {
   }
 
   try {
-    const { term, courseReferenceNumber, subject, courseNumber, section } = req.body || {};
-    if (!term || (!courseReferenceNumber && !(subject && courseNumber && section))) {
-      return res.status(400).json({ error: "term and either courseReferenceNumber, or subject/courseNumber/section, are required" });
+    const { term, subject, courseNumber, section } = req.body || {};
+    if (!term || !subject || !courseNumber || !section) {
+      return res.status(400).json({ error: "term, subject, courseNumber, and section are required" });
     }
 
     const termCode = await resolveTermCode(term);
@@ -204,16 +202,12 @@ async function handleDetails(req, res) {
       return res.status(404).json({ error: `Could not find "${term}" in the registration system's term list` });
     }
 
-    let crn = courseReferenceNumber ? String(courseReferenceNumber) : null;
-    let faculty = null;
-    if (!crn) {
-      const row = await findSectionRow(termCode, subject, courseNumber, section);
-      if (!row) {
-        return res.status(404).json({ error: `No section ${section} found for ${subject} ${courseNumber} in that term` });
-      }
-      crn = row.courseReferenceNumber;
-      faculty = row.faculty;
+    const row = await findSectionRow(termCode, subject, courseNumber, section);
+    if (!row) {
+      return res.status(404).json({ error: `No section ${section} found for ${subject} ${courseNumber} in that term` });
     }
+    const crn = row.courseReferenceNumber;
+    const faculty = row.faculty;
 
     const formBody = new URLSearchParams({
       term: termCode,
@@ -233,7 +227,7 @@ async function handleDetails(req, res) {
       fetchFacultyMeetingTimes(termCode, crn).catch(() => null),
       fetchSectionCatalogDetails(termCode, crn).catch(() => null),
       fetchSectionPrerequisites(termCode, crn).catch(() => null),
-      (subject && courseNumber) ? fetchCourseDescription(termCode, subject, courseNumber).catch(() => null) : null,
+      fetchCourseDescription(termCode, subject, courseNumber).catch(() => null),
     ]);
 
     const html = await response.text();
@@ -243,7 +237,7 @@ async function handleDetails(req, res) {
     const data = parseClassDetailsHtml(html);
 
     if (!data) {
-      return res.status(404).json({ error: "No class data found for that CRN" });
+      return res.status(404).json({ error: "No class data found for that section" });
     }
 
     if (meetingInfo) {
@@ -330,7 +324,7 @@ function summarizeMeeting(meetingsFaculty) {
 }
 
 function summarizeInstructor(faculty) {
-  const primary = (Array.isArray(faculty) && (faculty.find((f) => f.primaryIndicator) || faculty[0])) || null;
+  const primary = primaryFaculty(faculty);
   if (!primary?.displayName) return "Staff";
   return decodeEntities(primary.displayName.split(",")[0].trim());
 }
@@ -362,7 +356,6 @@ async function handleSectionSearch(req, res) {
         crn: r.courseReferenceNumber,
         instructor: summarizeInstructor(r.faculty),
         meeting: summarizeMeeting(r.meetingsFaculty),
-        seatsAvailable: r.seatsAvailable,
       }))
       .sort((a, b) => a.section.localeCompare(b.section, undefined, { numeric: true }));
 
@@ -408,7 +401,6 @@ async function handleCatalogPage(req, res) {
         crn: row.courseReferenceNumber,
         instructor: summarizeInstructor(row.faculty),
         meeting: summarizeMeeting(row.meetingsFaculty),
-        seatsAvailable: row.seatsAvailable,
       });
     }
     const courses = [...courseMap.entries()].map(([code, title]) => ({ code, title }));
