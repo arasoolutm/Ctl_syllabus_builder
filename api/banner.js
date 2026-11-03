@@ -159,10 +159,29 @@ function parseSectionCatalogDetails(html) {
   return name ? `Department of ${name}` : null;
 }
 
+// Banner returns prerequisites as an actual <table> (And/Or, Test, Score,
+// Subject, Course Number, Level, Grade columns) - stripping tags without
+// reading its structure collapses headers and data into one unreadable
+// run-on string. Walk the rows instead and rebuild a plain-English line,
+// e.g. "CSCI 302 (min. grade D) and CSCI 325 (min. grade D)".
 function parseSectionPrerequisites(html) {
-  const text = cleanText(html).replace(/^Catalog Prerequisites\s*/i, "").trim();
-  if (!text) return null;
-  return /no prerequisite information available/i.test(text) ? "None" : text;
+  if (/no prerequisite information available/i.test(html)) return "None";
+
+  const rows = [...html.matchAll(/<tr>([\s\S]*?)<\/tr>/gi)]
+    .map((row) => [...row[1].matchAll(/<td[^>]*>([\s\S]*?)<\/td>/gi)].map((cell) => cleanText(cell[1])))
+    .filter((cells) => cells.length > 0);
+
+  const parts = [];
+  for (const [connector, , test, score, subject, courseNumber, , grade] of rows) {
+    const piece = test
+      ? `${test}${score ? ` score of ${score}` : ""}`
+      : [subjectCode(subject) || subject, courseNumber].filter(Boolean).join(" ");
+    if (!piece) continue;
+    const withGrade = grade ? `${piece} (min. grade ${grade})` : piece;
+    parts.push(parts.length ? `${(connector || "and").toLowerCase()} ${withGrade}` : withGrade);
+  }
+
+  return parts.length ? parts.join(" ") : null;
 }
 
 async function fetchFacultyMeetingTimes(term, crn) {

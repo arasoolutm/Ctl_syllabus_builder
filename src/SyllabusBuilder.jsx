@@ -709,12 +709,14 @@ export default function SyllabusBuilder() {
   }, [d.code, d.section, d.term]);
 
   // Not Banner data — just a sensible default for a field we invented,
-  // derived from the course code once it's valid. Never overwrites
-  // something already typed.
+  // derived from the course code once it's valid. Tracks code changes until
+  // the professor actually types in the field themselves, at which point
+  // subjectLineAutoRef flips and this stops touching it.
+  const subjectLineAutoRef = useRef(true);
   useEffect(() => {
     const code = String(d.code || "").trim();
-    if (!/^[A-Za-z]{2,5}\s*-?\s*\d{3,4}[A-Za-z]?$/.test(code)) return;
-    setD((p) => (p.subjectLine.trim() ? p : { ...p, subjectLine: `${code} - [your question]` }));
+    if (!subjectLineAutoRef.current || !/^[A-Za-z]{2,5}\s*-?\s*\d{3,4}[A-Za-z]?$/.test(code)) return;
+    setD((p) => ({ ...p, subjectLine: `${code} - [your question]` }));
   }, [d.code]);
   const setDeep = (k, i, key, v) =>
     setD((p) => { const a = [...p[k]]; a[i] = { ...a[i], [key]: v }; return { ...p, [k]: a }; });
@@ -1221,7 +1223,7 @@ export default function SyllabusBuilder() {
             <Field label="Email"><T value={d.email} onChange={(v) => set("email", v)} placeholder="jdoe@utm.edu" /></Field>
             <Field label="Office"><T value={d.office} onChange={(v) => set("office", v)} placeholder="Humanities 212" /></Field>
             <Field label="Office hours"><A rows={2} value={d.hours} onChange={(v) => set("hours", v)} placeholder="Monday and Wednesday, 10 a.m. to noon, and by appointment. Email me and we will find a time that works." /></Field>
-            <Field label="Email subject line you want" hint="cuts your response time"><T value={d.subjectLine} onChange={(v) => set("subjectLine", v)} placeholder="POSC 322 - [your question]" /></Field>
+            <Field label="Email subject line you want" hint="cuts your response time"><T value={d.subjectLine} onChange={(v) => { subjectLineAutoRef.current = false; set("subjectLine", v); }} placeholder="POSC 322 - [your question]" /></Field>
             <Field label="Response time you commit to"><T value={d.responseTime} onChange={(v) => set("responseTime", v)} /></Field>
             <Field label="How students should address you"><T value={d.address} onChange={(v) => set("address", v)} placeholder="Dr. Doe" /></Field>
           </>)}
