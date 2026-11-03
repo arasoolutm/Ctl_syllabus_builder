@@ -173,6 +173,54 @@ const FALL_2026 = [
   ["December 14", "Final grades due by 8:30 p.m."],
 ];
 
+const SUMMER_SCHEDULES = {
+  "summer-full": { label: "Full summer schedule", start: "2026-06-02", end: "2026-08-06" },
+  "summer-first-half": { label: "First half summer schedule", start: "2026-06-02", end: "2026-07-01" },
+  "summer-second-half": { label: "Second half summer schedule", start: "2026-07-06", end: "2026-08-06" },
+};
+
+const formatWeekday = (date) => date.toLocaleDateString("en-US", { weekday: "long" });
+const formatMonthDay = (date) => date.toLocaleDateString("en-US", { month: "long", day: "numeric" });
+
+const buildSummerScheduleRows = (key) => {
+  const { start, end } = SUMMER_SCHEDULES[key] || SUMMER_SCHEDULES["summer-full"];
+  const startDate = new Date(`${start}T12:00:00`);
+  const endDate = new Date(`${end}T12:00:00`);
+  const rows = [];
+  let cursor = new Date(startDate);
+  let week = 1;
+
+  while (cursor <= endDate) {
+    while (cursor <= endDate && (cursor.getDay() === 0 || cursor.getDay() === 6)) {
+      cursor.setDate(cursor.getDate() + 1);
+    }
+    if (cursor > endDate) break;
+
+    const dates = [];
+    let current = new Date(cursor);
+    while (current <= endDate && current.getDay() !== 0 && current.getDay() !== 6) {
+      dates.push(new Date(current));
+      current.setDate(current.getDate() + 1);
+    }
+
+    if (dates.length) {
+      const first = dates[0];
+      const last = dates[dates.length - 1];
+      const rangeText = dates.length > 1
+        ? `${formatWeekday(first)}, ${formatMonthDay(first)} to ${formatWeekday(last)}, ${formatMonthDay(last)}`
+        : `${formatWeekday(first)}, ${formatMonthDay(first)}`;
+
+      rows.push({ label: `Week ${week}`, dates: rangeText, topics: "", due: "" });
+      week += 1;
+      cursor = new Date(current);
+    } else {
+      cursor.setDate(cursor.getDate() + 1);
+    }
+  }
+
+  return rows;
+};
+
 /* ---------- initial state ---------- */
 
 const blank = {
@@ -242,6 +290,11 @@ export default function SyllabusBuilder() {
     setD((p) => { const a = [...p[k]]; a[i] = { ...a[i], [key]: v }; return { ...p, [k]: a }; });
   const push = (k, obj) => setD((p) => ({ ...p, [k]: [...p[k], obj] }));
   const drop = (k, i) => setD((p) => ({ ...p, [k]: p[k].filter((_, j) => j !== i) }));
+  const applySummerPreset = (key) => setD((p) => ({
+    ...p,
+    scheduleType: key,
+    weeks: buildSummerScheduleRows(key),
+  }));
 
   const weightTotal = useMemo(
     () => d.items.reduce((s, x) => s + (parseFloat(x.weight) || 0), 0), [d.items]);
@@ -748,6 +801,10 @@ export default function SyllabusBuilder() {
             <Field label="Schedule format">
               <select style={inputBase} value={d.scheduleType || "weekly"} onChange={(e) => {
                 const next = e.target.value;
+                if (next === "summer-full" || next === "summer-first-half" || next === "summer-second-half") {
+                  applySummerPreset(next);
+                  return;
+                }
                 setD((p) => ({ ...p, scheduleType: next, weeks: p.weeks.map((w) => ({
                   ...w,
                   label: /^(Week|Module) \d+$/.test(w.label)
@@ -756,8 +813,16 @@ export default function SyllabusBuilder() {
               }}>
                 <option value="weekly">Weekly</option>
                 <option value="modular">Modular</option>
+                <option value="summer-full">Summer: Full</option>
+                <option value="summer-first-half">Summer: First half</option>
+                <option value="summer-second-half">Summer: Second half</option>
               </select>
             </Field>
+            <div className="flex gap-2 flex-wrap mb-4">
+              <Btn onClick={() => applySummerPreset("summer-full")} icon={Plus}>Add full summer schedule</Btn>
+              <Btn onClick={() => applySummerPreset("summer-first-half")} icon={Plus}>Add first half</Btn>
+              <Btn onClick={() => applySummerPreset("summer-second-half")} icon={Plus}>Add second half</Btn>
+            </div>
             <label className="flex items-start gap-2 mb-4 text-sm" style={{ color: C.slate, cursor: "pointer" }}>
               <input type="checkbox" checked={d.calNote} onChange={(e) => set("calNote", e.target.checked)} style={{ marginTop: 3 }} />
               <span>Append the Fall 2026 registrar dates: add and drop deadlines, Fall Break, Thanksgiving, finals, and commencement.</span>
@@ -778,6 +843,7 @@ export default function SyllabusBuilder() {
             <div className="flex gap-2 flex-wrap">
               <Btn onClick={() => push("weeks", { label: `${d.scheduleType === "modular" ? "Module" : "Week"} ${d.weeks.length + 1}`, dates: "", topics: "", due: "" })} icon={Plus}>Add {d.scheduleType === "modular" ? "module" : "week"}</Btn>
               {d.scheduleType !== "modular" && <Btn onClick={() => setD((p) => ({ ...p, weeks: Array.from({ length: 15 }, (_, i) => p.weeks[i] || { label: `Week ${i + 1}`, dates: "", topics: "", due: "" }) }))}>Build 15 weeks</Btn>}
+              <Btn onClick={() => setD((p) => ({ ...p, weeks: [] }))}>Delete All</Btn>
             </div>
           </>)}
 
