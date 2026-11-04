@@ -203,6 +203,120 @@ Emergency: 911`,
   },
 };
 
+const COURSE_PREFIX_TO_DEPT = {
+  "AGEC": "Agriculture, Geosciences, and Natural Resources",
+  "AGED": "Agriculture, Geosciences, and Natural Resources",
+  "AGET": "Agriculture, Geosciences, and Natural Resources",
+  "AGRI": "Agriculture, Geosciences, and Natural Resources",
+  "GEOL": "Agriculture, Geosciences, and Natural Resources",
+  "GEOS": "Agriculture, Geosciences, and Natural Resources",
+  "GEOG": "Agriculture, Geosciences, and Natural Resources",
+  "METR": "Agriculture, Geosciences, and Natural Resources",
+  "SOIL": "Agriculture, Geosciences, and Natural Resources",
+  "NRM": "Agriculture, Geosciences, and Natural Resources",
+  "WBIO": "Agriculture, Geosciences, and Natural Resources",
+  "ANSC": "Agriculture, Geosciences, and Natural Resources",
+  "PLSC": "Agriculture, Geosciences, and Natural Resources",
+  "VET": "Agriculture, Geosciences, and Natural Resources",
+
+  "CFS": "Family and Consumer Sciences",
+  "CRMG": "Family and Consumer Sciences",
+  "FASH": "Family and Consumer Sciences",
+  "FCS": "Family and Consumer Sciences",
+  "FSCI": "Family and Consumer Sciences",
+  "FSVC": "Family and Consumer Sciences",
+  "FSMG": "Family and Consumer Sciences",
+  "HPMG": "Family and Consumer Sciences",
+  "NUTR": "Family and Consumer Sciences",
+  "GERO": "Family and Consumer Sciences",
+
+  "ACCT": "Accounting, Finance, Economics, and Political Science",
+  "POSC": "Accounting, Finance, Economics, and Political Science",
+  "ECON": "Accounting, Finance, Economics, and Political Science",
+  "FIN": "Accounting, Finance, Economics, and Political Science",
+  "GLST": "Accounting, Finance, Economics, and Political Science",
+
+  "MGT": "Management, Marketing, and Information Systems",
+  "MKTG": "Management, Marketing, and Information Systems",
+  "INFS": "Management, Marketing, and Information Systems",
+  "BADM": "Management, Marketing, and Information Systems",
+  "BCOM": "Management, Marketing, and Information Systems",
+  "SPMG": "Management, Marketing, and Information Systems",
+
+  "CJ": "Behavioral Sciences",
+  "SOC": "Behavioral Sciences",
+  "SWRK": "Behavioral Sciences",
+
+  "TCED": "Educational Studies",
+  "SPED": "Educational Studies",
+  "READ": "Educational Studies",
+  "SEDU": "Educational Studies",
+  "ECED": "Educational Studies",
+  "BUED": "Educational Studies",
+  "ELED": "Educational Studies",
+  "EDST": "Educational Studies",
+  "FCSE": "Educational Studies",
+
+  "EXSC": "Health and Human Performance",
+  "HLTH": "Health and Human Performance",
+  "HPED": "Health and Human Performance",
+  "ATRN": "Health and Human Performance",
+  "PACT": "Health and Human Performance",
+  "HHP": "Health and Human Performance",
+  "HPER": "Health and Human Performance",
+
+  "NURS": "Nursing",
+
+  "PSYC": "Psychology",
+  "NEUR": "Psychology",
+
+  "BIOL": "Biological Sciences",
+  "BOT": "Biological Sciences",
+  "MBIO": "Biological Sciences",
+  "ZOOL": "Biological Sciences",
+
+  "CHEM": "Chemistry and Physics",
+  "PHYS": "Chemistry and Physics",
+  "ASTR": "Chemistry and Physics",
+  "BCHE": "Chemistry and Physics",
+
+  "CSCI": "Computer Science",
+  "CYBR": "Computer Science",
+
+  "AMAE": "Engineering",
+  "ENGR": "Engineering",
+  "CIEG": "Engineering",
+  "CMGT": "Engineering",
+
+  "MATH": "Mathematics and Statistics",
+  "STAT": "Mathematics and Statistics",
+
+  "MMSC": "Communications",
+
+  "ENGL": "English and Modern Foreign Languages",
+  "FREN": "English and Modern Foreign Languages",
+  "GERM": "English and Modern Foreign Languages",
+  "JAPN": "English and Modern Foreign Languages",
+  "PORT": "English and Modern Foreign Languages",
+  "SPAN": "English and Modern Foreign Languages",
+
+  "HIST": "History and Philosophy",
+  "PHIL": "History and Philosophy",
+  "RLST": "History and Philosophy",
+
+  "MUS": "Music",
+  "MUAP": "Music",
+  "MUED": "Music",
+  "MUEN": "Music",
+
+  "THEA": "Visual and Theatre Arts",
+  "ART": "Visual and Theatre Arts",
+  "ARTH": "Visual and Theatre Arts",
+  "FA": "Visual and Theatre Arts",
+  "GDES": "Visual and Theatre Arts",
+  "DANC": "Visual and Theatre Arts"
+};
+
 const FALL_2026 = [
   ["August 24", "First day of classes"],
   ["August 24 to 30", "Late registration"],
@@ -515,6 +629,10 @@ export default function SyllabusBuilder() {
         formattedCode = `${match[1]} ${match[2]}`; // Constructs clean "POSC 322" layout
       }
 
+      // 2. Extract Prefix for Department autofill lookup
+      const prefix = match ? match[1] : "";
+      const inferredDept = COURSE_PREFIX_TO_DEPT[prefix] || "";
+
       setD((prev) => {
         const isDefaultCredits = prev.credits === "3";
 
@@ -529,8 +647,8 @@ export default function SyllabusBuilder() {
           title: (!prev.title.trim() || isSwitchingCourse) ? (course.courseTitle || "") : prev.title,
           description: (!prev.description.trim() || isSwitchingCourse) ? (course.description || "") : prev.description,
           prereq: (!prev.prereq.trim() || isSwitchingCourse) ? (course.prerequisites || "") : prev.prereq,
-          credits: (!prev.credits.trim() || isDefaultCredits || isSwitchingCourse) ? (course.creditHours || "3") : prev.credits
-          // Department is safely omitted here so the manual dropdown menu remains completely in control
+          credits: (!prev.credits.trim() || isDefaultCredits || isSwitchingCourse) ? (course.creditHours || "3") : prev.credits,
+          dept: (inferredDept && (!prev.dept.trim() || prev.dept === "Select a department..." || isSwitchingCourse)) ? inferredDept : prev.dept
         };
       });
 
