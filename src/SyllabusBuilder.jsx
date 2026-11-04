@@ -9,7 +9,6 @@ import {
    UTM SYLLABUS BUILDER  ·  Center for Teaching and Learning
    Fill in the left. Watch the right. Export to Word or PDF.
    No accounts, no server, no stored data.
-   commit branch check
    ============================================================ */
 
 
@@ -368,7 +367,7 @@ const MEETING_PATTERNS = [
 const createBlank = () => ({
   code: "", title: "", crn: "", section: "", term: "Fall 2026", modality: "In person",
   credits: "3", meetingPattern: "", meeting: "", meetingTime: "",
-  location: "", exlocation: "", dept: "", prereq: "",
+  location: "", exlocation: "", dept: "Select a department...", prereq: "",
   instructor: "", email: "", phone: "", office: "", hours: "", address: "",
   subjectLine: "", responseTime: "48 hours on business days",
   description: "", welcome: "", customDescriptions: [],
@@ -811,7 +810,7 @@ export default function SyllabusBuilder() {
       <td class="hdr-l"><img src="${LOGO}" alt="The University of Tennessee at Martin" width="230"/></td>
       <td class="hdr-r"><div class="ct">${esc(d.code || "COURSE 000")}</div>
       <h1 class="tt">${esc(d.title || "Course Title")}</h1>
-      <div class="st">${esc(d.term)}${d.modality ? " &nbsp;|&nbsp; " + esc(d.modality) : ""}${d.dept ? " &nbsp;|&nbsp; " + esc(d.dept) : ""}</div></td></tr></table>`);
+      <div class="st">${esc(d.term)}${d.modality ? " &nbsp;|&nbsp; " + esc(d.modality) : ""}${d.dept && d.dept !== "Select a department..." ? " &nbsp;|&nbsp; " + esc(d.dept) : ""}</div></td></tr></table>`);
 
     // Course facts
     const facts = [
@@ -1200,87 +1199,123 @@ export default function SyllabusBuilder() {
             </Field>
             <Field label="Room"><T value={d.location} onChange={(v) => set("location", v)} placeholder="Humanities 407" /></Field>
             <Field label="Other Meeting Room" hint="Only fill this if some classes take place in other room during the week"><T value={d.exlocation} onChange={(v) => set("exlocation", v)} placeholder="Humanities 409 on Fridays" /></Field>
-<Field label="Department">
-  <select
-    style={inputBase}
-    value={d.dept}
-    onChange={(e) => set("dept", e.target.value)}
-  >
-    <option value="">Select a department...</option>
+            <Field label="Department">
+              <select
+                style={inputBase}
+                value={
+                  [
+                    "Select a department...",
+                    "Agriculture, Geosciences, and Natural Resources", "Family and Consumer Sciences",
+                    "Accounting, Finance, Economics, and Political Science", "Management, Marketing, and Information Systems",
+                    "Behavioral Sciences", "Educational Studies", "Health and Human Performance", "Nursing", "Psychology",
+                    "Biological Sciences", "Chemistry and Physics", "Computer Science", "Engineering", "Mathematics and Statistics",
+                    "Communications", "English and Modern Foreign Languages", "History and Philosophy", "Music", "Visual and Theatre Arts"
+                  ].includes(d.dept)
+                    ? d.dept
+                    : "Custom Department"
+                }
+                onChange={(e) => {
+                  const val = e.target.value;
+                  set("dept", val === "Custom Department" ? "" : val);
+                }}
+              >
+                <option value="Select a department...">Select a department...</option>
 
-    <optgroup label="College of Agriculture and Applied Sciences">
-      <option value="Agriculture, Geosciences, and Natural Resources">
-        Agriculture, Geosciences, and Natural Resources
-      </option>
-      <option value="Family and Consumer Sciences">
-        Family and Consumer Sciences
-      </option>
-    </optgroup>
+                <optgroup label="College of Agriculture and Applied Sciences">
+                  <option value="Agriculture, Geosciences, and Natural Resources">
+                    Agriculture, Geosciences, and Natural Resources
+                  </option>
+                  <option value="Family and Consumer Sciences">
+                    Family and Consumer Sciences
+                  </option>
+                </optgroup>
 
-    <optgroup label="College of Business and Global Affairs">
-      <option value="Accounting, Finance, Economics, and Political Science">
-        Accounting, Finance, Economics, and Political Science
-      </option>
-      <option value="Management, Marketing, and Information Systems">
-        Management, Marketing, and Information Systems
-      </option>
-    </optgroup>
+                <optgroup label="College of Business and Global Affairs">
+                  <option value="Accounting, Finance, Economics, and Political Science">
+                    Accounting, Finance, Economics, and Political Science
+                  </option>
+                  <option value="Management, Marketing, and Information Systems">
+                    Management, Marketing, and Information Systems
+                  </option>
+                </optgroup>
 
-    <optgroup label="College of Education, Health, and Behavioral Sciences">
-      <option value="Behavioral Sciences">
-        Behavioral Sciences
-      </option>
-      <option value="Educational Studies">
-        Educational Studies
-      </option>
-      <option value="Health and Human Performance">
-        Health and Human Performance
-      </option>
-      <option value="Nursing">
-        Nursing
-      </option>
-      <option value="Psychology">
-        Psychology
-      </option>
-    </optgroup>
+                <optgroup label="College of Education, Health, and Behavioral Sciences">
+                  <option value="Behavioral Sciences">
+                    Behavioral Sciences
+                  </option>
+                  <option value="Educational Studies">
+                    Educational Studies
+                  </option>
+                  <option value="Health and Human Performance">
+                    Health and Human Performance
+                  </option>
+                  <option value="Nursing">
+                    Nursing
+                  </option>
+                  <option value="Psychology">
+                    Psychology
+                  </option>
+                </optgroup>
 
-    <optgroup label="College of Engineering and Natural Sciences">
-      <option value="Biological Sciences">
-        Biological Sciences
-      </option>
-      <option value="Chemistry and Physics">
-        Chemistry and Physics
-      </option>
-      <option value="Computer Science">
-        Computer Science
-      </option>
-      <option value="Engineering">
-        Engineering
-      </option>
-      <option value="Mathematics and Statistics">
-        Mathematics and Statistics
-      </option>
-    </optgroup>
+                <optgroup label="College of Engineering and Natural Sciences">
+                  <option value="Biological Sciences">
+                    Biological Sciences
+                  </option>
+                  <option value="Chemistry and Physics">
+                    Chemistry and Physics
+                  </option>
+                  <option value="Computer Science">
+                    Computer Science
+                  </option>
+                  <option value="Engineering">
+                    Engineering
+                  </option>
+                  <option value="Mathematics and Statistics">
+                    Mathematics and Statistics
+                  </option>
+                </optgroup>
 
-    <optgroup label="College of Humanities and Fine Arts">
-      <option value="Communications">
-        Communications
-      </option>
-      <option value="English and Modern Foreign Languages">
-        English and Modern Foreign Languages
-      </option>
-      <option value="History and Philosophy">
-        History and Philosophy
-      </option>
-      <option value="Music">
-        Music
-      </option>
-      <option value="Visual and Theatre Arts">
-        Visual and Theatre Arts
-      </option>
-    </optgroup>
-  </select>
-</Field>
+                <optgroup label="College of Humanities and Fine Arts">
+                  <option value="Communications">
+                    Communications
+                  </option>
+                  <option value="English and Modern Foreign Languages">
+                    English and Modern Foreign Languages
+                  </option>
+                  <option value="History and Philosophy">
+                    History and Philosophy
+                  </option>
+                  <option value="Music">
+                    Music
+                  </option>
+                  <option value="Visual and Theatre Arts">
+                    Visual and Theatre Arts
+                  </option>
+                </optgroup>
+
+                <option value="Custom Department">Custom Department</option>
+              </select>
+            </Field>
+
+            {/* Custom Input dynamically renders when d.dept has been edited away from standard predefined options */}
+            {![
+              "Select a department...",
+              "Agriculture, Geosciences, and Natural Resources", "Family and Consumer Sciences",
+              "Accounting, Finance, Economics, and Political Science", "Management, Marketing, and Information Systems",
+              "Behavioral Sciences", "Educational Studies", "Health and Human Performance", "Nursing", "Psychology",
+              "Biological Sciences", "Chemistry and Physics", "Computer Science", "Engineering", "Mathematics and Statistics",
+              "Communications", "English and Modern Foreign Languages", "History and Philosophy", "Music", "Visual and Theatre Arts"
+            ].includes(d.dept) && (
+              <div className="mt-[-8px] mb-4">
+                <Field label="Custom Department Name">
+                  <T 
+                    value={d.dept} 
+                    onChange={(v) => set("dept", v)} 
+                    placeholder="Enter custom department name" 
+                  />
+                </Field>
+              </div>
+            )}
             <Field label="Prerequisites"><T value={d.prereq} onChange={(v) => set("prereq", v)} placeholder="None" /></Field>
           </>)}
 
