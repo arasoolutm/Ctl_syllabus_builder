@@ -2,7 +2,8 @@ import React, { useState, useMemo, useRef, useEffect } from "react";
 import {
   BookOpen, User, MessageSquare, Target, Library, Scale, Gavel,
   ShieldCheck, CalendarDays, FileDown, Check, AlertTriangle, Plus, Trash2,
-  Save, Upload, Printer, Lock, Info, ChevronRight, Maximize2, Minimize2, FlaskConical
+  Save, Upload, Printer, Lock, Info, ChevronRight, Maximize2, Minimize2, FlaskConical,
+  CircleX
 } from "lucide-react";
 
 /* ============================================================
@@ -913,6 +914,86 @@ export default function SyllabusBuilder() {
     ] : []),
   ];
   const passed = checks.filter((c) => c[1]).length;
+
+  /* ---------- accessibility: Panorama-style checks on the professor's own writing ---------- */
+
+  // Every free-text box the professor writes in, tagged with the tab and label where it
+  // lives, so each problem can say exactly where to fix it. inList marks text that the
+  // document already puts inside a real numbered list (the learning outcomes).
+  const a11yFields = useMemo(() => {
+    const f = (tab, label, text, inList = false) =>
+      ({ tab, label, text: typeof text === "string" ? text : "", inList });
+    const titled = (base, i, title) => `${base} ${i + 1}${title?.trim() ? ` (${title.trim()})` : ""}`;
+    return [
+      f("Instructor", "Office hours", d.hours),
+      f("Welcome", "Why this course matters", d.welcome),
+      f("Welcome", "Course description", d.description),
+      ...d.customDescriptions.map((x, i) => f("Welcome", titled("Custom description", i, x.title), x.description)),
+      ...d.outcomes.map((o, i) => f("Outcomes", `Outcome ${i + 1}`, o, true)),
+      f("Materials", "Required texts", d.texts),
+      f("Materials", "Cost note", d.costNote),
+      f("Materials", "Technology and platforms", d.tech),
+      f("Materials", "Access details", d.materials.acquire),
+      ...d.extraMaterials.map((x, i) => f("Materials", titled("Material section", i, x.title), x.description)),
+      ...d.items.map((x, i) => f("Grading", `${x.name?.trim() || `Assignment ${i + 1}`} description`, x.desc)),
+      f("Grading", "Grading scale", d.scale),
+      f("Policies", "Attendance", d.attendance),
+      f("Policies", "What engagement looks like here", d.participation),
+      f("Policies", "Late work and make-up", d.late),
+      ...d.lateAdditional.map((x, i) => f("Policies", `Additional late policy ${i + 1}`, x.text)),
+      ...(d.aiTier === "custom" ? [f("Policies", "Custom AI policy", d.aiCustom)] : []),
+      f("Policies", "A note from your professor", d.profNote),
+      ...d.customPolicies.map((x, i) => f("Policies", titled("Custom policy", i, x.title), x.text)),
+      ...d.weeks.flatMap((w, i) => [
+        f("Schedule", `Week ${i + 1} topics`, w.topics),
+        f("Schedule", `Week ${i + 1} due`, w.due),
+      ]),
+      ...(d.hasLab ? [
+        f("Labs", "What happens in lab", d.lab.description),
+        f("Labs", "How the lab counts toward the course grade", d.lab.gradeNote),
+        f("Labs", "Lab attendance", d.lab.attendance),
+        f("Labs", "Lab safety", d.lab.safety),
+        f("Labs", "Supplies and protective equipment", d.lab.supplies),
+        f("Labs", "Missed labs and make-up", d.lab.makeup),
+      ] : []),
+    ].filter((x) => x.text.trim());
+  }, [d]);
+
+  // Shortens a line of the professor's text for display in a result.
+  const excerpt = (s, n = 50) => {
+    const t = s.trim().replace(/\s+/g, " ");
+    return t.length > n ? `${t.slice(0, n)}…` : t;
+  };
+
+  // A line that starts like a typed bullet or number: "- ", "-Item", "* ", "• ", "1. ", "1.Item",
+  // "2) ", "a) " … A symbol or number counts with or without a space as long as a letter follows,
+  // so "-5 points" and "1.5 hours" are not mistaken for bullets.
+  const FAKE_BULLET = /^\s*(?:[-*•–—→▪◦·](?:\s+|(?=[a-z]))|\d{1,2}[.)](?:\s+|(?=[a-z]))|[a-z]\)\s+)/i;
+
+  // Each check: id, title, level ("fail" or "warn"), why it matters, how to fix,
+  // and found = the places where the problem appears (empty means it passes).
+  const a11yChecks = useMemo(() => {
+    const fakeLists = a11yFields.flatMap((x) => {
+      const lines = x.text.split("\n").filter((l) => FAKE_BULLET.test(l));
+      // Two typed bullets make a list. Inside an outcome, even one is a doubled number.
+      return lines.length >= (x.inList ? 1 : 2)
+        ? [{ tab: x.tab, label: x.label, quote: excerpt(lines[0]) }]
+        : [];
+    });
+
+    return [
+      {
+        id: "fake-lists",
+        title: "Lists typed with dashes, bullets, or numbers",
+        level: "fail",
+        why: "The syllabus prints these lines as plain text, so a screen reader reads \"dash\" or \"one period\" instead of announcing a list.",
+        fix: "Write the items as a sentence or as short separate paragraphs (leave a blank line between them). In an outcome, delete the number; the syllabus numbers outcomes for you.",
+        found: fakeLists,
+      },
+    ];
+  }, [a11yFields]);
+
+  const a11yIssueCount = a11yChecks.filter((c) => c.found.length).length;
 
   /* ---------- document builder: create the HTML shared by preview and exports ---------- */
 
@@ -1858,7 +1939,48 @@ export default function SyllabusBuilder() {
               or hard to read, similar to what YuJa Panorama flags in Canvas. Everything runs here in your
               browser; nothing is sent anywhere. Fixing these is recommended but does not block export.
             </p>
-            <Note>Checks are coming in the next step.</Note>
+            <div className="mb-3" style={{ fontSize: 14, fontWeight: "bold", color: UI.ink }} role="status">
+              {a11yIssueCount === 0
+                ? "No accessibility issues found."
+                : `${a11yIssueCount} accessibility issue${a11yIssueCount > 1 ? "s" : ""} found.`}
+            </div>
+            <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
+              {a11yChecks.map((c) => {
+                const status = c.found.length ? c.level : "pass";
+                const StatusIcon = status === "pass" ? Check : status === "fail" ? CircleX : AlertTriangle;
+                const statusText = status === "pass" ? "Pass" : status === "fail" ? "Fail" : "Warning";
+                const statusColor = status === "pass" ? UI.good : UI.warn;
+                const tabsToVisit = [...new Set(c.found.map((p) => p.tab))];
+                return (
+                  <li key={c.id} className="mb-3 p-3 rounded"
+                    style={{ background: UI.paper, border: `1px solid ${UI.line}`, fontSize: 13.5, color: UI.ink }}>
+                    <div className="flex items-start gap-2">
+                      <StatusIcon size={16} aria-hidden="true" style={{ color: statusColor, flexShrink: 0, marginTop: 2 }} />
+                      <div style={{ flex: 1, fontWeight: "bold" }}>{c.title}</div>
+                      <span style={{ fontSize: 12, fontWeight: "bold", color: statusColor }}>{statusText}</span>
+                    </div>
+                    {status !== "pass" && (
+                      <div style={{ marginLeft: 24, marginTop: 6, lineHeight: 1.5 }}>
+                        <ul style={{ listStyle: "disc", paddingLeft: 18, margin: "0 0 8px" }}>
+                          {c.found.map((p, i) => (
+                            <li key={i}>
+                              <span style={{ color: UI.slate }}>{p.tab} › {p.label}:</span> “{p.quote}”
+                            </li>
+                          ))}
+                        </ul>
+                        <p style={{ margin: "0 0 4px", color: UI.slate }}><strong>Why it matters:</strong> {c.why}</p>
+                        <p style={{ margin: "0 0 8px", color: UI.slate }}><strong>How to fix:</strong> {c.fix}</p>
+                        <div className="flex flex-wrap gap-2">
+                          {tabsToVisit.map((t) => (
+                            <Btn key={t} onClick={() => setTab(tabIndex(t))} icon={ChevronRight}>Go to {t}</Btn>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
           </>)}
 
           {tab === tabIndex("Export") && (<>
