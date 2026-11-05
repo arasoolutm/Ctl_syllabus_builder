@@ -683,6 +683,9 @@ export default function SyllabusBuilder() {
   useEffect(() => {
     document.documentElement.setAttribute("data-theme", theme);
   }, [theme]);
+  const [showPrinted, setShowPrinted] = useState(false);
+  // true when the preview is showing the real print colors
+  const printColors = theme !== "dark" || showPrinted;
   const [pendingDelete, setPendingDelete] = useState(null);
   const [weekCount, setWeekCount] = useState("15");
   const [weekCountWarning, setWeekCountWarning] = useState(false);
@@ -1106,6 +1109,29 @@ export default function SyllabusBuilder() {
     .primer-h{font-weight:bold;color:${C.navy};margin-bottom:6px}
     .pnote{border:1px solid ${C.orange};background:#FFF8F0;padding:10px 14px;margin:10px 0;font-size:10.5pt}
     .off{color:${C.warn};font-weight:bold;font-size:10pt;margin-bottom:3px}
+  `;
+  const PREVIEW_CSS = `
+    .doc-preview{font-family:Cambria,Georgia,serif;font-size:11pt;line-height:1.5;color:#1a1a1a;background:#fff}
+    .doc-preview{
+       ${DOC_CSS}
+    }
+    /* dark theme override on the preview only, not the exported document */
+    [data-theme="dark"] .doc-preview.themed{background:var(--paper);color:var(--ink)}
+    [data-theme="dark"] .doc-preview.themed h2,
+    [data-theme="dark"] .doc-preview.themed h3,
+    [data-theme="dark"] .doc-preview.themed .tt{color:var(--navy)}
+    [data-theme="dark"] .doc-preview.themed table.hdr{border-bottom-color:var(--navy)}
+    [data-theme="dark"] .doc-preview.themed .soft,
+    [data-theme="dark"] .doc-preview.themed .st{color:var(--muted)}
+    [data-theme="dark"] .doc-preview.themed .grid th,
+    [data-theme="dark"] .doc-preview.themed .grid td{border-color:var(--line)}
+    [data-theme="dark"] .doc-preview.themed .grid th{background:var(--tint); color:var(--navy)}
+    [data-theme="dark"] .doc-preview.themed .grid tr.tot td{background:var(--tint)}
+    [data-theme="dark"] .doc-preview.themed .primer{background:var(--tint)}
+    [data-theme="dark"] .doc-preview.themed .primer-h{color:var(--navy)}
+    [data-theme="dark"] .doc-preview.themed .pnote{background:var(--warnBg)}
+    [data-theme="dark"] .doc-preview.themed .off{color:var(--warn)}
+    [data-theme="dark"] .doc-preview.themed .hdr-l img{filter:invert(1) hue-rotate(180deg);mix-blend-mode:lighten}
   `;
 
   const fullHtml = () =>
@@ -1874,39 +1900,54 @@ export default function SyllabusBuilder() {
 
         {/* preview */}
         <div className={previewFullscreen ? "" : "p-5"} style={previewFullscreen
-          ? { position: "fixed", inset: 0, zIndex: 1000, display: "flex", flexDirection: "column", background: C.wash }
+          ? { position: "fixed", inset: 0, zIndex: 1000, display: "flex", flexDirection: "column", background: UI.wash }
           : { flex: "1 1 460px", minWidth: 360 }}>
           <div className="flex items-center justify-between gap-3 mb-2" style={{
-            color: C.slate, fontSize: 12, letterSpacing: 1,
-            ...(previewFullscreen ? { background: "#fff", borderBottom: `1px solid ${C.line}`, padding: "12px 20px", marginBottom: 0 } : {}),
+            color: UI.slate, fontSize: 12, letterSpacing: 1,
+            ...(previewFullscreen ? { background: UI.paper, borderBottom: `1px solid ${UI.line}`, padding: "12px 20px", marginBottom: 0 } : {}),
           }}>
-            <div className="flex items-center gap-2">
-              <ChevronRight size={13} style={{ color: C.orange }} />THIS IS EXACTLY WHAT EXPORTS
+                        <div className="flex items-center gap-2">
+              <ChevronRight size={13} style={{ color: C.orange }} />
+              {printColors ? "THIS IS EXACTLY WHAT EXPORTS" : "DARK PREVIEW · EXPORTS PRINT IN LIGHT"}
             </div>
-            <button
-              type="button"
-              onClick={() => setPreviewFullscreen((fullscreen) => !fullscreen)}
-              aria-label={previewFullscreen ? "Exit fullscreen preview" : "Open fullscreen preview"}
-              aria-pressed={previewFullscreen}
-              title={previewFullscreen ? "Exit fullscreen (Esc)" : "Open fullscreen preview"}
-              className="flex items-center gap-2 px-3 py-2 rounded text-sm font-semibold"
-              style={{ background: "#fff", color: C.navy, border: `1px solid ${C.line}`, cursor: "pointer", letterSpacing: 0 }}
-            >
-              {previewFullscreen ? <Minimize2 size={15} /> : <Maximize2 size={15} />}
-              {previewFullscreen ? "Exit fullscreen" : "Fullscreen"}
-            </button>
+            <div className="flex items-center gap-2">
+              {theme === "dark" && (
+                <button
+                  type="button"
+                  onClick={() => setShowPrinted((on) => !on)}
+                  aria-pressed={showPrinted}
+                  title="Show the preview in the light colors it prints in"
+                  className="px-3 py-2 rounded text-sm font-semibold"
+                  style={{ background: showPrinted ? UI.tint : UI.paper, color: UI.navy, border: `1px solid ${UI.line}`, cursor: "pointer", letterSpacing: 0 }}
+                >
+                  Show as printed
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => setPreviewFullscreen((fullscreen) => !fullscreen)}
+                aria-label={previewFullscreen ? "Exit fullscreen preview" : "Open fullscreen preview"}
+                aria-pressed={previewFullscreen}
+                title={previewFullscreen ? "Exit fullscreen (Esc)" : "Open fullscreen preview"}
+                className="flex items-center gap-2 px-3 py-2 rounded text-sm font-semibold"
+                style={{ background: UI.paper, color: UI.navy, border: `1px solid ${UI.line}`, cursor: "pointer", letterSpacing: 0 }}
+              >
+                {previewFullscreen ? <Minimize2 size={15} /> : <Maximize2 size={15} />}
+                {previewFullscreen ? "Exit fullscreen" : "Fullscreen"}
+              </button>
+            </div>
           </div>
           <div style={previewFullscreen
             ? { flex: 1, minHeight: 0, overflow: "auto", padding: "24px clamp(16px, 5vw, 72px)" }
             : {}}>
-            <div ref={previewRef} style={{
-              background: "#fff", border: `1px solid ${C.line}`, borderRadius: 3, boxSizing: "border-box",
+                        <div ref={previewRef} className={showPrinted ? "doc-preview" : "doc-preview themed"} style={{
+              border: `1px solid ${UI.line}`, borderRadius: 3, boxSizing: "border-box",
               width: "8.5in", maxWidth: "100%", padding: "0.8in",
               maxHeight: previewFullscreen ? "none" : "calc(100vh - 130px)", overflow: previewFullscreen ? "visible" : "auto",
               boxShadow: "0 1px 4px rgba(11,34,64,.08)",
               ...(previewFullscreen ? { maxWidth: 1100, minHeight: "100%", margin: "0 auto" } : {}),
             }}>
-              <style>{DOC_CSS}</style>
+              <style>{PREVIEW_CSS}</style>
               <div dangerouslySetInnerHTML={{ __html: docBody || `<p class="soft">Start on the left. The document builds itself here.</p>` }} />
             </div>
           </div>
