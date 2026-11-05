@@ -693,6 +693,7 @@ export default function SyllabusBuilder() {
   const frameRef = useRef(null);
   const previewRef = useRef(null);
   const formRef = useRef(null);
+  const lastGradingItemRef = useRef(null);
 
   useEffect(() => {
     if (!previewFullscreen) return;
@@ -751,6 +752,12 @@ export default function SyllabusBuilder() {
   };
   // Add or remove one item from a repeated syllabus section.
   const push = (k, obj) => setD((p) => ({ ...p, [k]: [...p[k], obj] }));
+  const addGradingItem = () => {
+    push("items", { name: "", weight: "", points: "", due: "", desc: "", slos: [] });
+    window.requestAnimationFrame(() => {
+      lastGradingItemRef.current?.querySelector("input")?.focus();
+    });
+  };
   const entryHasContent = (entry) => typeof entry === "string"
     ? entry.trim().length > 0
     : Object.values(entry).some((value) => Array.isArray(value) ? value.length > 0 : String(value ?? "").trim().length > 0);
@@ -1015,7 +1022,7 @@ export default function SyllabusBuilder() {
     if (live.length) {
       const hasDueDates = live.some((x) => x.due?.trim());
       sec("Assessment and Grading");
-      h.push(`<table class="grid"><tr><th>Assignment</th><th class="w">Weight</th>${hasDueDates ? '<th class="assignment-due">Due date</th>' : ""}<th>What it is</th></tr>${
+      h.push(`<table class="grid"><tr><th>Assignment or category</th><th class="w">Weight</th>${hasDueDates ? '<th class="assignment-due">Due date</th>' : ""}<th>What it is</th></tr>${
         live.map((x) => `<tr><td><strong>${esc(x.name)}</strong>${
           x.slos.length ? `<div class="tag">Outcome${x.slos.length > 1 ? "s" : ""} ${x.slos.map((i) => i + 1).join(", ")}</div>` : ""
         }</td><td class="w">${fmtWeight(parseWeight(x.weight))}%</td>${hasDueDates ? `<td class="assignment-due">${esc(x.due || "")}</td>` : ""}<td>${esc(x.desc)}</td></tr>`).join("")
@@ -1223,7 +1230,7 @@ export default function SyllabusBuilder() {
             style={{ width: "min(100%, 420px)", background: "#fff", borderRadius: 4, padding: 24, boxShadow: "0 12px 36px rgba(11,34,64,.24)" }}>
             <div id="delete-dialog-title" style={{ color: C.navy, fontSize: 18, fontWeight: "bold", marginBottom: 8 }}>Delete this entry?</div>
             <div style={{ color: C.slate, fontSize: 14, lineHeight: 1.5, marginBottom: 20 }}>
-              This {({ outcomes: "learning outcome", items: "assignment", weeks: "schedule entry" }[pendingDelete.k] || "entry")} contains information. Are you sure you want to delete it?
+              This {({ outcomes: "learning outcome", items: "assignment or category", weeks: "schedule entry" }[pendingDelete.k] || "entry")} contains information. Are you sure you want to delete it?
             </div>
             <div className="flex justify-end gap-2">
               <Btn onClick={() => setPendingDelete(null)}>Cancel</Btn>
@@ -1586,6 +1593,7 @@ export default function SyllabusBuilder() {
 
           {tab === 5 && (<>
             <H>Assessment and Grading</H>
+            <Note>Use one row for an individual assignment, such as a final paper, or a grading category, such as quizzes. For a category, enter its combined course weight.</Note>
             <div className="p-3 mb-4 rounded flex items-center gap-2" style={{
               background: Math.abs(weightTotal - 100) < 0.01 ? UI.goodBg : UI.warnBg,
               color: Math.abs(weightTotal - 100) < 0.01 ? UI.good : UI.warn, fontSize: 14, fontWeight: "bold" }}>
@@ -1593,15 +1601,15 @@ export default function SyllabusBuilder() {
               Weights total {fmtWeight(weightTotal)}%{Math.abs(weightTotal - 100) < 0.01 ? "" : `, which is ${weightTotal > 100 ? "over" : "under"} by ${fmtWeight(Math.abs(100 - weightTotal))}`}
             </div>
             {d.items.map((x, i) => (
-              <div key={i} className="p-3 mb-3 rounded" style={{ background: UI.paper, border: `1px solid ${UI.line}` }}>
+              <div key={i} ref={i === d.items.length - 1 ? lastGradingItemRef : null} className="p-3 mb-3 rounded" style={{ background: UI.paper, border: `1px solid ${UI.line}` }}>
                 <div className="flex gap-2 mb-2">
-                  <div style={{ flex: 3 }}><T value={x.name} onChange={(v) => setDeep("items", i, "name", v)} placeholder="Final paper" /></div>
+                  <div style={{ flex: 3 }}><T value={x.name} onChange={(v) => setDeep("items", i, "name", v)} placeholder="Assignment or category" /></div>
                   <div style={{ flex: 1 }}><T mono value={x.weight} onChange={(v) => setDeep("items", i, "weight", v)} placeholder="%" /></div>
                   <div style={{ flex: 1 }}><T mono value={x.points} onChange={(v) => setDeep("items", i, "points", v)} placeholder="pts" /></div>
                   <div style={{ flex: 1 }}><T value={x.due} onChange={(v) => setDeep("items", i, "due", v)} placeholder="Due date" /></div>
-                  <button onClick={() => drop("items", i)} style={{ color: UI.muted, cursor: "pointer" }}><Trash2 size={15} /></button>
+                  <button onClick={() => drop("items", i)} aria-label={`Remove assignment or category ${i + 1}`} style={{ color: UI.muted, cursor: "pointer" }}><Trash2 size={15} /></button>
                 </div>
-                <A rows={2} value={x.desc} onChange={(v) => setDeep("items", i, "desc", v)} placeholder="What it is and how long." />
+                <A rows={2} value={x.desc} onChange={(v) => setDeep("items", i, "desc", v)} placeholder="Describe the assignment or category." />
                 {realOutcomes.length > 0 && (
                   <div className="mt-2">
                     <div style={{ fontSize: 11, color: C.slate, marginBottom: 4 }}>WHICH OUTCOMES DOES THIS PRODUCE EVIDENCE FOR?</div>
@@ -1621,11 +1629,11 @@ export default function SyllabusBuilder() {
                 )}
               </div>
             ))}
-            <Btn onClick={() => push("items", { name: "", weight: "", points: "", due: "", desc: "", slos: [] })} icon={Plus}>Add assignment</Btn>
+            <Btn onClick={addGradingItem} icon={Plus}>Add Assignment or Category</Btn>
             {unmapped.length > 0 && (
               <div className="mt-4 p-3 rounded flex gap-2" style={{ background: "#FEF6E7", color: C.warn, fontSize: 13 }}>
                 <AlertTriangle size={15} style={{ flexShrink: 0, marginTop: 2 }} />
-                <div>Outcome{unmapped.length > 1 ? "s" : ""} {unmapped.map((i) => i + 1).join(", ")} {unmapped.length > 1 ? "have" : "has"} nothing in the grade breakdown producing evidence for {unmapped.length > 1 ? "them" : "it"}. Either attach an assignment or rewrite the outcome.</div>
+                <div>Outcome{unmapped.length > 1 ? "s" : ""} {unmapped.map((i) => i + 1).join(", ")} {unmapped.length > 1 ? "have" : "has"} nothing in the grade breakdown producing evidence for {unmapped.length > 1 ? "them" : "it"}. Either attach an assignment or category or rewrite the outcome.</div>
               </div>
             )}
             <div className="mt-4"><Field label="Grading scale"><A rows={2} value={d.scale} onChange={(v) => set("scale", v)} /></Field></div>
