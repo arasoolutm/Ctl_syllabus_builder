@@ -27,6 +27,7 @@ const UtmMark = ({ style, textColor = "#fff" }) => (
 const C = {
   navy: "#0B2240",      // UT Martin PMS 289
   orange: "#FF8300",    // UT Martin PMS 151
+  orangeText: "#B35900", // darker orange for small text: 4.8:1 on white (UT Orange is 2.5:1, below WCAG's 4.5:1)
   ink: "#1a1a1a",
   slate: "#4A5568",
   line: "#D8DEE7",
@@ -1143,7 +1144,7 @@ export default function SyllabusBuilder() {
     const h = [];
     const sec = (t) => h.push(`<h2>${esc(t)}</h2>`);
 
-    h.push(`<table class="hdr"><tr>
+    h.push(`<table class="hdr" role="presentation"><tr>
       <td class="hdr-l"><img src="${LOGO}" alt="The University of Tennessee at Martin" width="230"/></td>
       <td class="hdr-r"><div class="ct">${esc(d.code || "COURSE 000")}</div>
       <h1 class="tt">${esc(d.title || "Course Title")}</h1>
@@ -1170,7 +1171,7 @@ export default function SyllabusBuilder() {
     if (facts.length) {
       sec("Course Information");
       h.push(`<table class="grid">${facts.map((r) =>
-        `<tr><th>${esc(r[0])}</th><td>${esc(r[1])}</td></tr>`).join("")}</table>`);
+        `<tr><th scope="row">${esc(r[0])}</th><td>${esc(r[1])}</td></tr>`).join("")}</table>`);
     }
 
     if (d.welcome) { sec("Welcome to This Course"); h.push(para(d.welcome)); }
@@ -1218,7 +1219,7 @@ export default function SyllabusBuilder() {
     if (live.length) {
       const hasDueDates = live.some((x) => x.due?.trim());
       sec("Assessment and Grading");
-      h.push(`<table class="grid"><tr><th>Assignment</th><th class="w">Weight</th>${hasDueDates ? '<th class="assignment-due">Due date</th>' : ""}<th>What it is</th></tr>${
+      h.push(`<table class="grid"><tr><th scope="col">Assignment</th><th scope="col" class="w">Weight</th>${hasDueDates ? '<th scope="col" class="assignment-due">Due date</th>' : ""}<th scope="col">What it is</th></tr>${
         live.map((x) => `<tr><td><strong>${esc(x.name)}</strong>${
           x.slos.length ? `<div class="tag">Outcome${x.slos.length > 1 ? "s" : ""} ${x.slos.map((i) => i + 1).join(", ")}</div>` : ""
         }</td><td class="w">${fmtWeight(parseWeight(x.weight))}%</td>${hasDueDates ? `<td class="assignment-due">${esc(x.due || "")}</td>` : ""}<td>${esc(x.desc)}</td></tr>`).join("")
@@ -1236,7 +1237,7 @@ export default function SyllabusBuilder() {
         ["Lab instructor", L.instructor],
       ].filter((r) => r[1] && String(r[1]).trim());
       if (lf.length) h.push(`<table class="grid">${lf.map((r) =>
-        `<tr><th>${esc(r[0])}</th><td>${esc(r[1])}</td></tr>`).join("")}</table>`);
+        `<tr><th scope="row">${esc(r[0])}</th><td>${esc(r[1])}</td></tr>`).join("")}</table>`);
       if (L.description) h.push(para(L.description));
       [
         ["How the Lab Counts Toward Your Grade", L.gradeNote],
@@ -1280,7 +1281,7 @@ export default function SyllabusBuilder() {
     const wk = schedRows.filter((w) => w.label || w.topics || w.dates);
     if (wk.length) {
       sec("Course Schedule");
-      h.push(`<table class="grid"><tr><th class="wk">${d.scheduleType === "modular" ? "Module" : "Week"}</th><th>Topics and Readings</th><th class="due">Due</th></tr>${
+      h.push(`<table class="grid"><tr><th scope="col" class="wk">${d.scheduleType === "modular" ? "Module" : "Week"}</th><th scope="col">Topics and Readings</th><th scope="col" class="due">Due</th></tr>${
         wk.map((w) => `<tr><td class="wk"><strong>${esc(w.label)}</strong>${w.dates ? `<br/><span class="soft">${esc(w.dates)}</span>` : ""}</td><td>${
           w.off.map((o) => `<div class="off">${esc(o)}</div>`).join("")}${esc(w.topics).replace(/\n/g, "<br/>")}</td><td class="due">${esc(w.due).replace(/\n/g, "<br/>")}</td></tr>`).join("")
       }</table>`);
@@ -1289,7 +1290,7 @@ export default function SyllabusBuilder() {
     if (d.calNote && d.term === "Fall 2026") {
       sec("Fall 2026 Dates You Should Know");
       h.push(`<table class="grid">${FALL_2026.map((r) =>
-        `<tr><th class="wk">${esc(r[0])}</th><td>${esc(r[1])}</td></tr>`).join("")}</table>
+        `<tr><th scope="row" class="wk">${esc(r[0])}</th><td>${esc(r[1])}</td></tr>`).join("")}</table>
         <p class="soft">Registrar's calendar, subject to change. Confirm at utm.edu/academics/academic-calendar/</p>`);
     }
 
@@ -1309,13 +1310,13 @@ export default function SyllabusBuilder() {
     .hdr td{vertical-align:bottom;padding:0 0 10px}
     .hdr-l{width:245px}
     .hdr-r{text-align:right}
-    .ct{font-size:10pt;letter-spacing:2px;color:${C.orange};font-weight:bold}
+    .ct{font-size:10pt;letter-spacing:2px;color:${C.orangeText};font-weight:bold}
     .tt{font-size:19pt;color:${C.navy};line-height:1.15;font-weight:bold;margin:0}
     .st{font-size:10pt;color:#5A6A80;margin-top:3px}
     table.grid{width:100%;border-collapse:collapse;margin:6px 0 12px;font-size:10.5pt}
     .grid th,.grid td{border:1px solid ${C.line};padding:6px 9px;text-align:left;vertical-align:top}
     .grid th{background:#EEF2F7;color:${C.navy};font-weight:bold;width:auto}
-    .grid td .tag{font-size:8.5pt;color:${C.orange};font-weight:bold;margin-top:3px}
+    .grid td .tag{font-size:8.5pt;color:${C.orangeText};font-weight:bold;margin-top:3px}
     .grid .w{width:70px;text-align:right}
     .grid .wk{width:110px}
     .grid .due{width:150px}
@@ -1328,7 +1329,7 @@ export default function SyllabusBuilder() {
   `;
 
   const fullHtml = () =>
-    `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word"><head>
+    `<html lang="en" xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word"><head>
     <meta charset="utf-8"/><title>${esc(pdfFilename())}</title>
      <style>@page{size:8.5in 11in;margin:0.8in}${DOC_CSS}</style></head>
      <body><div class="page">${docBody}</div></body></html>`;
