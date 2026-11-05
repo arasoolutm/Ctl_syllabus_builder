@@ -1,10 +1,9 @@
-import React, { useEffect, useState, useMemo, useRef } from "react";
+import React, { useState, useMemo, useRef, useEffect } from "react";
 import {
   BookOpen, User, MessageSquare, Target, Library, Scale, Gavel,
   ShieldCheck, CalendarDays, FileDown, Check, AlertTriangle, Plus, Trash2,
-  Save, Upload, Printer, Lock, Info, ChevronRight, ChevronDown, X, Loader2, Maximize2, Minimize2, FlaskConical 
+  Save, Upload, Printer, Lock, Info, ChevronRight, Maximize2, Minimize2, FlaskConical
 } from "lucide-react";
-import { SUBJECTS } from "./subjectCodes.js";
 
 /* ============================================================
    UTM SYLLABUS BUILDER  ·  Center for Teaching and Learning
@@ -34,7 +33,6 @@ const C = {
   wash: "#F4F6F9",
   good: "#1E7A46",
   warn: "#B45309",
-  bad: "#C0392B",
 };
 
 const UI = {
@@ -462,82 +460,23 @@ const fmtWeight = (n) => {
 
 /* ---------- initial state ---------- */
 
-// Self-updating default term: approximates each semester's start date (no
-// per-year table to keep current) and switches to the next one 2 weeks
-// early, since that's when a professor is realistically starting to prep it.
-function defaultTermLabel(today = new Date()) {
-  const approxStart = (year, monthIndex, day) => new Date(year, monthIndex, day);
-  const year = today.getFullYear();
-  const candidates = [
-    { label: `Spring ${year}`, start: approxStart(year, 0, 13) },
-    { label: `Summer ${year}`, start: approxStart(year, 4, 25) },
-    { label: `Fall ${year}`, start: approxStart(year, 7, 22) },
-    { label: `Spring ${year + 1}`, start: approxStart(year + 1, 0, 13) },
-  ];
-  const earlySwitch = 14 * 24 * 60 * 60 * 1000;
-  let chosen = candidates[0].label;
-  for (const c of candidates) {
-    if (c.start.getTime() - earlySwitch <= today.getTime()) chosen = c.label;
-  }
-  return chosen;
-}
 
-// Verified against each department's own page at utm.edu (not guessed); also
-// used as a fallback when Banner's own department lookup fails or is unreliable.
-const DEPARTMENT_DATA = [
-  { college: "College of Agriculture and Applied Sciences", departments: [
-    { name: "Agriculture, Geosciences, and Natural Resources", subjects: ["AGEC", "AGED", "AGET", "AGRI", "ANSC", "GEOL", "GEOS", "METR", "NRM", "PARK", "PLSC", "SOIL", "VET", "WBIO"] },
-    { name: "Family and Consumer Sciences", subjects: ["FCS", "CFS", "FCSE", "FASH", "GERO", "HPMG", "FSMG", "NUTR"] },
-    { name: "Military Science and Leadership", subjects: ["MSL"] },
-  ] },
-  { college: "College of Business and Global Affairs", departments: [
-    { name: "School of Business", subjects: ["ACCT", "ECON", "FIN", "MGT", "MKTG", "BCOM", "INFS", "SPMG", "BLAW"] },
-  ] },
-  { college: "College of Education, Health, and Behavioral Sciences", departments: [
-    { name: "Behavioral Sciences", subjects: ["CJ", "SWRK", "SOC"] },
-    { name: "Educational Studies", subjects: ["EDST", "ELED", "ECED", "SEDU", "SPED", "COUN", "TCED", "EDFN", "READ"] },
-    { name: "Health and Human Performance", subjects: ["HHP", "EXSC", "HPER", "ATRN", "HPED", "HLTH", "PACT"] },
-    { name: "Interdisciplinary Studies", subjects: ["IDST"] },
-    { name: "Nursing", subjects: ["NURS"] },
-    { name: "Psychology", subjects: ["PSYC"] },
-  ] },
-  { college: "College of Engineering and Natural Sciences", departments: [
-    { name: "Biological Sciences", subjects: ["BIOL", "ZOOL", "BOT", "MBIO", "BCHE"] },
-    { name: "Chemistry and Physics", subjects: ["CHEM", "PHYS", "ASTR"] },
-    { name: "Computer Science", subjects: ["CSCI", "CYBR"] },
-    { name: "Engineering", subjects: ["ENGR", "CIEG", "CMGT"] },
-    { name: "Mathematics and Statistics", subjects: ["MATH", "STAT"] },
-  ] },
-  { college: "College of Humanities and Fine Arts", departments: [
-    { name: "English and Modern Foreign Languages", subjects: ["ENGL", "FREN", "GERM", "JAPN", "SPAN"] },
-    { name: "History and Philosophy", subjects: ["AAST", "HIST", "PHIL", "RLST", "WMST"] },
-    { name: "Mass Media and Strategic Communication", subjects: ["MMSC"] },
-    { name: "Music", subjects: ["MUS", "MUAP", "MUED", "MUEN"] },
-    { name: "Political Science and Global Studies", subjects: ["POSC", "INST"] },
-    { name: "Visual and Theatre Arts", subjects: ["ART", "ARTE", "ARTH", "DANC", "DNED", "THEA", "GDES"] },
-  ] },
+const MEETING_PATTERNS = [
+  { value: "MWF", label: "Monday-Wednesday-Friday (MWF)" },
+  { value: "MW", label: "Monday-Wednesday (MW)" },
+  { value: "TR", label: "Tuesday-Thursday (TR)" },
+  { value: "custom", label: "Custom" },
 ];
 
-// For the Department combo-box's grouped option list.
-const DEPARTMENTS = DEPARTMENT_DATA.map(({ college, departments }) => ({
-  college, names: departments.map((d) => d.name),
-}));
-
-// Subject code -> "Department of X", used when Banner's own lookup fails.
-// Ambiguous/general-ed codes (GENS, HNRS, NEUR, ...) are left out rather than guessed.
-const SUBJECT_DEPARTMENTS = new Map();
-for (const { departments } of DEPARTMENT_DATA) {
-  for (const { name, subjects } of departments) {
-    for (const code of subjects) SUBJECT_DEPARTMENTS.set(code, `Department of ${name}`);
-  }
-}
-
-const blank = {
-  code: "", title: "", crn: "", section: "", term: defaultTermLabel(), modality: "In person",
-  credits: "3", meeting: "", location: "", dept: "", prereq: "",
-  instructor: "", email: "", office: "", hours: "", address: "",
-  subjectLine: "", responseTime: "48 hours on business days",
-  description: "", welcome: "",
+// Builds a fresh blank draft. Returning a new object each time keeps the
+// initial state and every reset independent of each other.
+const createBlank = () => ({
+  code: "", title: "", crn: "", section: "", term: "Spring 2027", modality: "In person",
+  credits: "3", meetingPattern: "", meeting: "", meetingTime: "",
+  location: "", exlocation: "", dept: "Select a department...", prereq: "",
+  instructor: "", email: "", phone: "", office: "", hours: "", address: "",
+  subjectLine: "",
+  description: "", welcome: "", customDescriptions: [],
   showPrimer: true, outcomes: [""],
   texts: "", costNote: "", tech: "",
   materials: { provided: false, hardcopy: false, online: false, acquire: "" },
@@ -732,317 +671,17 @@ export default function SyllabusBuilder() {
     return () => window.removeEventListener("beforeunload", warnBeforeUnload);
   }, [hasUnsavedChanges]);
   const [tab, setTab] = useState(0);
-  const [lookupStatus, setLookupStatus] = useState(null);
-  const [deliveryOpen, setDeliveryOpen] = useState(false);
-  const deliveryRef = useRef(null);
-  const fileRef = useRef(null);
-
+  const [theme,setTheme] = useState('light');
   useEffect(() => {
-    if (!deliveryOpen) return undefined;
-    const onDocClick = (e) => {
-      if (deliveryRef.current && !deliveryRef.current.contains(e.target)) setDeliveryOpen(false);
-    };
-    const onKey = (e) => { if (e.key === "Escape") setDeliveryOpen(false); };
-    document.addEventListener("mousedown", onDocClick);
-    document.addEventListener("keydown", onKey);
-    return () => {
-      document.removeEventListener("mousedown", onDocClick);
-      document.removeEventListener("keydown", onKey);
-    };
-  }, [deliveryOpen]);
-
-  const [termOptions, setTermOptions] = useState([]);
-  const [termOpen, setTermOpen] = useState(false);
-  const termRef = useRef(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    fetch("/api/banner?action=terms")
-      .then((r) => (r.ok ? r.json() : { terms: [] }))
-      .then((payload) => { if (!cancelled) setTermOptions(payload.terms || []); })
-      .catch(() => {});
-    return () => { cancelled = true; };
-  }, []);
-
-  useEffect(() => {
-    if (!termOpen) return undefined;
-    const onDocClick = (e) => {
-      if (termRef.current && !termRef.current.contains(e.target)) setTermOpen(false);
-    };
-    const onKey = (e) => { if (e.key === "Escape") setTermOpen(false); };
-    document.addEventListener("mousedown", onDocClick);
-    document.addEventListener("keydown", onKey);
-    return () => {
-      document.removeEventListener("mousedown", onDocClick);
-      document.removeEventListener("keydown", onKey);
-    };
-  }, [termOpen]);
-
-  const [deptOpen, setDeptOpen] = useState(false);
-  const deptRef = useRef(null);
-
-  useEffect(() => {
-    if (!deptOpen) return undefined;
-    const onDocClick = (e) => {
-      if (deptRef.current && !deptRef.current.contains(e.target)) setDeptOpen(false);
-    };
-    const onKey = (e) => { if (e.key === "Escape") setDeptOpen(false); };
-    document.addEventListener("mousedown", onDocClick);
-    document.addEventListener("keydown", onKey);
-    return () => {
-      document.removeEventListener("mousedown", onDocClick);
-      document.removeEventListener("keydown", onKey);
-    };
-  }, [deptOpen]);
-
-  const [codeSuggestions, setCodeSuggestions] = useState([]);
-  const [codeSuggestOpen, setCodeSuggestOpen] = useState(false);
-  const [codeSuggestLoading, setCodeSuggestLoading] = useState(false);
-  const codeSuggestRef = useRef(null);
-  const codeJustSelectedRef = useRef(false);
-  // Caches course-search results by term|subject|q so retyping doesn't re-hit Banner.
-  const courseListCacheRef = useRef(new Map());
-
-  useEffect(() => {
-    if (!codeSuggestOpen) return undefined;
-    const onDocClick = (e) => {
-      if (codeSuggestRef.current && !codeSuggestRef.current.contains(e.target)) setCodeSuggestOpen(false);
-    };
-    const onKey = (e) => { if (e.key === "Escape") setCodeSuggestOpen(false); };
-    document.addEventListener("mousedown", onDocClick);
-    document.addEventListener("keydown", onKey);
-    return () => {
-      document.removeEventListener("mousedown", onDocClick);
-      document.removeEventListener("keydown", onKey);
-    };
-  }, [codeSuggestOpen]);
-
-  const pickCodeSuggestion = (s) => {
-    if (s.type === "subject") {
-      // Let the search effect run normally so it shows this subject's course list.
-      setD((p) => ({ ...p, code: `${s.code} ` }));
-    } else {
-      // Skip the next search effect - a full course pick needs no further narrowing.
-      codeJustSelectedRef.current = true;
-      setD((p) => ({ ...p, code: s.code, title: s.title || p.title }));
-    }
-    setCodeSuggestOpen(false);
-  };
-
-  // Live "as you type" lookup: letters alone show matching subjects (no
-  // network); a subject + digits searches Banner for matching course numbers.
-  useEffect(() => {
-    if (codeJustSelectedRef.current) { codeJustSelectedRef.current = false; return undefined; }
-
-    const raw = String(d.code || "");
-    const match = raw.match(/^\s*([A-Za-z]*)\s*(\d*)/);
-    const subjectPart = (match?.[1] || "").toUpperCase();
-    const numberPart = match?.[2] || "";
-
-    if (!subjectPart) { setCodeSuggestLoading(false); setCodeSuggestions([]); setCodeSuggestOpen(false); return undefined; }
-
-    const knownSubject = SUBJECTS.some((s) => s.code === subjectPart);
-
-    if (!knownSubject) {
-      // Still narrowing down the subject itself (e.g. "C", "CS").
-      const matches = SUBJECTS.filter((s) => s.code.startsWith(subjectPart)).slice(0, 8)
-        .map((s) => ({ type: "subject", code: s.code, description: s.description }));
-      setCodeSuggestLoading(false);
-      setCodeSuggestions(matches);
-      setCodeSuggestOpen(matches.length > 0);
-      return undefined;
-    }
-
-    // subjectPart is already a complete, known subject code (e.g. "CSCI") -
-    // no need to wait for a space or a digit before showing its courses.
-
-    // Only trust this cache once the warm-up pass has FULLY finished for this
-    // term - pages land at different times, so a subject's entry can exist
-    // while still missing courses from a page still in flight.
-    const warmedList = warmCompleteRef.current.has(d.term)
-      ? courseListCacheRef.current.get(`${d.term}|${subjectPart}|`)
-      : null;
-    if (warmedList) {
-      const filtered = numberPart
-        ? warmedList.filter((c) => c.code.slice(subjectPart.length).trim().startsWith(numberPart))
-        : warmedList;
-      setCodeSuggestLoading(false);
-      setCodeSuggestions(filtered);
-      setCodeSuggestOpen(filtered.length > 0);
-      return undefined;
-    }
-
-    // "q:" prefix keeps this distinct from the warm-up accumulator's key above
-    // (same key minus prefix) - they used to collide and leak the full warm-up
-    // list into what should've been a narrow live-search result.
-    const cacheKey = `q:${d.term}|${subjectPart}|${numberPart}`;
-    const cached = courseListCacheRef.current.get(cacheKey);
-    if (cached) {
-      setCodeSuggestLoading(false);
-      setCodeSuggestions(cached);
-      setCodeSuggestOpen(cached.length > 0);
-      return undefined;
-    }
-
-    // Clear the stale (subject-list) suggestions right away instead of leaving
-    // them showing while the live course search is still in flight.
-    setCodeSuggestions([]);
-    setCodeSuggestLoading(true);
-    setCodeSuggestOpen(true);
-
-    const controller = new AbortController();
-    const timer = setTimeout(async () => {
-      try {
-        const url = `/api/banner?action=course-search&term=${encodeURIComponent(d.term)}&subject=${encodeURIComponent(subjectPart)}&q=${encodeURIComponent(numberPart)}`;
-        const res = await fetch(url, { signal: controller.signal });
-        if (!res.ok) throw new Error("search failed");
-        const payload = await res.json();
-        const matches = (payload.courses || []).map((c) => ({ type: "course", code: c.code, title: c.title }));
-        courseListCacheRef.current.set(cacheKey, matches);
-        setCodeSuggestLoading(false);
-        setCodeSuggestions(matches);
-        setCodeSuggestOpen(matches.length > 0);
-      } catch (error) {
-        if (error.name !== "AbortError") { setCodeSuggestLoading(false); setCodeSuggestions([]); setCodeSuggestOpen(false); }
-      }
-    }, 250);
-
-    return () => { clearTimeout(timer); controller.abort(); };
-  }, [d.code, d.term]);
-
-  const [sectionSuggestions, setSectionSuggestions] = useState([]);
-  const [sectionSuggestOpen, setSectionSuggestOpen] = useState(false);
-  const sectionSuggestRef = useRef(null);
-  // Mirrors courseListCacheRef for section-search, keyed by term|subject|courseNumber.
-  const sectionListCacheRef = useRef(new Map());
-
-  useEffect(() => {
-    if (!sectionSuggestOpen) return undefined;
-    const onDocClick = (e) => {
-      if (sectionSuggestRef.current && !sectionSuggestRef.current.contains(e.target)) setSectionSuggestOpen(false);
-    };
-    const onKey = (e) => { if (e.key === "Escape") setSectionSuggestOpen(false); };
-    document.addEventListener("mousedown", onDocClick);
-    document.addEventListener("keydown", onKey);
-    return () => {
-      document.removeEventListener("mousedown", onDocClick);
-      document.removeEventListener("keydown", onKey);
-    };
-  }, [sectionSuggestOpen]);
-
-  const pickSectionSuggestion = (s) => {
-    setD((p) => ({ ...p, section: s.section }));
-    setSectionSuggestOpen(false);
-  };
-
-  // Once the code is a complete "SUBJ 000", proactively surface the real
-  // sections offered that term so the professor doesn't have to already know one.
-  useEffect(() => {
-    const code = String(d.code || "").trim();
-    const parsed = code.match(/^([A-Za-z]{2,5})\s*-?\s*(\d{3,4}[A-Za-z]?)$/);
-    if (!parsed) { setSectionSuggestions([]); setSectionSuggestOpen(false); return undefined; }
-
-    const subject = parsed[1].toUpperCase();
-    const courseNumber = parsed[2].toUpperCase();
-    const cacheKey = `${d.term}|${subject}|${courseNumber}`;
-    const cached = sectionListCacheRef.current.get(cacheKey);
-    if (cached) {
-      setSectionSuggestions(cached);
-      if (cached.length && !String(d.section || "").trim()) setSectionSuggestOpen(true);
-      return undefined;
-    }
-
-    // Not cached - clear stale sections immediately rather than leaving them
-    // looking like they belong to the new course while the search is in flight.
-    setSectionSuggestions([]);
-
-    const controller = new AbortController();
-    const timer = setTimeout(async () => {
-      try {
-        const url = `/api/banner?action=section-search&term=${encodeURIComponent(d.term)}&subject=${encodeURIComponent(subject)}&courseNumber=${encodeURIComponent(courseNumber)}`;
-        const res = await fetch(url, { signal: controller.signal });
-        if (!res.ok) throw new Error("search failed");
-        const payload = await res.json();
-        const sections = payload.sections || [];
-        sectionListCacheRef.current.set(cacheKey, sections);
-        setSectionSuggestions(sections);
-        if (sections.length && !String(d.section || "").trim()) setSectionSuggestOpen(true);
-      } catch (error) {
-        if (error.name !== "AbortError") setSectionSuggestions([]);
-      }
-    }, 450);
-
-    return () => { clearTimeout(timer); controller.abort(); };
-  }, [d.code, d.term]);
-  // "Warm up" the whole term's catalog into the course/section caches above,
-  // once per term, paging through Banner's results in the background so
-  // later typing hits cache instead of a live lookup.
-  const warmedTermsRef = useRef(new Set());
-  // Set only once every page has landed, unlike warmedTermsRef (set when the
-  // pass starts). Callers must check this before trusting a cache entry as complete.
-  const warmCompleteRef = useRef(new Set());
-
-  useEffect(() => {
-    const term = String(d.term || "").trim();
-    if (!term || warmedTermsRef.current.has(term)) return undefined;
-
-    const PAGE_SIZE = 500;
-    const controller = new AbortController();
-
-    const applyPage = (payload) => {
-      for (const course of payload.courses || []) {
-        const subject = course.code.split(" ")[0];
-        const key = `${term}|${subject}|`;
-        const list = courseListCacheRef.current.get(key) || [];
-        if (!list.some((c) => c.code === course.code)) list.push({ type: "course", code: course.code, title: course.title });
-        courseListCacheRef.current.set(key, list);
-      }
-      for (const [code, sections] of Object.entries(payload.sectionsByCode || {})) {
-        const [subject, courseNumber] = code.split(" ");
-        sectionListCacheRef.current.set(`${term}|${subject}|${courseNumber}`, sections);
-      }
-    };
-
-    const fetchPage = async (pageOffset) => {
-      const url = `/api/banner?action=catalog-page&term=${encodeURIComponent(term)}&offset=${pageOffset}&size=${PAGE_SIZE}`;
-      const res = await fetch(url, { signal: controller.signal });
-      if (!res.ok) throw new Error("warm-up page failed");
-      return res.json();
-    };
-
-    // Debounced the same way the other term-driven lookups are, so typing
-    // out a term doesn't fire (and immediately abort) a warm-up per keystroke.
-    const timer = setTimeout(() => {
-      warmedTermsRef.current.add(term);
-      (async () => {
-        try {
-          const first = await fetchPage(0);
-          applyPage(first);
-
-          const totalCount = first.totalCount || 0;
-          const remainingOffsets = [];
-          for (let o = PAGE_SIZE; o < totalCount; o += PAGE_SIZE) remainingOffsets.push(o);
-
-          // Sequential, not Promise.all: on multi-instance Vercel, parallel pages
-          // can land on different instances with separate session state, which
-          // the server-side lock can't protect against across instances.
-          for (const offset of remainingOffsets) {
-            const payload = await fetchPage(offset);
-            applyPage(payload);
-          }
-
-          warmCompleteRef.current.add(term);
-        } catch {
-          // Aborted or failed - un-mark the term so a later mount retries instead
-          // of leaving its cache empty forever.
-          warmedTermsRef.current.delete(term);
-        }
-      })();
-    }, 450);
-
-    return () => { clearTimeout(timer); controller.abort(); };
-  }, [d.term]);
-
+    document.documentElement.setAttribute("data-theme", theme);
+  }, [theme]);
+  const [showPrinted, setShowPrinted] = useState(false);
+  // true when the preview is showing the real print colors
+  const printColors = theme !== "dark" || showPrinted;
+  const [pendingDelete, setPendingDelete] = useState(null);
+  const [weekCount, setWeekCount] = useState("15");
+  const [weekCountWarning, setWeekCountWarning] = useState(false);
+  const [previewFullscreen, setPreviewFullscreen] = useState(false);
   const frameRef = useRef(null);
   const previewRef = useRef(null);
   const formRef = useRef(null);
@@ -1094,106 +733,12 @@ export default function SyllabusBuilder() {
     scroller.scrollTo({ top: Math.max(0, top), behavior: "smooth" });
   };
 
-  const set = (k, v) => setD((p) => ({ ...p, [k]: v }));
-
-  const lookupCourseBySection = async (triggerCode, term, subject, courseNumber, section, signal) => {
-    try {
-      const res = await fetch("/api/banner?action=details", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ term, subject, courseNumber, section }),
-        signal,
-      });
-
-      if (!res.ok) {
-        const errorText = await res.text();
-        throw new Error(errorText || "Lookup failed");
-      }
-
-      const payload = await res.json();
-      if (!payload.crn || !payload.title) throw new Error("The portal returned no course details");
-      setD((p) => {
-        // The response may have been superseded by further edits while in flight
-        // (AbortController can lose that race) - drop it if it no longer matches
-        // what's on screen instead of clobbering newer input.
-        const stillCurrent = p.code.trim() === triggerCode && p.section.trim() === section && p.term.trim() === term;
-        if (!stillCurrent) return p;
-        return {
-          ...p,
-          crn: payload.crn || p.crn,
-          code: payload.code || p.code,
-          title: payload.title || p.title,
-          section: payload.section || p.section,
-          term: payload.term || p.term,
-          credits: payload.credits || p.credits,
-          modality: payload.modality || p.modality,
-          // Blank these rather than falling back to p.X - a fallback would silently
-          // leave a different, previously-looked-up course's value on screen.
-          meeting: payload.meeting || "",
-          location: payload.location || "",
-          // Prefer our verified SUBJECT_DEPARTMENTS table over Banner's own lookup,
-          // which is unreliable and returns abbreviated text that doesn't match
-          // our Department dropdown's canonical names.
-          dept: SUBJECT_DEPARTMENTS.get(subject) || payload.dept || "",
-          prereq: payload.prereq || "",
-          instructor: payload.instructor || "",
-          email: payload.email || "",
-          description: payload.description || "",
-        };
-      });
-      setLookupStatus("ok");
-    } catch (error) {
-      if (error.name !== "AbortError") {
-        setLookupStatus("error");
-        // No CRN resolved - clear lookup-sourced fields instead of leaving a
-        // different course's leftover data on screen. Department keeps its
-        // subject-level fallback since that doesn't need the section to resolve.
-        setD((p) => {
-          const stillCurrent = p.code.trim() === triggerCode && p.section.trim() === section && p.term.trim() === term;
-          if (!stillCurrent) return p;
-          return {
-            ...p,
-            crn: "",
-            title: "",
-            meeting: "",
-            location: "",
-            dept: SUBJECT_DEPARTMENTS.get(subject) || "",
-            prereq: "",
-            instructor: "",
-            email: "",
-            description: "",
-          };
-        });
-      }
-    }
+  const set = (k, v) => {
+    setD((p) => ({ ...p, [k]: v }));
+    setTimeout(() => scrollPreviewTo(SECTION_FOR_TAB[tab]), 0);
   };
-
-  useEffect(() => {
-    const code = String(d.code || "").trim();
-    const section = String(d.section || "").trim();
-    const term = String(d.term || "").trim();
-    const parsed = code.match(/^([A-Za-z]{2,5})\s*-?\s*(\d{3,4}[A-Za-z]?)$/);
-    if (!parsed || !section || !term) { setLookupStatus(null); return undefined; }
-
-    const controller = new AbortController();
-    setLookupStatus("loading");
-    const timer = setTimeout(() => {
-      lookupCourseBySection(code, term, parsed[1].toUpperCase(), parsed[2].toUpperCase(), section, controller.signal);
-    }, 450);
-    return () => { clearTimeout(timer); controller.abort(); };
-  }, [d.code, d.section, d.term]);
-
-  // Not Banner data — just a sensible default for a field we invented,
-  // derived from the course code once it's valid. Tracks code changes until
-  // the professor actually types in the field themselves, at which point
-  // subjectLineAutoRef flips and this stops touching it.
-  const subjectLineAutoRef = useRef(true);
-  useEffect(() => {
-    const code = String(d.code || "").trim();
-    if (!subjectLineAutoRef.current || !/^[A-Za-z]{2,5}\s*-?\s*\d{3,4}[A-Za-z]?$/.test(code)) return;
-    setD((p) => ({ ...p, subjectLine: `${code} - [your question]` }));
-  }, [d.code]);
-  const setDeep = (k, i, key, v) =>
+  // Update one property inside a repeated array item, such as an assignment or week.
+  const setDeep = (k, i, key, v) => {
     setD((p) => { const a = [...p[k]]; a[i] = { ...a[i], [key]: v }; return { ...p, [k]: a }; });
     setTimeout(() => scrollPreviewTo(SECTION_FOR_ITEM[k]), 0);
   };
@@ -1732,145 +1277,47 @@ export default function SyllabusBuilder() {
         <div ref={formRef} className="p-5 editor-form" style={{ flex: "1 1 420px", minWidth: 340, maxWidth: 620 }}>
           {tab === 0 && (<>
             <H>Course</H>
-            <div className="flex gap-3 flex-wrap items-end">
+            <div className="flex gap-3 flex-wrap">
               <div style={{ flex: "1 1 150px" }}>
                 <Field label="Course code" hint="POSC 322">
-                  <div ref={codeSuggestRef} style={{ position: "relative" }}>
-                    <input
-                      style={inputBase}
-                      value={d.code}
-                      placeholder="POSC 322"
-                      autoComplete="off"
-                      onChange={(e) => set("code", e.target.value)}
-                      onFocus={() => { if (codeSuggestions.length) setCodeSuggestOpen(true); }}
-                    />
-                    <div role="listbox" className="transition-all duration-200"
+                  <T
+                    value={d.code}
+                    onChange={handleCourseCodeChange} // Connected to your safe lookup handler
+                    placeholder="POSC 322"
+                  />
+
+                  {/* Autofill Match Indicator Banner */}
+                  {d.code && catalog && catalog[normalizeCourseKey(d.code)] && (
+                    <div
+                      className="flex items-center gap-1.5 mt-1.5 px-2 py-1 rounded text-xs font-semibold"
                       style={{
-                        position: "absolute", left: 0, right: 0, top: "calc(100% + 4px)", zIndex: 30,
-                        background: "#fff", border: `1px solid ${C.line}`, borderRadius: 4,
-                        boxShadow: "0 6px 16px rgba(0,0,0,.12)", overflow: "hidden", maxHeight: 220, overflowY: "auto",
-                        opacity: codeSuggestOpen ? 1 : 0,
-                        transform: codeSuggestOpen ? "translateY(0) scaleY(1)" : "translateY(-4px) scaleY(0.96)",
-                        transformOrigin: "top", pointerEvents: codeSuggestOpen ? "auto" : "none",
-                      }}>
-                      {codeSuggestLoading && codeSuggestions.length === 0 && (
-                        <div className="flex items-center gap-2" style={{ padding: "8px 10px", fontSize: 12.5, color: C.slate }}>
-                          <Loader2 size={13} className="animate-spin" />Searching live course catalog&hellip;
-                        </div>
-                      )}
-                      {codeSuggestions.map((s) => (
-                        <div key={s.type + s.code} role="option"
-                          onClick={() => pickCodeSuggestion(s)}
-                          onMouseEnter={(e) => { e.currentTarget.style.background = "#F4F6F9"; }}
-                          onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
-                          style={{ padding: "7px 10px", fontSize: 13, cursor: "pointer" }}>
-                          <div style={{ fontWeight: "bold", color: C.navy }}>{s.code}</div>
-                          <div style={{ fontSize: 11.5, color: C.slate }}>{s.type === "subject" ? s.description : s.title}</div>
-                        </div>
-                      ))}
+                        background: UI.goodBg || "#E8F5E9",
+                        color: UI.good || "#1E7A46",
+                        border: `1px solid ${UI.line || "#D8DEE7"}`
+                      }}
+                    >
+                      <Check size={12} />
+                      Matched catalog data loaded!
                     </div>
-                  </div>
+                  )}
                 </Field>
               </div>
-              <div style={{ flex: "1 1 130px" }}>
-                <Field label="Section" hint="e.g. 001">
-                  <div ref={sectionSuggestRef} style={{ position: "relative" }}>
-                    <input
-                      style={{ ...inputBase, paddingRight: 30 }}
-                      value={d.section}
-                      placeholder="001"
-                      autoComplete="off"
-                      onChange={(e) => set("section", e.target.value)}
-                      onFocus={() => { if (sectionSuggestions.length) setSectionSuggestOpen(true); }}
-                    />
-                    {lookupStatus === "loading" &&
-                      <div style={{ position: "absolute", right: 9, top: 0, bottom: 0, display: "flex", alignItems: "center" }}>
-                        <Loader2 size={15} className="animate-spin" style={{ color: C.slate }} />
-                      </div>}
-                    {lookupStatus === "ok" &&
-                      <Check size={15} style={{ position: "absolute", right: 9, top: "50%", transform: "translateY(-50%)", color: C.good }} />}
-                    {lookupStatus === "error" &&
-                      <X size={15} style={{ position: "absolute", right: 9, top: "50%", transform: "translateY(-50%)", color: C.bad }} />}
-                    <div role="listbox" className="transition-all duration-200"
-                      style={{
-                        position: "absolute", left: 0, right: 0, top: "calc(100% + 4px)", zIndex: 30,
-                        background: "#fff", border: `1px solid ${C.line}`, borderRadius: 4,
-                        boxShadow: "0 6px 16px rgba(0,0,0,.12)", overflow: "hidden", maxHeight: 220, overflowY: "auto",
-                        opacity: sectionSuggestOpen ? 1 : 0,
-                        transform: sectionSuggestOpen ? "translateY(0) scaleY(1)" : "translateY(-4px) scaleY(0.96)",
-                        transformOrigin: "top", pointerEvents: sectionSuggestOpen ? "auto" : "none",
-                      }}>
-                      {sectionSuggestions.map((s) => (
-                        <div key={s.crn} role="option"
-                          onClick={() => pickSectionSuggestion(s)}
-                          onMouseEnter={(e) => { e.currentTarget.style.background = "#F4F6F9"; }}
-                          onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
-                          style={{ padding: "7px 10px", fontSize: 13, cursor: "pointer" }}>
-                          <div style={{ fontWeight: "bold", color: C.navy }}>Section {s.section}</div>
-                          <div style={{ fontSize: 11.5, color: C.slate }}>{s.meeting} &middot; {s.instructor}</div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
+              <div style={{ flex: "2 1 240px" }}>
+                <Field label="Course title">
+                  <T value={d.title} onChange={(v) => set("title", v)} placeholder="American Foreign Policy" />
                 </Field>
               </div>
             </div>
             <div className="flex gap-3 flex-wrap">
-              <div style={{ flex: "2 1 240px" }}><Field label="Course title"><T value={d.title} onChange={(v) => set("title", v)} placeholder="American Foreign Policy" /></Field></div>
-              <div style={{ flex: "0 0 100px" }}>
-                <Field label="CRN"><T value={d.crn} onChange={(v) => set("crn", v.replace(/\D/g, "").slice(0, 5))} placeholder="12345" /></Field>
-              </div>
+              <div style={{ flex: "1 1 130px" }}><Field label="CRN" hint="the 5-digit registration number"><T value={d.crn} onChange={(v) => set("crn", v)} placeholder="12345" maxLength={5} /></Field></div>
+              <div style={{ flex: "1 1 130px" }}><Field label="Section"><T value={d.section} onChange={(v) => set("section", v)} placeholder="001" /></Field></div>
             </div>
             <div className="flex gap-3 flex-wrap">
-              <div style={{ flex: "1 1 130px" }}>
-                <Field label="Term" hint="used for the lookup too">
-                  <div ref={termRef} style={{ position: "relative" }}>
-                    <input
-                      style={{ ...inputBase, paddingRight: 30 }}
-                      value={d.term}
-                      placeholder="Fall 2026"
-                      autoComplete="off"
-                      onChange={(e) => set("term", e.target.value)}
-                      onFocus={() => { if (termOptions.length) setTermOpen(true); }}
-                    />
-                    {termOptions.length > 0 && (
-                      <button type="button" onClick={() => setTermOpen((o) => !o)}
-                        aria-haspopup="listbox" aria-expanded={termOpen} aria-label="Choose a term"
-                        style={{
-                          position: "absolute", right: 0, top: 0, bottom: 0, width: 28,
-                          display: "flex", alignItems: "center", justifyContent: "center",
-                          background: "transparent", cursor: "pointer",
-                        }}>
-                        <ChevronDown size={14} className="transition-transform duration-200"
-                          style={{ color: C.slate, transform: termOpen ? "rotate(180deg)" : "none" }} />
-                      </button>
-                    )}
-                    <div role="listbox" className="transition-all duration-200"
-                      style={{
-                        position: "absolute", left: 0, right: 0, top: "calc(100% + 4px)", zIndex: 30,
-                        background: "#fff", border: `1px solid ${C.line}`, borderRadius: 4,
-                        boxShadow: "0 6px 16px rgba(0,0,0,.12)", overflow: "hidden", maxHeight: 220, overflowY: "auto",
-                        opacity: termOpen ? 1 : 0,
-                        transform: termOpen ? "translateY(0) scaleY(1)" : "translateY(-4px) scaleY(0.96)",
-                        transformOrigin: "top", pointerEvents: termOpen ? "auto" : "none",
-                      }}>
-                      {termOptions.map((t) => (
-                        <div key={t} role="option" aria-selected={d.term === t}
-                          onClick={() => { set("term", t); setTermOpen(false); }}
-                          onMouseEnter={(e) => { e.currentTarget.style.background = "#F4F6F9"; }}
-                          onMouseLeave={(e) => { e.currentTarget.style.background = d.term === t ? "#EEF2F7" : "transparent"; }}
-                          style={{
-                            padding: "7px 10px", fontSize: 13.5, cursor: "pointer",
-                            color: d.term === t ? C.navy : C.ink, fontWeight: d.term === t ? "bold" : "normal",
-                            background: d.term === t ? "#EEF2F7" : "transparent",
-                          }}>
-                          {t}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </Field>
-              </div>
+              <div style={{ flex: "1 1 130px" }}><Field label="Term">
+                <select style={inputBase} value={d.term} onChange={(e) => set("term", e.target.value)}>
+                  {[...new Set([...Object.keys(ACADEMIC_CALENDARS), d.term])].map((t) => <option key={t}>{t}</option>)}
+                </select>
+              </Field></div>
               <div style={{ flex: "1 1 130px" }}><Field label="Credit hours"><T value={d.credits} onChange={(v) => set("credits", v)} /></Field></div>
             </div>
             <Field label="Semester Length" hint="students read this before they register">
@@ -1879,38 +1326,21 @@ export default function SyllabusBuilder() {
               </select>
             </Field>
             <Field label="Delivery" hint="students read this before they register">
-              <div ref={deliveryRef} style={{ position: "relative" }}>
-                <button type="button" onClick={() => setDeliveryOpen((o) => !o)}
-                  aria-haspopup="listbox" aria-expanded={deliveryOpen}
-                  style={{ ...inputBase, display: "flex", alignItems: "center", justifyContent: "space-between", cursor: "pointer" }}>
-                  <span>{d.modality}</span>
-                  <ChevronDown size={14} className="transition-transform duration-200"
-                    style={{ color: C.slate, flexShrink: 0, marginLeft: 8, transform: deliveryOpen ? "rotate(180deg)" : "none" }} />
-                </button>
-                <div role="listbox" className="transition-all duration-200"
-                  style={{
-                    position: "absolute", left: 0, right: 0, top: "calc(100% + 4px)", zIndex: 20,
-                    background: "#fff", border: `1px solid ${C.line}`, borderRadius: 4,
-                    boxShadow: "0 6px 16px rgba(0,0,0,.12)", overflow: "hidden",
-                    opacity: deliveryOpen ? 1 : 0,
-                    transform: deliveryOpen ? "translateY(0) scaleY(1)" : "translateY(-4px) scaleY(0.96)",
-                    transformOrigin: "top", pointerEvents: deliveryOpen ? "auto" : "none",
-                  }}>
-                  {["In person", "Hybrid", "Online synchronous", "Online asynchronous"].map((m) => (
-                    <div key={m} role="option" aria-selected={d.modality === m}
-                      onClick={() => { set("modality", m); setDeliveryOpen(false); }}
-                      onMouseEnter={(e) => { e.currentTarget.style.background = "#F4F6F9"; }}
-                      onMouseLeave={(e) => { e.currentTarget.style.background = d.modality === m ? "#EEF2F7" : "transparent"; }}
-                      style={{
-                        padding: "8px 10px", fontSize: 14, cursor: "pointer",
-                        color: d.modality === m ? C.navy : C.ink, fontWeight: d.modality === m ? "bold" : "normal",
-                        background: d.modality === m ? "#EEF2F7" : "transparent",
-                      }}>
-                      {m}
-                    </div>
-                  ))}
-                </div>
-              </div>
+              <select style={inputBase} value={d.modality} onChange={(e) => set("modality", e.target.value)}>
+                {["In person", "Hybrid", "Online synchronous", "Online asynchronous", "Dual Enrollment", "Internship"].map((m) => <option key={m}>{m}</option>)}
+              </select>
+            </Field>
+                        <Field label="Meeting days" hint="leave blank if fully asynchronous">
+              <select
+                style={inputBase}
+                value={d.meetingPattern || ""}
+                onChange={(e) => set("meetingPattern", e.target.value)}
+              >
+                <option value="">Select meeting days</option>
+                {MEETING_PATTERNS.map((pattern) => (
+                  <option key={pattern.value} value={pattern.value}>{pattern.label}</option>
+                ))}
+              </select>
             </Field>
             {d.meetingPattern === "custom" && (
               <Field label="Custom meeting days">
@@ -1929,62 +1359,124 @@ export default function SyllabusBuilder() {
               />
             </Field>
             <Field label="Room"><T value={d.location} onChange={(v) => set("location", v)} placeholder="Humanities 407" /></Field>
-            <Field label="Department" hint="type freely, or pick from the list">
-              <div ref={deptRef} style={{ position: "relative" }}>
-                <input
-                  style={{ ...inputBase, paddingRight: 30 }}
-                  value={d.dept}
-                  placeholder="Department of Computer Science"
-                  autoComplete="off"
-                  onChange={(e) => set("dept", e.target.value)}
-                  onFocus={() => setDeptOpen(true)}
-                />
-                <button type="button" onClick={() => setDeptOpen((o) => !o)}
-                  aria-haspopup="listbox" aria-expanded={deptOpen} aria-label="Choose a department"
-                  style={{
-                    position: "absolute", right: 0, top: 0, bottom: 0, width: 28,
-                    display: "flex", alignItems: "center", justifyContent: "center",
-                    background: "transparent", cursor: "pointer",
-                  }}>
-                  <ChevronDown size={14} className="transition-transform duration-200"
-                    style={{ color: C.slate, transform: deptOpen ? "rotate(180deg)" : "none" }} />
-                </button>
-                <div role="listbox" className="transition-all duration-200"
-                  style={{
-                    position: "absolute", left: 0, right: 0, top: "calc(100% + 4px)", zIndex: 30,
-                    background: "#fff", border: `1px solid ${C.line}`, borderRadius: 4,
-                    boxShadow: "0 6px 16px rgba(0,0,0,.12)", overflow: "hidden", maxHeight: 260, overflowY: "auto",
-                    opacity: deptOpen ? 1 : 0,
-                    transform: deptOpen ? "translateY(0) scaleY(1)" : "translateY(-4px) scaleY(0.96)",
-                    transformOrigin: "top", pointerEvents: deptOpen ? "auto" : "none",
-                  }}>
-                  {DEPARTMENTS.map((g) => (
-                    <div key={g.college}>
-                      <div style={{ padding: "8px 10px 4px", fontSize: 12, fontWeight: "bold", textTransform: "uppercase", letterSpacing: .4, color: C.slate }}>
-                        {g.college}
-                      </div>
-                      {g.names.map((name) => {
-                        const value = `Department of ${name}`;
-                        const on = d.dept === value;
-                        return (
-                          <div key={name} role="option" aria-selected={on}
-                            onClick={() => { set("dept", value); setDeptOpen(false); }}
-                            onMouseEnter={(e) => { e.currentTarget.style.background = "#F4F6F9"; }}
-                            onMouseLeave={(e) => { e.currentTarget.style.background = on ? "#EEF2F7" : "transparent"; }}
-                            style={{
-                              padding: "7px 10px 7px 20px", fontSize: 13.5, cursor: "pointer",
-                              color: on ? C.navy : C.ink, fontWeight: on ? "bold" : "normal",
-                              background: on ? "#EEF2F7" : "transparent",
-                            }}>
-                            {name}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  ))}
-                </div>
-              </div>
+            <Field label="Other Meeting Room" hint="Only fill this if some classes take place in other room during the week"><T value={d.exlocation} onChange={(v) => set("exlocation", v)} placeholder="Humanities 409 on Fridays" /></Field>
+            <Field label="Department">
+              <select
+                style={inputBase}
+                value={
+                  [
+                    "Select a department...",
+                    "Agriculture, Geosciences, and Natural Resources", "Family and Consumer Sciences",
+                    "Accounting, Finance, Economics, and Political Science", "Management, Marketing, and Information Systems",
+                    "Behavioral Sciences", "Educational Studies", "Health and Human Performance", "Nursing", "Psychology",
+                    "Biological Sciences", "Chemistry and Physics", "Computer Science", "Engineering", "Mathematics and Statistics",
+                    "Communications", "English and Modern Foreign Languages", "History and Philosophy", "Music", "Visual and Theatre Arts"
+                  ].includes(d.dept)
+                    ? d.dept
+                    : "Custom Department"
+                }
+                onChange={(e) => {
+                  const val = e.target.value;
+                  set("dept", val === "Custom Department" ? "" : val);
+                }}
+              >
+                <option value="Select a department...">Select a department...</option>
+
+                <optgroup label="College of Agriculture and Applied Sciences">
+                  <option value="Agriculture, Geosciences, and Natural Resources">
+                    Agriculture, Geosciences, and Natural Resources
+                  </option>
+                  <option value="Family and Consumer Sciences">
+                    Family and Consumer Sciences
+                  </option>
+                </optgroup>
+
+                <optgroup label="College of Business and Global Affairs">
+                  <option value="Accounting, Finance, Economics, and Political Science">
+                    Accounting, Finance, Economics, and Political Science
+                  </option>
+                  <option value="Management, Marketing, and Information Systems">
+                    Management, Marketing, and Information Systems
+                  </option>
+                </optgroup>
+
+                <optgroup label="College of Education, Health, and Behavioral Sciences">
+                  <option value="Behavioral Sciences">
+                    Behavioral Sciences
+                  </option>
+                  <option value="Educational Studies">
+                    Educational Studies
+                  </option>
+                  <option value="Health and Human Performance">
+                    Health and Human Performance
+                  </option>
+                  <option value="Nursing">
+                    Nursing
+                  </option>
+                  <option value="Psychology">
+                    Psychology
+                  </option>
+                </optgroup>
+
+                <optgroup label="College of Engineering and Natural Sciences">
+                  <option value="Biological Sciences">
+                    Biological Sciences
+                  </option>
+                  <option value="Chemistry and Physics">
+                    Chemistry and Physics
+                  </option>
+                  <option value="Computer Science">
+                    Computer Science
+                  </option>
+                  <option value="Engineering">
+                    Engineering
+                  </option>
+                  <option value="Mathematics and Statistics">
+                    Mathematics and Statistics
+                  </option>
+                </optgroup>
+
+                <optgroup label="College of Humanities and Fine Arts">
+                  <option value="Communications">
+                    Communications
+                  </option>
+                  <option value="English and Modern Foreign Languages">
+                    English and Modern Foreign Languages
+                  </option>
+                  <option value="History and Philosophy">
+                    History and Philosophy
+                  </option>
+                  <option value="Music">
+                    Music
+                  </option>
+                  <option value="Visual and Theatre Arts">
+                    Visual and Theatre Arts
+                  </option>
+                </optgroup>
+
+                <option value="Custom Department">Custom Department</option>
+              </select>
             </Field>
+
+            {/* Custom Input dynamically renders when d.dept has been edited away from standard predefined options */}
+            {![
+              "Select a department...",
+              "Agriculture, Geosciences, and Natural Resources", "Family and Consumer Sciences",
+              "Accounting, Finance, Economics, and Political Science", "Management, Marketing, and Information Systems",
+              "Behavioral Sciences", "Educational Studies", "Health and Human Performance", "Nursing", "Psychology",
+              "Biological Sciences", "Chemistry and Physics", "Computer Science", "Engineering", "Mathematics and Statistics",
+              "Communications", "English and Modern Foreign Languages", "History and Philosophy", "Music", "Visual and Theatre Arts"
+            ].includes(d.dept) && (
+              <div className="mt-[-8px] mb-4">
+                <Field label="Custom Department Name">
+                  <T 
+                    value={d.dept} 
+                    onChange={(v) => set("dept", v)} 
+                    placeholder="Enter custom department name" 
+                  />
+                </Field>
+              </div>
+            )}
             <Field label="Prerequisites"><T value={d.prereq} onChange={(v) => set("prereq", v)} placeholder="None" /></Field>
           </>)}
 
@@ -1996,8 +1488,7 @@ export default function SyllabusBuilder() {
             <Field label="Phone"><T type="tel" value={d.phone} onChange={(v) => set("phone", v)} placeholder="731-555-0123" /></Field>
             <Field label="Office"><T value={d.office} onChange={(v) => set("office", v)} placeholder="Humanities 212" /></Field>
             <Field label="Office hours"><A rows={2} value={d.hours} onChange={(v) => set("hours", v)} placeholder="Monday and Wednesday, 10 a.m. to noon, and by appointment. Email me and we will find a time that works." /></Field>
-            <Field label="Email subject line you want" hint="cuts your response time"><T value={d.subjectLine} onChange={(v) => { subjectLineAutoRef.current = false; set("subjectLine", v); }} placeholder="POSC 322 - [your question]" /></Field>
-            <Field label="Response time you commit to"><T value={d.responseTime} onChange={(v) => set("responseTime", v)} /></Field>
+            <Field label="Email subject line you want" hint="cuts your response time"><T value={d.subjectLine} onChange={(v) => set("subjectLine", v)} placeholder="POSC 322 - [your question]" /></Field>
             <Field label="How students should address you"><T value={d.address} onChange={(v) => set("address", v)} placeholder="Dr. Doe" /></Field>
           </>)}
 
