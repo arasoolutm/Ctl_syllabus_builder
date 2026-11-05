@@ -918,6 +918,7 @@ export default function SyllabusBuilder() {
   const [weekCount, setWeekCount] = useState("15");
   const [weekCountWarning, setWeekCountWarning] = useState(false);
   const [previewFullscreen, setPreviewFullscreen] = useState(false);
+  const [showTextKeybinds, setShowTextKeybinds] = useState(false);
   const frameRef = useRef(null);
   const previewRef = useRef(null);
   const formRef = useRef(null);
@@ -1498,6 +1499,23 @@ export default function SyllabusBuilder() {
             <div className="flex justify-end gap-2">
               <Btn onClick={() => setPendingDelete(null)}>Cancel</Btn>
               <Btn onClick={confirmDrop} primary>Delete</Btn>
+            </div>
+          </div>
+        </div>
+      )}
+      {showTextKeybinds && (
+        <div role="presentation" onMouseDown={() => setShowTextKeybinds(false)} style={{ position: "fixed", inset: 0, zIndex: 1100,
+          display: "flex", alignItems: "center", justifyContent: "center", padding: 20, background: "rgba(11,34,64,.38)" }}>
+          <div role="dialog" aria-modal="true" aria-labelledby="text-keybinds-title" onMouseDown={(event) => event.stopPropagation()}
+            style={{ width: "min(100%, 340px)", background: UI.paper, border: `1px solid ${UI.line}`, borderRadius: 4, padding: 20, boxShadow: "0 12px 36px rgba(11,34,64,.24)" }}>
+            <div id="text-keybinds-title" style={{ color: UI.navy, fontSize: 18, fontWeight: "bold", marginBottom: 14 }}>Text keybinds</div>
+            <div style={{ display: "grid", gridTemplateColumns: "auto 1fr", gap: "10px 16px", alignItems: "center", color: UI.slate, fontSize: 14 }}>
+              <kbd>Ctrl+B</kbd><span>Bold</span>
+              <kbd>Ctrl+U</kbd><span>Underline</span>
+              <kbd>Ctrl+I</kbd><span>Italicize</span>
+            </div>
+            <div className="flex justify-end" style={{ marginTop: 20 }}>
+              <Btn onClick={() => setShowTextKeybinds(false)}>Close</Btn>
             </div>
           </div>
         </div>
@@ -2332,6 +2350,15 @@ export default function SyllabusBuilder() {
                   Show as printed
                 </button>
               )}
+              <button
+                type="button"
+                onClick={() => setShowTextKeybinds(true)}
+                title="Show the text formatting keybinds"
+                className="px-3 py-2 rounded text-sm font-semibold"
+                style={{ background: UI.paper, color: UI.navy, border: `1px solid ${UI.line}`, cursor: "pointer", letterSpacing: 0 }}
+              >
+                Text keybinds
+              </button>
               <button
                 type="button"
                 onClick={() => setPreviewFullscreen((fullscreen) => !fullscreen)}
