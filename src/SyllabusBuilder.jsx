@@ -970,15 +970,89 @@ export default function SyllabusBuilder() {
   // so "-5 points" and "1.5 hours" are not mistaken for bullets.
   const FAKE_BULLET = /^\s*(?:[-*•–—→▪◦·](?:\s+|(?=[a-z]))|\d{1,2}[.)](?:\s+|(?=[a-z]))|[a-z]\)\s+)/i;
 
+  // Wording that only makes sense for a clickable link. The export has no links, so in print
+  // and in a screen reader these phrases point at nothing.
+  const VAGUE_LINK = /\b(click here|click the link|click this link|tap here|follow this link|this link|the link below|link below)\b/i;
+  // Four or more of the same symbol in a row, used as a divider: ----, ****, ====, ____
+  const DECORATIVE_RUN = /([-*=_~#+])\1{3,}/;
+  // Web addresses: https://…, www.…, or a bare domain such as utm.edu/calendar
+  const URL_RE = /\b(?:https?:\/\/|www\.)\S+|\b[a-z0-9-]+\.(?:edu|com|org|gov|net|io)(?:\/\S*)?/gi;
+  // A tab, or three or more spaces, between two pieces of text: columns lined up by hand.
+  const FAKE_COLUMNS = /\S(?:\t+| {3,})\S/;
+
   // Each check: id, title, level ("fail" or "warn"), why it matters, how to fix,
   // and found = the places where the problem appears (empty means it passes).
+  // A found item has tab, label, and either a quote of the text or a note.
   const a11yChecks = useMemo(() => {
+    const at = (x, extra) => ({ tab: x.tab, label: x.label, ...extra });
+    const lines = (x) => x.text.split("\n");
+    const paragraphs = (x) => x.text.split(/\n{2,}/).filter((p) => p.trim());
+
     const fakeLists = a11yFields.flatMap((x) => {
-      const lines = x.text.split("\n").filter((l) => FAKE_BULLET.test(l));
+      const hits = lines(x).filter((l) => FAKE_BULLET.test(l));
       // Two typed bullets make a list. Inside an outcome, even one is a doubled number.
-      return lines.length >= (x.inList ? 1 : 2)
-        ? [{ tab: x.tab, label: x.label, quote: excerpt(lines[0]) }]
-        : [];
+      return hits.length >= (x.inList ? 1 : 2) ? [at(x, { quote: excerpt(hits[0]) })] : [];
+    });
+
+    const vagueLinks = a11yFields.flatMap((x) => {
+      const line = lines(x).find((l) => VAGUE_LINK.test(l));
+      return line ? [at(x, { quote: excerpt(line) })] : [];
+    });
+
+    const decorative = a11yFields.flatMap((x) => {
+      const line = lines(x).find((l) => DECORATIVE_RUN.test(l));
+      return line ? [at(x, { quote: excerpt(line) })] : [];
+    });
+
+    // Custom items whose title and text don't match up. In the document a title becomes a
+    // heading; text without a title lands under whatever heading came before it.
+    const headingProblems = [];
+    const pairUp = (list, tab, base, textKey) => list.forEach((item, i) => {
+      const title = item.title.trim(); const text = (item[textKey] || "").trim();
+      const label = `${base} ${i + 1}${title ? ` (${title})` : ""}`;
+      if (title && !text) headingProblems.push({ tab, label, note: "has a title but no text, so it prints as an empty heading" });
+      if (!title && text) headingProblems.push({ tab, label, note: "has text but no title, so it prints under the previous heading" });
+    });
+    d.customDescriptions.forEach((item, i) => {
+      if (item.title.trim() && !item.description.trim()) headingProblems.push({
+        tab: "Welcome", label: `Custom description ${i + 1} (${item.title.trim()})`,
+        note: "has a title but no text, so it prints as an empty heading",
+      });
+    });
+    pairUp(d.extraMaterials, "Materials", "Material section", "description");
+    pairUp(d.customPolicies, "Policies", "Custom policy", "text");
+    if (d.hasLab && ![d.lab.crn, d.lab.meeting, d.lab.location, d.lab.instructor, d.lab.description,
+      d.lab.gradeNote, d.lab.attendance, d.lab.safety, d.lab.supplies, d.lab.makeup].some((v) => v?.trim())) {
+      headingProblems.push({ tab: "Labs", label: "Laboratory component",
+        note: "is turned on but empty, so it prints as a heading with nothing under it" });
+    }
+
+    const allCaps = a11yFields.flatMap((x) => {
+      const line = lines(x).find((l) => {
+        const letters = l.match(/[a-z]/gi) || [];
+        const upper = l.match(/[A-Z]/g) || [];
+        return l.trim().split(/\s+/).length >= 3 && letters.length >= 12 && upper.length / letters.length >= 0.8;
+      });
+      return line ? [at(x, { quote: excerpt(line) })] : [];
+    });
+
+    const longParagraphs = a11yFields.flatMap((x) => paragraphs(x).flatMap((p) => {
+      const words = p.trim().split(/\s+/).length;
+      return words > 150 ? [at(x, { quote: excerpt(p), note: `${words} words` })] : [];
+    }));
+
+    const bareUrls = a11yFields.flatMap((x) => lines(x).flatMap((l) => {
+      const withoutEmails = l.replace(/\S+@\S+/g, " ");
+      return [...withoutEmails.matchAll(URL_RE)].flatMap(([url]) => {
+        // An address is fine when it's short and the sentence around it names the page.
+        const wordsAround = withoutEmails.replace(url, " ").trim().split(/\s+/).filter(Boolean).length;
+        return url.length > 40 || wordsAround < 3 ? [at(x, { quote: excerpt(url, 60) })] : [];
+      });
+    }));
+
+    const fakeTables = a11yFields.flatMap((x) => {
+      const hits = lines(x).filter((l) => FAKE_COLUMNS.test(l));
+      return hits.length >= 2 ? [at(x, { quote: excerpt(hits[0]) })] : [];
     });
 
     return [
@@ -990,10 +1064,74 @@ export default function SyllabusBuilder() {
         fix: "Write the items as a sentence or as short separate paragraphs (leave a blank line between them). In an outcome, delete the number; the syllabus numbers outcomes for you.",
         found: fakeLists,
       },
+      {
+        id: "vague-links",
+        title: "\"Click here\" or \"this link\" wording",
+        level: "fail",
+        why: "The syllabus has no clickable links, so \"click here\" points at nothing in print, and screen reader users can't tell where it leads.",
+        fix: "Say what the page is and give its short address, for example: \"See the UTM Academic Calendar at utm.edu/calendar.\"",
+        found: vagueLinks,
+      },
+      {
+        id: "decorative",
+        title: "Divider lines made of symbols",
+        level: "fail",
+        why: "A screen reader reads every character: \"dash dash dash dash…\".",
+        fix: "Delete the divider line. Use a blank line to separate paragraphs, or a custom section with its own title.",
+        found: decorative,
+      },
+      {
+        id: "headings",
+        title: "Empty headings or text without a heading",
+        level: "fail",
+        why: "Screen reader users jump between headings to find things. An empty heading leads nowhere, and text without a title gets announced as part of the wrong section.",
+        fix: "Give every custom section both a title and some text, or remove the one you don't need.",
+        found: headingProblems,
+      },
+      {
+        id: "all-caps",
+        title: "Text in ALL CAPITALS",
+        level: "warn",
+        why: "All caps is harder to read, comes across as shouting, and some screen readers spell it out letter by letter.",
+        fix: "Use normal sentence case. To stress something, say so in words (\"Important:\") instead.",
+        found: allCaps,
+      },
+      {
+        id: "long-paragraphs",
+        title: "Very long paragraphs",
+        level: "warn",
+        why: "Paragraphs over about 150 words are hard to follow, especially for students using screen readers, magnifiers, or reading in a second language.",
+        fix: "Break it into two or three shorter paragraphs by leaving a blank line between them.",
+        found: longParagraphs,
+      },
+      {
+        id: "bare-urls",
+        title: "Long or unexplained web addresses",
+        level: "warn",
+        why: "Screen readers read web addresses character by character, and a long address on its own doesn't tell students what the page is.",
+        fix: "Name the page in your sentence and use the shortest address that works, for example: \"the Writing Center (utm.edu/writing)\".",
+        found: bareUrls,
+      },
+      {
+        id: "fake-tables",
+        title: "Columns lined up with tabs or spaces",
+        level: "warn",
+        why: "The syllabus collapses the extra spacing, so the columns fall apart, and screen readers have no table structure to follow.",
+        fix: "Put dates and assignments in the Grading or Schedule tables, or write each row as its own sentence.",
+        found: fakeTables,
+      },
     ];
-  }, [a11yFields]);
+  }, [a11yFields, d]);
 
-  const a11yIssueCount = a11yChecks.filter((c) => c.found.length).length;
+  const a11yFailCount = a11yChecks.filter((c) => c.found.length && c.level === "fail").length;
+  const a11yWarnCount = a11yChecks.filter((c) => c.found.length && c.level === "warn").length;
+  // One line, shared by the Accessibility tab and the Export tab summary.
+  const a11ySummary = a11yFailCount + a11yWarnCount === 0
+    ? "No accessibility issues found."
+    : [
+        a11yFailCount && `${a11yFailCount} accessibility issue${a11yFailCount > 1 ? "s" : ""}`,
+        a11yWarnCount && `${a11yWarnCount} warning${a11yWarnCount > 1 ? "s" : ""}`,
+      ].filter(Boolean).join(" and ") + " found.";
 
   /* ---------- document builder: create the HTML shared by preview and exports ---------- */
 
@@ -1940,9 +2078,7 @@ export default function SyllabusBuilder() {
               browser; nothing is sent anywhere. Fixing these is recommended but does not block export.
             </p>
             <div className="mb-3" style={{ fontSize: 14, fontWeight: "bold", color: UI.ink }} role="status">
-              {a11yIssueCount === 0
-                ? "No accessibility issues found."
-                : `${a11yIssueCount} accessibility issue${a11yIssueCount > 1 ? "s" : ""} found.`}
+              {a11ySummary}
             </div>
             <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
               {a11yChecks.map((c) => {
@@ -1964,7 +2100,9 @@ export default function SyllabusBuilder() {
                         <ul style={{ listStyle: "disc", paddingLeft: 18, margin: "0 0 8px" }}>
                           {c.found.map((p, i) => (
                             <li key={i}>
-                              <span style={{ color: UI.slate }}>{p.tab} › {p.label}:</span> “{p.quote}”
+                              <span style={{ color: UI.slate }}>{p.tab} › {p.label}</span>
+                              {p.quote && <>: “{p.quote}”</>}
+                              {p.note && <>{p.quote ? " · " : " "}{p.note}</>}
                             </li>
                           ))}
                         </ul>
