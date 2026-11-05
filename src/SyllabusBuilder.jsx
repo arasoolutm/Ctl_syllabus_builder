@@ -2132,6 +2132,20 @@ export default function SyllabusBuilder() {
                 </div>
               ))}
             </div>
+            {/* Accessibility summary: warns only, never blocks export */}
+            <div className="flex flex-wrap items-center gap-2 mb-4 p-3 rounded" role="status"
+              style={{ background: UI.paper, border: `1px solid ${UI.line}`, color: UI.ink, fontSize: 13.5 }}>
+              {a11yFailCount + a11yWarnCount === 0
+                ? <Check size={16} aria-hidden="true" style={{ color: UI.good, flexShrink: 0 }} />
+                : <AlertTriangle size={16} aria-hidden="true" style={{ color: UI.warn, flexShrink: 0 }} />}
+              <span style={{ flex: "1 1 200px" }}>
+                {a11ySummary}
+                {a11yFailCount + a11yWarnCount > 0 && " Fixing them is recommended, but you can still export."}
+              </span>
+              {a11yFailCount + a11yWarnCount > 0 && (
+                <Btn onClick={() => setTab(tabIndex("Accessibility"))} icon={ChevronRight}>Review accessibility</Btn>
+              )}
+            </div>
             <Note>Nothing here is stored anywhere. Closing this tab clears it. Export your syllabus to Word or PDF before closing.</Note>
             <div className="flex flex-wrap gap-2 mb-4">
               <Btn onClick={() => confirmThenExport(exportWord)} icon={FileDown} primary>Export to Word</Btn>
