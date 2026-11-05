@@ -602,16 +602,194 @@ const inputBase = {
   fontSize: 14, color: UI.ink, background: UI.paper, outline: "none",
 };
 
-/** Renders a controlled single-line text input using the builder's shared styling. */
+/* Rich-text fields are stored as a small HTML subset. Browsers wrap each new
+   line in a <div>, so those blocks are kept (without attributes) while the
+   editor is being typed in; blocksToBreaks() flattens them on blur so the value
+   survives a round trip through JSON and the document builder. */
+const allowedEditorTags = ["B", "STRONG", "I", "EM", "U"];
+
+const stripAttributes = (node) => {
+  Array.from(node.attributes).forEach((attr) => node.removeAttribute(attr.name));
+};
+
+const sanitizeEditorContent = (html = "") => {
+  if (!html) return "";
+
+  const temp = document.createElement("div");
+  temp.innerHTML = html;
+
+  Array.from(temp.querySelectorAll("*")).forEach((node) => {
+    if (!node.parentNode) return;
+    const tag = node.tagName.toUpperCase();
+    if (allowedEditorTags.includes(tag) || tag === "DIV" || tag === "P" || tag === "BR") {
+      stripAttributes(node);
+      return;
+    }
+    while (node.firstChild) node.parentNode.insertBefore(node.firstChild, node);
+    node.remove();
+  });
+
+  return temp.innerHTML;
+};
+
+const blocksToBreaks = (html = "") => {
+  if (!html) return "";
+  const temp = document.createElement("div");
+  temp.innerHTML = html;
+
+  Array.from(temp.querySelectorAll("div, p")).forEach((node) => {
+    if (!node.parentNode) return;
+    const br = document.createElement("br");
+    node.parentNode.insertBefore(br, node);
+    while (node.firstChild) node.parentNode.insertBefore(node.firstChild, node);
+    node.remove();
+  });
+
+  // A leading block (a first line that has content) leaves a leading break.
+  if (temp.firstChild && temp.firstChild.nodeName === "BR") temp.removeChild(temp.firstChild);
+
+  return temp.innerHTML;
+};
+
+const TextEditor = ({ value, onChange, placeholder, rows = 1, mono = false, singleLine = false, onBlur }) => {
+  const editorRef = useRef(null);
+
+  useEffect(() => {
+    if (editorRef.current && editorRef.current.innerHTML !== value) {
+      editorRef.current.innerHTML = value || "";
+    }
+  }, [value]);
+
+  const persistValue = () => {
+    const raw = editorRef.current?.innerHTML || "";
+    const safe = sanitizeEditorContent(raw);
+    editorRef.current.innerHTML = safe;
+    onChange(safe);
+  };
+
+  const handleKeyDown = (event) => {
+    const isModifier = event.ctrlKey || event.metaKey;
+    const key = event.key.toLowerCase();
+
+    if (!isModifier) return;
+
+    const map = {
+      b: "bold",
+      i: "italic",
+      u: "underline",
+    };
+
+    if (map[key]) {
+      event.preventDefault();
+      const editor = editorRef.current;
+      if (!editor) return;
+      editor.focus();
+      document.execCommand(map[key], false, null);
+      persistValue();
+    }
+  };
+
+  return (
+    <div
+      style={{
+        ...inputBase,
+        minHeight: singleLine ? 34 : rows * 22,
+        height: singleLine ? 34 : undefined,
+        maxHeight: singleLine ? 34 : 220,
+        overflow: singleLine ? "hidden" : "auto",
+        padding: 0,
+        display: "flex",
+        alignItems: "stretch",
+      }}
+    >
+      <div
+        ref={editorRef}
+        contentEditable
+        suppressContentEditableWarning
+        role="textbox"
+        aria-label={placeholder || "Text editor"}
+        onInput={(e) => onChange(sanitizeEditorContent(e.currentTarget.innerHTML))}
+        onBlur={() => {
+          const safe = blocksToBreaks(sanitizeEditorContent(editorRef.current?.innerHTML || ""));
+          editorRef.current.innerHTML = safe;
+          onChange(safe);
+          onBlur?.();
+        }}
+        onKeyDown={handleKeyDown}
+        style={{
+          width: "100%",
+          minHeight: singleLine ? 34 : rows * 22,
+          height: singleLine ? 34 : undefined,
+          maxHeight: singleLine ? 34 : 220,
+          overflow: singleLine ? "hidden" : "auto",
+          resize: "vertical",
+          border: "none",
+          borderRadius: 0,
+          boxShadow: "none",
+          background: "transparent",
+          lineHeight: 1.5,
+          whiteSpace: singleLine ? "nowrap" : "pre-wrap",
+          fontFamily: mono ? "ui-monospace, monospace" : inputBase.fontFamily,
+          color: C.ink,
+          padding: "7px 10px",
+          outline: "none",
+        }}
+      />
+    </div>
+  );
+};
+
+/* Single-line fields are identifiers, dates, and phone numbers: keep the native
+   input so type="date"/"tel", maxLength, and onBlur keep working. Rich text is
+   for the multi-line fields below. */
 const T = ({ value, onChange, placeholder, mono, type = "text", onBlur, maxLength }) => (
   <input type={type} style={{ ...inputBase, fontFamily: mono ? "ui-monospace, monospace" : inputBase.fontFamily }}
     value={value} placeholder={placeholder} maxLength={maxLength} onChange={(e) => onChange(e.target.value)} onBlur={onBlur} />
 );
 
-/** Renders a controlled multi-line text input using the builder's shared styling. */
+const normalizeRichHtml = (value = "") => {
+  const normalized = String(value)
+    .replace(/<div>/gi, "\n")
+    .replace(/<\/div>/gi, "")
+    .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/&nbsp;/gi, " ");
+
+  const escapeText = (text = "") =>
+    text.replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;");
+
+  const walk = (node) => {
+    if (!node) return "";
+    if (node.nodeType === 3) return escapeText(node.textContent || "");
+    if (node.nodeType !== 1) return "";
+
+    const tag = node.nodeName.toUpperCase();
+    if (tag === "BR") return "<br/>";
+    if (["DIV", "P", "SPAN"].includes(tag)) {
+      return Array.from(node.childNodes).map(walk).join("");
+    }
+    if (["B", "STRONG"].includes(tag)) {
+      return `<strong>${Array.from(node.childNodes).map(walk).join("")}</strong>`;
+    }
+    if (["I", "EM"].includes(tag)) {
+      return `<em>${Array.from(node.childNodes).map(walk).join("")}</em>`;
+    }
+    if (tag === "U") {
+      return `<u>${Array.from(node.childNodes).map(walk).join("")}</u>`;
+    }
+    return Array.from(node.childNodes).map(walk).join("");
+  };
+
+  const template = document.createElement("template");
+  template.innerHTML = normalized;
+  return Array.from(template.content.childNodes).map(walk).join("");
+};
+
+const formatRichText = (value = "") => normalizeRichHtml(value);
+
 const A = ({ value, onChange, placeholder, rows = 4, onBlur }) => (
-  <textarea style={{ ...inputBase, resize: "vertical", lineHeight: 1.5 }} rows={rows}
-    value={value} placeholder={placeholder} onChange={(e) => onChange(e.target.value)} onBlur={onBlur} />
+  <TextEditor value={value} onChange={onChange} placeholder={placeholder} rows={rows} onBlur={onBlur} />
 );
 
 /** Groups a label, hint, and form control into one consistent field. */
@@ -1021,8 +1199,8 @@ export default function SyllabusBuilder() {
 
   /* ---------- document builder: create the HTML shared by preview and exports ---------- */
 
-  const esc = (s = "") => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-  const para = (s = "") => esc(s).split(/\n{2,}/).map((p) =>
+  const esc = (s = "") => normalizeRichHtml(s);
+  const para = (s = "") => formatRichText(s).split(/\n{2,}/).map((p) =>
     `<p>${p.replace(/\n/g, "<br/>")}</p>`).join("");
 
   const docBody = useMemo(() => {
