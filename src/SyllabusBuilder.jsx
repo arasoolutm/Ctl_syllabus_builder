@@ -2,7 +2,7 @@ import React, { useState, useMemo, useRef } from "react";
 import {
   BookOpen, User, MessageSquare, Target, Library, Scale, Gavel,
   ShieldCheck, CalendarDays, FileDown, Check, AlertTriangle, Plus, Trash2,
-  Save, Upload, Printer, Lock, Info, ChevronRight, FlaskConical
+  Save, Upload, Printer, Lock, Info, ChevronRight, FlaskConical, ClipboardCheck
 } from "lucide-react";
 
 /* ============================================================
@@ -480,9 +480,9 @@ export default function SyllabusBuilder() {
   /* ---------- sections ---------- */
   const TABS = [
     { n: "Course", i: BookOpen }, { n: "Instructor", i: User }, { n: "Welcome", i: MessageSquare },
-    { n: "Outcomes", i: Target }, { n: "Materials", i: Library }, { n: "Grading", i: Scale },
-    { n: "Policies", i: Gavel }, { n: "University", i: ShieldCheck }, { n: "Schedule", i: CalendarDays },
-    {n: "Labs", i: FlaskConical},{ n: "Export", i: FileDown },
+    { n: "Outcomes", i: Target }, { n: "Materials", i: Library }, {n: "Review/Summary", i: ClipboardCheck},
+    { n: "Grading", i: Scale }, { n: "Policies", i: Gavel }, { n: "University", i: ShieldCheck },
+    { n: "Schedule", i: CalendarDays }, {n: "Labs", i: FlaskConical},{ n: "Export", i: FileDown },
   ];
 
   const Btn = ({ onClick, children, icon: I, primary }) => (
@@ -700,6 +700,40 @@ export default function SyllabusBuilder() {
           </>)}
 
           {tab === 5 && (<>
+            <H>Review</H>
+            <Note>A read-only check of the course info and materials you have entered. Anything required that is still empty shows a Fix link that takes you to the right tab.</Note>
+            <ReviewPanel
+              onJump={setTab}
+              groups={[
+                {
+                  title: "Course information",
+                  rows: [
+                    { label: "Course", value: `${d.code} ${d.title}`.trim(), required: true, tab: 0 },
+                    { label: "Term", value: d.term, required: true, tab: 0 },
+                    { label: "Credit hours", value: d.credits, required: true, tab: 0 },
+                    { label: "Delivery", value: d.modality, required: true, tab: 0 },
+                    { label: "Meeting time", value: d.meeting, required: !d.modality.startsWith("Online"), tab: 0 },
+                    { label: "Room", value: d.location, tab: 0 },
+                    { label: "CRN / Section", value: [d.crn, d.section].filter(Boolean).join(" / "), tab: 0 },
+                    { label: "Instructor", value: d.instructor, required: true, tab: 1 },
+                    { label: "Email", value: d.email, required: true, tab: 1 },
+                    { label: "Office hours", value: d.hours, required: true, tab: 1 },
+                  ],
+              },
+              {
+                title: "Materials",
+                rows: [
+                  { label: "Required texts", value: d.texts, required: true, tab: 4 },
+                  { label: "Cost note", value: d.costNote, tab: 4 },
+                  { label: "Technology and platforms", value: d.tech, tab: 4 },
+                ],
+              },
+            ]}
+          />
+      </>)}
+
+
+          {tab === 6 && (<>
             <H>Assessment and Grading</H>
             <div className="p-3 mb-4 rounded flex items-center gap-2" style={{
               background: Math.abs(weightTotal - 100) < 0.01 ? "#EAF6EF" : "#FEF6E7",
@@ -744,7 +778,7 @@ export default function SyllabusBuilder() {
             <div className="mt-4"><Field label="Grading scale"><A rows={2} value={d.scale} onChange={(v) => set("scale", v)} /></Field></div>
           </>)}
 
-          {tab === 6 && (<>
+          {tab === 7 && (<>
             <H>Course Policies</H>
             <Field label="Attendance"><A rows={3} value={d.attendance} onChange={(v) => set("attendance", v)} placeholder="Say what counts as present, what happens after an absence, and who to tell." /></Field>
             <Field label="What engagement looks like here" hint="optional, but it removes a lot of guesswork"><A rows={3} value={d.participation} onChange={(v) => set("participation", v)} placeholder="Merely showing up and sitting through the class is not participation. Asking questions during Q and A, contributing to project discussions, and showing up to team meetings all count." /></Field>
@@ -764,7 +798,7 @@ export default function SyllabusBuilder() {
               <A rows={3} value={d.profNote} onChange={(v) => set("profNote", v)} placeholder="If you are ever unsure whether what you are submitting crosses that line, reach out before you submit. That conversation is always easier before the fact than after." /></Field></div>
           </>)}
 
-          {tab === 7 && (<>
+          {tab === 8 && (<>
             <H>University Policies</H>
             <Note>CTL maintains this language and checks it each term. Leave it checked and it stays current. If you edit it in Word after export, you own the accuracy of the edit.</Note>
             {Object.entries(LOCKED).map(([k, v]) => (
@@ -779,7 +813,7 @@ export default function SyllabusBuilder() {
             ))}
           </>)}
 
-          {tab === 8 && (<>
+          {tab === 9 && (<>
             <H>Schedule</H>
             <Field label="Schedule format">
               <select style={inputBase} value={d.scheduleType || "weekly"} onChange={(e) => {
@@ -817,7 +851,7 @@ export default function SyllabusBuilder() {
             </div>
           </>)}
 
-                    {tab === 9 && (<>
+            {tab === 10 && (<>
             <H>Laboratory Component</H>
             <label className="flex items-start gap-2 mb-4 text-sm" style={{ color: C.slate, cursor: "pointer" }}>
               <input type="checkbox" checked={d.hasLab} onChange={(e) => set("hasLab", e.target.checked)} style={{ marginTop: 3 }} />
@@ -841,7 +875,7 @@ export default function SyllabusBuilder() {
           </>)}
 
 
-          {tab === 10 && (<>
+          {tab === 11 && (<>
             <H>Review and Export</H>
             <div className="mb-5">
               {checks.map(([label, ok]) => (
@@ -887,4 +921,46 @@ export default function SyllabusBuilder() {
 function H({ children }) {
   return <div style={{ color: C.navy, fontWeight: "bold", fontSize: 17, marginBottom: 12,
     borderBottom: `2px solid ${C.orange}`, paddingBottom: 6, display: "inline-block" }}>{children}</div>;
+}
+
+function ReviewPanel({ groups, onJump }) {
+  const has = (v) => v && String(v).trim();
+  const missing = groups.flatMap((g) => g.rows).filter((r) => r.required && !has(r.value)).length;
+
+  return (
+    <div className="mt-6 rounded" style={{ background: "#fff", border: `1px solid ${C.line}` }}>
+      <div className="flex items-center gap-2 px-4 py-3" style={{
+        borderBottom: `1px solid ${C.line}`,
+        background: missing ? "#FEF6E7" : "#EAF6EF",
+        color: missing ? C.warn : C.good, fontWeight: "bold", fontSize: 14 }}>
+        {missing ? <AlertTriangle size={15} /> : <Check size={15} />}
+        {missing
+          ? `Review: ${missing} required item${missing > 1 ? "s" : ""} still missing`
+          : "Review: course info and materials look complete"}
+      </div>
+      <div className="px-4 py-2">
+        {groups.map((g) => (
+          <div key={g.title} className="mb-3">
+            <div style={{ color: C.navy, fontWeight: "bold", fontSize: 12, letterSpacing: 1,
+              textTransform: "uppercase", margin: "10px 0 4px" }}>{g.title}</div>
+            {g.rows.map((r) => {
+              const filled = has(r.value);
+              return (
+                <div key={r.label} className="flex gap-3 py-1" style={{ fontSize: 13, borderTop: `1px solid ${C.wash}` }}>
+                  <div style={{ width: 130, flexShrink: 0, color: C.slate }}>{r.label}</div>
+                  <div style={{ flex: 1, whiteSpace: "pre-wrap", color: filled ? C.ink : r.required ? C.warn : "#9AA5B5" }}>
+                    {filled ? r.value : r.required ? "Not entered" : "Not entered (optional)"}
+                  </div>
+                  {!filled && r.required && r.tab !== undefined && (
+                    <button onClick={() => onJump(r.tab)}
+                      style={{ color: C.orange, fontSize: 12, fontWeight: "bold", cursor: "pointer" }}>Fix</button>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
 }
