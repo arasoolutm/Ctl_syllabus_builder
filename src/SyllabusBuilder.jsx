@@ -203,6 +203,17 @@ Emergency: 911`,
   },
 };
 
+const Spring_2027 = [
+  ["January 7", "Classes Begin"],
+  ["January 18", "Martin Luther King Holiday"],
+  ["February 22", "Midterm progress report"],
+  ["March 22-28", "Spring Break"],
+  ["March 26", "Spring Holiday"],
+  ["April 23", "Classes End"],
+  ["April 26-30", "Final exams"],
+  ["May 1", "Commencement"]
+];
+
 const COURSE_PREFIX_TO_DEPT = {
   "AGEC": "Agriculture, Geosciences, and Natural Resources",
   "AGED": "Agriculture, Geosciences, and Natural Resources",
@@ -316,25 +327,6 @@ const COURSE_PREFIX_TO_DEPT = {
   "GDES": "Visual and Theatre Arts",
   "DANC": "Visual and Theatre Arts"
 };
-
-const FALL_2026 = [
-  ["August 24", "First day of classes"],
-  ["August 24 to 30", "Late registration"],
-  ["August 30", "Last day to add a course (Part of Term 1)"],
-  ["September 3", "Administrative drop for non-payment"],
-  ["September 6", "Last day to drop without a W grade"],
-  ["September 7", "Labor Day holiday, no classes"],
-  ["October 9", "Mid-term progress reports due"],
-  ["October 12 to 13", "Fall Break, no classes"],
-  ["October 16", "Last day to drop a class without documentation"],
-  ["November 5 to 6", "Approved early registration for Spring 2027"],
-  ["November 9 to 13", "Advising and early registration for Spring 2027"],
-  ["November 25 to 29", "Thanksgiving holiday, no classes"],
-  ["December 4", "Classes end"],
-  ["December 7 to 11", "Final exams"],
-  ["December 12", "Commencement, Elam Center"],
-  ["December 14", "Final grades due by 8:30 p.m."],
-];
 
 /* Registrar's academic calendar, one entry per term. Dates are "YYYY-MM-DD".
    noClass: holidays and breaks. The schedule skips these on the days a class meets. */
@@ -1092,7 +1084,7 @@ export default function SyllabusBuilder() {
 
     if (d.calNote && d.term === "Spring 2027") {
       sec("Spring 2027 Dates You Should Know");
-      h.push(`<table class="grid">${FALL_2026.map((r) =>
+      h.push(`<table class="grid">${Spring_2027.map((r) =>
         `<tr><th class="wk">${esc(r[0])}</th><td>${esc(r[1])}</td></tr>`).join("")}</table>
         <p class="soft">Registrar's calendar, subject to change. Confirm at utm.edu/academics/academic-calendar/</p>`);
     }
