@@ -501,7 +501,7 @@ const createBlank = () => ({
   calNote: true,
   hasLab: false,
   lab: {
-    crn: "", meeting: "", location: "", instructor: "",
+    crn: "", meetDays: [], meeting: "", location: "", instructor: "",
     description: "", gradeNote: "", attendance: "",
     safety: "", supplies: "", makeup: "",
   },
@@ -792,6 +792,15 @@ export default function SyllabusBuilder() {
   }, [pendingDelete]);
 
   const setLab = (k, v) => setD((p) => ({ ...p, lab: { ...p.lab, [k]: v } }));
+  const toggleLabDay = (n) => setD((p) => ({
+    ...p,
+    lab: {
+      ...p.lab,
+      meetDays: (p.lab.meetDays || []).includes(n)
+        ? p.lab.meetDays.filter((x) => x !== n)
+        : [...(p.lab.meetDays || []), n].sort(),
+    },
+  }));
 
   function calculateWeightTotal(items) {
     const total = items.reduce((sum, item) => sum + parseWeight(item.weight), 0);
@@ -882,6 +891,10 @@ export default function SyllabusBuilder() {
   const meetingDisplay = [meetingDays, String(d.meetingTime || "").trim()]
    .filter(Boolean)
    .join(", ") || String(d.meeting || "").trim();
+  const labMeetingDays = (d.lab.meetDays || []).map((day) => DAY_NAMES[day]).join(", ");
+  const labMeetingDisplay = [labMeetingDays, String(d.lab.meeting || "").trim()]
+    .filter(Boolean)
+    .join(", ") || String(d.lab.meeting || "").trim();
 
   /* ---------- readiness: report whether required syllabus content is complete ---------- */
   const hasText = (value) => typeof value === "string" && value.trim().length > 0;
@@ -1015,7 +1028,7 @@ export default function SyllabusBuilder() {
       sec("Laboratory Component");
       const lf = [
         ["Lab section / CRN", L.crn],
-        ["Lab meeting time", L.meeting],
+        ["Lab meeting time", labMeetingDisplay],
         ["Lab location", L.location],
         ["Lab instructor", L.instructor],
       ].filter((r) => r[1] && String(r[1]).trim());
@@ -1078,7 +1091,7 @@ export default function SyllabusBuilder() {
     }
 
     return h.join("");
-  }, [d, weightTotal, realOutcomes, aiText, meetingDisplay, schedRows]);
+  }, [d, weightTotal, realOutcomes, aiText, meetingDisplay, labMeetingDisplay, schedRows]);
 
   const DOC_CSS = `
     body{font-family:Cambria,Georgia,serif;font-size:11pt;line-height:1.5;color:#1a1a1a;margin:0}
@@ -1863,7 +1876,23 @@ export default function SyllabusBuilder() {
                 <div style={{ flex: "1 1 130px" }}><Field label="Lab section / CRN"><T value={d.lab.crn} onChange={(v) => setLab("crn", v)} placeholder="12346" /></Field></div>
                 <div style={{ flex: "2 1 220px" }}><Field label="Lab instructor" hint="if different from you"><T value={d.lab.instructor} onChange={(v) => setLab("instructor", v)} /></Field></div>
               </div>
-              <Field label="Lab meeting time"><T value={d.lab.meeting} onChange={(v) => setLab("meeting", v)} placeholder="Wednesday, 2:00 to 4:50 p.m." /></Field>
+              <Field label="Lab meets on" hint="Select the days this lab meets">
+                <div className="flex flex-wrap gap-1">
+                  {CLASS_DAYS.map(([n, name]) => {
+                    const on = (d.lab.meetDays || []).includes(n);
+                    return (
+                      <button key={n} type="button" aria-pressed={on} aria-label={DAY_NAMES[n]} onClick={() => toggleLabDay(n)}
+                        style={{ fontSize: 13, padding: "5px 12px", borderRadius: 14, cursor: "pointer", fontWeight: on ? "bold" : "normal",
+                          border: `1px solid ${on ? C.orange : C.line}`, background: on ? C.orange : "#fff", color: on ? "#fff" : C.slate }}>
+                        {name}
+                      </button>
+                    );
+                  })}
+                </div>
+              </Field>
+              <Field label="Lab meeting time">
+                <T value={d.lab.meeting} onChange={(v) => setLab("meeting", v)} placeholder="2:00 to 4:50 p.m." />
+              </Field>
               <Field label="Lab location"><T value={d.lab.location} onChange={(v) => setLab("location", v)} placeholder="Science Complex 118" /></Field>
               <Field label="What happens in lab" hint="how it connects to lecture"><A rows={3} value={d.lab.description} onChange={(v) => setLab("description", v)} /></Field>
               <Field label="How the lab counts toward the course grade" hint="separate grade, percent of the total, or must pass both"><A rows={3} value={d.lab.gradeNote} onChange={(v) => setLab("gradeNote", v)} placeholder="Lab is 25 percent of your final grade. Lab reports are graded within one week." /></Field>
