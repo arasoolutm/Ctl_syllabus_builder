@@ -684,6 +684,8 @@ export default function SyllabusBuilder() {
     document.documentElement.setAttribute("data-theme", theme);
   }, [theme]);
   const [showPrinted, setShowPrinted] = useState(false);
+  // true when the preview is showing the real print colors
+  const printColors = theme !== "dark" || showPrinted;
   const [pendingDelete, setPendingDelete] = useState(null);
   const [weekCount, setWeekCount] = useState("15");
   const [weekCountWarning, setWeekCountWarning] = useState(false);
@@ -1904,21 +1906,36 @@ export default function SyllabusBuilder() {
             color: C.slate, fontSize: 12, letterSpacing: 1,
             ...(previewFullscreen ? { background: "#fff", borderBottom: `1px solid ${C.line}`, padding: "12px 20px", marginBottom: 0 } : {}),
           }}>
-            <div className="flex items-center gap-2">
-              <ChevronRight size={13} style={{ color: C.orange }} />THIS IS EXACTLY WHAT EXPORTS
+                        <div className="flex items-center gap-2">
+              <ChevronRight size={13} style={{ color: C.orange }} />
+              {printColors ? "THIS IS EXACTLY WHAT EXPORTS" : "DARK PREVIEW · EXPORTS PRINT IN LIGHT"}
             </div>
-            <button
-              type="button"
-              onClick={() => setPreviewFullscreen((fullscreen) => !fullscreen)}
-              aria-label={previewFullscreen ? "Exit fullscreen preview" : "Open fullscreen preview"}
-              aria-pressed={previewFullscreen}
-              title={previewFullscreen ? "Exit fullscreen (Esc)" : "Open fullscreen preview"}
-              className="flex items-center gap-2 px-3 py-2 rounded text-sm font-semibold"
-              style={{ background: "#fff", color: C.navy, border: `1px solid ${C.line}`, cursor: "pointer", letterSpacing: 0 }}
-            >
-              {previewFullscreen ? <Minimize2 size={15} /> : <Maximize2 size={15} />}
-              {previewFullscreen ? "Exit fullscreen" : "Fullscreen"}
-            </button>
+            <div className="flex items-center gap-2">
+              {theme === "dark" && (
+                <button
+                  type="button"
+                  onClick={() => setShowPrinted((on) => !on)}
+                  aria-pressed={showPrinted}
+                  title="Show the preview in the light colors it prints in"
+                  className="px-3 py-2 rounded text-sm font-semibold"
+                  style={{ background: showPrinted ? UI.tint : UI.paper, color: UI.navy, border: `1px solid ${UI.line}`, cursor: "pointer", letterSpacing: 0 }}
+                >
+                  Show as printed
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => setPreviewFullscreen((fullscreen) => !fullscreen)}
+                aria-label={previewFullscreen ? "Exit fullscreen preview" : "Open fullscreen preview"}
+                aria-pressed={previewFullscreen}
+                title={previewFullscreen ? "Exit fullscreen (Esc)" : "Open fullscreen preview"}
+                className="flex items-center gap-2 px-3 py-2 rounded text-sm font-semibold"
+                style={{ background: "#fff", color: C.navy, border: `1px solid ${C.line}`, cursor: "pointer", letterSpacing: 0 }}
+              >
+                {previewFullscreen ? <Minimize2 size={15} /> : <Maximize2 size={15} />}
+                {previewFullscreen ? "Exit fullscreen" : "Fullscreen"}
+              </button>
+            </div>
           </div>
           <div style={previewFullscreen
             ? { flex: 1, minHeight: 0, overflow: "auto", padding: "24px clamp(16px, 5vw, 72px)" }
