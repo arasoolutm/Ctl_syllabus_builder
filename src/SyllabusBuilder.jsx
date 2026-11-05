@@ -1113,6 +1113,22 @@ export default function SyllabusBuilder() {
     .doc-preview{
        ${DOC_CSS}
     }
+    /* dark theme override on the preview only, not the exported document */
+    [data-theme="dark"] .doc-preview.themed{background:var(--paper);color:var(--ink)}
+    [data-theme="dark"] .doc-preview.themed h2,
+    [data-theme="dark"] .doc-preview.themed h3,
+    [data-theme="dark"] .doc-preview.themed .tt{color:var(--navy)}
+    [data-theme="dark"] .doc-preview.themed table.hdr{border-bottom-color:var(--navy)}
+    [data-theme="dark"] .doc-preview.themed .soft,
+    [data-theme="dark"] .doc-preview.themed .st{color:var(--muted)}
+    [data-theme="dark"] .doc-preview.themed .grid th,
+    [data-theme="dark"] .doc-preview.themed .grid td{border-color:var(--line)}
+    [data-theme="dark"] .doc-preview.themed .grid th{background:var(--tint); color:var(--navy)}
+    [data-theme="dark"] .doc-preview.themed .grid tr.tot td{background:var(--tint)}
+    [data-theme="dark"] .doc-preview.themed .primer{background:var(--tin)}
+    [data-theme="dark"] .doc-preview.themed .primer-h{color:var(--navy)}
+    [data-theme="dark"] .doc-preview.themed .pnote{background:var(--warnBg)}
+    [data-theme="dark"] .doc-preview.themed .off{color:var(--warn)}
   `;
 
   const fullHtml = () =>
