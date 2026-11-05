@@ -687,6 +687,7 @@ export default function SyllabusBuilder() {
   const [weekCount, setWeekCount] = useState("15");
   const [weekCountWarning, setWeekCountWarning] = useState(false);
   const [previewFullscreen, setPreviewFullscreen] = useState(false);
+  const [showTextKeybinds, setShowTextKeybinds] = useState(false);
   const frameRef = useRef(null);
   const previewRef = useRef(null);
   const formRef = useRef(null);
@@ -1189,6 +1190,23 @@ export default function SyllabusBuilder() {
             <div className="flex justify-end gap-2">
               <Btn onClick={() => setPendingDelete(null)}>Cancel</Btn>
               <Btn onClick={confirmDrop} primary>Delete</Btn>
+            </div>
+          </div>
+        </div>
+      )}
+      {showTextKeybinds && (
+        <div role="presentation" onMouseDown={() => setShowTextKeybinds(false)} style={{ position: "fixed", inset: 0, zIndex: 20,
+          display: "flex", alignItems: "center", justifyContent: "center", padding: 20, background: "rgba(11,34,64,.38)" }}>
+          <div role="dialog" aria-modal="true" aria-labelledby="text-keybinds-title" onMouseDown={(event) => event.stopPropagation()}
+            style={{ width: "min(100%, 340px)", background: "#fff", borderRadius: 4, padding: 20, boxShadow: "0 12px 36px rgba(11,34,64,.24)" }}>
+            <div id="text-keybinds-title" style={{ color: C.navy, fontSize: 18, fontWeight: "bold", marginBottom: 14 }}>Text keybinds</div>
+            <div style={{ display: "grid", gridTemplateColumns: "auto 1fr", gap: "10px 16px", alignItems: "center", color: C.slate, fontSize: 14 }}>
+              <kbd>Ctrl+B</kbd><span>Bold</span>
+              <kbd>Ctrl+U</kbd><span>Underline</span>
+              <kbd>Ctrl+I</kbd><span>Italicize</span>
+            </div>
+            <div className="flex justify-end" style={{ marginTop: 20 }}>
+              <Btn onClick={() => setShowTextKeybinds(false)}>Close</Btn>
             </div>
           </div>
         </div>
@@ -1883,18 +1901,28 @@ export default function SyllabusBuilder() {
             <div className="flex items-center gap-2">
               <ChevronRight size={13} style={{ color: C.orange }} />THIS IS EXACTLY WHAT EXPORTS
             </div>
-            <button
-              type="button"
-              onClick={() => setPreviewFullscreen((fullscreen) => !fullscreen)}
-              aria-label={previewFullscreen ? "Exit fullscreen preview" : "Open fullscreen preview"}
-              aria-pressed={previewFullscreen}
-              title={previewFullscreen ? "Exit fullscreen (Esc)" : "Open fullscreen preview"}
-              className="flex items-center gap-2 px-3 py-2 rounded text-sm font-semibold"
-              style={{ background: "#fff", color: C.navy, border: `1px solid ${C.line}`, cursor: "pointer", letterSpacing: 0 }}
-            >
-              {previewFullscreen ? <Minimize2 size={15} /> : <Maximize2 size={15} />}
-              {previewFullscreen ? "Exit fullscreen" : "Fullscreen"}
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setShowTextKeybinds(true)}
+                className="px-3 py-2 rounded text-sm font-semibold"
+                style={{ background: "#fff", color: C.navy, border: `1px solid ${C.line}`, cursor: "pointer", letterSpacing: 0 }}
+              >
+                Text keybinds
+              </button>
+              <button
+                type="button"
+                onClick={() => setPreviewFullscreen((fullscreen) => !fullscreen)}
+                aria-label={previewFullscreen ? "Exit fullscreen preview" : "Open fullscreen preview"}
+                aria-pressed={previewFullscreen}
+                title={previewFullscreen ? "Exit fullscreen (Esc)" : "Open fullscreen preview"}
+                className="flex items-center gap-2 px-3 py-2 rounded text-sm font-semibold"
+                style={{ background: "#fff", color: C.navy, border: `1px solid ${C.line}`, cursor: "pointer", letterSpacing: 0 }}
+              >
+                {previewFullscreen ? <Minimize2 size={15} /> : <Maximize2 size={15} />}
+                {previewFullscreen ? "Exit fullscreen" : "Fullscreen"}
+              </button>
+            </div>
           </div>
           <div style={previewFullscreen
             ? { flex: 1, minHeight: 0, overflow: "auto", padding: "24px clamp(16px, 5vw, 72px)" }
