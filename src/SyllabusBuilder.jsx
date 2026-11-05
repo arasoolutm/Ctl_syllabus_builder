@@ -9,7 +9,6 @@ import {
    UTM SYLLABUS BUILDER  ·  Center for Teaching and Learning
    Fill in the left. Watch the right. Export to Word or PDF.
    No accounts, no server, no stored data.
-   commit branch check
    ============================================================ */
 
 
@@ -215,6 +214,120 @@ const Spring_2027 = [
   ["May 1", "Commencement"]
 ];
 
+const COURSE_PREFIX_TO_DEPT = {
+  "AGEC": "Agriculture, Geosciences, and Natural Resources",
+  "AGED": "Agriculture, Geosciences, and Natural Resources",
+  "AGET": "Agriculture, Geosciences, and Natural Resources",
+  "AGRI": "Agriculture, Geosciences, and Natural Resources",
+  "GEOL": "Agriculture, Geosciences, and Natural Resources",
+  "GEOS": "Agriculture, Geosciences, and Natural Resources",
+  "GEOG": "Agriculture, Geosciences, and Natural Resources",
+  "METR": "Agriculture, Geosciences, and Natural Resources",
+  "SOIL": "Agriculture, Geosciences, and Natural Resources",
+  "NRM": "Agriculture, Geosciences, and Natural Resources",
+  "WBIO": "Agriculture, Geosciences, and Natural Resources",
+  "ANSC": "Agriculture, Geosciences, and Natural Resources",
+  "PLSC": "Agriculture, Geosciences, and Natural Resources",
+  "VET": "Agriculture, Geosciences, and Natural Resources",
+
+  "CFS": "Family and Consumer Sciences",
+  "CRMG": "Family and Consumer Sciences",
+  "FASH": "Family and Consumer Sciences",
+  "FCS": "Family and Consumer Sciences",
+  "FSCI": "Family and Consumer Sciences",
+  "FSVC": "Family and Consumer Sciences",
+  "FSMG": "Family and Consumer Sciences",
+  "HPMG": "Family and Consumer Sciences",
+  "NUTR": "Family and Consumer Sciences",
+  "GERO": "Family and Consumer Sciences",
+
+  "ACCT": "Accounting, Finance, Economics, and Political Science",
+  "POSC": "Accounting, Finance, Economics, and Political Science",
+  "ECON": "Accounting, Finance, Economics, and Political Science",
+  "FIN": "Accounting, Finance, Economics, and Political Science",
+  "GLST": "Accounting, Finance, Economics, and Political Science",
+
+  "MGT": "Management, Marketing, and Information Systems",
+  "MKTG": "Management, Marketing, and Information Systems",
+  "INFS": "Management, Marketing, and Information Systems",
+  "BADM": "Management, Marketing, and Information Systems",
+  "BCOM": "Management, Marketing, and Information Systems",
+  "SPMG": "Management, Marketing, and Information Systems",
+
+  "CJ": "Behavioral Sciences",
+  "SOC": "Behavioral Sciences",
+  "SWRK": "Behavioral Sciences",
+
+  "TCED": "Educational Studies",
+  "SPED": "Educational Studies",
+  "READ": "Educational Studies",
+  "SEDU": "Educational Studies",
+  "ECED": "Educational Studies",
+  "BUED": "Educational Studies",
+  "ELED": "Educational Studies",
+  "EDST": "Educational Studies",
+  "FCSE": "Educational Studies",
+
+  "EXSC": "Health and Human Performance",
+  "HLTH": "Health and Human Performance",
+  "HPED": "Health and Human Performance",
+  "ATRN": "Health and Human Performance",
+  "PACT": "Health and Human Performance",
+  "HHP": "Health and Human Performance",
+  "HPER": "Health and Human Performance",
+
+  "NURS": "Nursing",
+
+  "PSYC": "Psychology",
+  "NEUR": "Psychology",
+
+  "BIOL": "Biological Sciences",
+  "BOT": "Biological Sciences",
+  "MBIO": "Biological Sciences",
+  "ZOOL": "Biological Sciences",
+
+  "CHEM": "Chemistry and Physics",
+  "PHYS": "Chemistry and Physics",
+  "ASTR": "Chemistry and Physics",
+  "BCHE": "Chemistry and Physics",
+
+  "CSCI": "Computer Science",
+  "CYBR": "Computer Science",
+
+  "AMAE": "Engineering",
+  "ENGR": "Engineering",
+  "CIEG": "Engineering",
+  "CMGT": "Engineering",
+
+  "MATH": "Mathematics and Statistics",
+  "STAT": "Mathematics and Statistics",
+
+  "MMSC": "Communications",
+
+  "ENGL": "English and Modern Foreign Languages",
+  "FREN": "English and Modern Foreign Languages",
+  "GERM": "English and Modern Foreign Languages",
+  "JAPN": "English and Modern Foreign Languages",
+  "PORT": "English and Modern Foreign Languages",
+  "SPAN": "English and Modern Foreign Languages",
+
+  "HIST": "History and Philosophy",
+  "PHIL": "History and Philosophy",
+  "RLST": "History and Philosophy",
+
+  "MUS": "Music",
+  "MUAP": "Music",
+  "MUED": "Music",
+  "MUEN": "Music",
+
+  "THEA": "Visual and Theatre Arts",
+  "ART": "Visual and Theatre Arts",
+  "ARTH": "Visual and Theatre Arts",
+  "FA": "Visual and Theatre Arts",
+  "GDES": "Visual and Theatre Arts",
+  "DANC": "Visual and Theatre Arts"
+};
+
 /* Registrar's academic calendar, one entry per term. Dates are "YYYY-MM-DD".
    noClass: holidays and breaks. The schedule skips these on the days a class meets. */
 
@@ -358,11 +471,11 @@ const MEETING_PATTERNS = [
 // Builds a fresh blank draft. Returning a new object each time keeps the
 // initial state and every reset independent of each other.
 const createBlank = () => ({
-  code: "", title: "", crn: "", section: "", term: "Fall 2026", modality: "In person",
+  code: "", title: "", crn: "", section: "", term: "Spring 2027", modality: "In person",
   credits: "3", meetingPattern: "", meeting: "", meetingTime: "",
-  location: "", exlocation: "", dept: "", prereq: "",
+  location: "", exlocation: "", dept: "Select a department...", prereq: "",
   instructor: "", email: "", phone: "", office: "", hours: "", address: "",
-  subjectLine: "", responseTime: "48 hours on business days",
+  subjectLine: "",
   description: "", welcome: "", customDescriptions: [],
   showPrimer: true, outcomes: [""],
   texts: "", costNote: "", tech: "",
@@ -380,7 +493,7 @@ const createBlank = () => ({
   calNote: true,
   hasLab: false,
   lab: {
-    crn: "", meeting: "", location: "", instructor: "",
+    crn: "", meetDays: [], meeting: "", location: "", instructor: "",
     description: "", gradeNote: "", attendance: "",
     safety: "", supplies: "", makeup: "",
   },
@@ -434,9 +547,9 @@ const inputBase = {
 };
 
 /** Renders a controlled single-line text input using the builder's shared styling. */
-const T = ({ value, onChange, placeholder, mono, type = "text", onBlur }) => (
+const T = ({ value, onChange, placeholder, mono, type = "text", onBlur, maxLength }) => (
   <input type={type} style={{ ...inputBase, fontFamily: mono ? "ui-monospace, monospace" : inputBase.fontFamily }}
-    value={value} placeholder={placeholder} onChange={(e) => onChange(e.target.value)} onBlur={onBlur} />
+    value={value} placeholder={placeholder} maxLength={maxLength} onChange={(e) => onChange(e.target.value)} onBlur={onBlur} />
 );
 
 /** Renders a controlled multi-line text input using the builder's shared styling. */
@@ -508,6 +621,10 @@ export default function SyllabusBuilder() {
         formattedCode = `${match[1]} ${match[2]}`; // Constructs clean "POSC 322" layout
       }
 
+      // 2. Extract Prefix for Department autofill lookup
+      const prefix = match ? match[1] : "";
+      const inferredDept = COURSE_PREFIX_TO_DEPT[prefix] || "";
+
       setD((prev) => {
         const isDefaultCredits = prev.credits === "3";
 
@@ -522,8 +639,8 @@ export default function SyllabusBuilder() {
           title: (!prev.title.trim() || isSwitchingCourse) ? (course.courseTitle || "") : prev.title,
           description: (!prev.description.trim() || isSwitchingCourse) ? (course.description || "") : prev.description,
           prereq: (!prev.prereq.trim() || isSwitchingCourse) ? (course.prerequisites || "") : prev.prereq,
-          credits: (!prev.credits.trim() || isDefaultCredits || isSwitchingCourse) ? (course.creditHours || "3") : prev.credits
-          // Department is safely omitted here so the manual dropdown menu remains completely in control
+          credits: (!prev.credits.trim() || isDefaultCredits || isSwitchingCourse) ? (course.creditHours || "3") : prev.credits,
+          dept: (inferredDept && (!prev.dept.trim() || prev.dept === "Select a department..." || isSwitchingCourse)) ? inferredDept : prev.dept
         };
       });
 
@@ -558,6 +675,9 @@ export default function SyllabusBuilder() {
   useEffect(() => {
     document.documentElement.setAttribute("data-theme", theme);
   }, [theme]);
+  const [showPrinted, setShowPrinted] = useState(false);
+  // true when the preview is showing the real print colors
+  const printColors = theme !== "dark" || showPrinted;
   const [pendingDelete, setPendingDelete] = useState(null);
   const [weekCount, setWeekCount] = useState("15");
   const [weekCountWarning, setWeekCountWarning] = useState(false);
@@ -565,6 +685,7 @@ export default function SyllabusBuilder() {
   const frameRef = useRef(null);
   const previewRef = useRef(null);
   const formRef = useRef(null);
+  const lastGradingItemRef = useRef(null);
 
   useEffect(() => {
     if (!previewFullscreen) return;
@@ -623,6 +744,12 @@ export default function SyllabusBuilder() {
   };
   // Add or remove one item from a repeated syllabus section.
   const push = (k, obj) => setD((p) => ({ ...p, [k]: [...p[k], obj] }));
+  const addGradingItem = () => {
+    push("items", { name: "", weight: "", points: "", due: "", desc: "", slos: [] });
+    window.requestAnimationFrame(() => {
+      lastGradingItemRef.current?.querySelector("input")?.focus();
+    });
+  };
   const entryHasContent = (entry) => typeof entry === "string"
     ? entry.trim().length > 0
     : Object.values(entry).some((value) => Array.isArray(value) ? value.length > 0 : String(value ?? "").trim().length > 0);
@@ -664,6 +791,15 @@ export default function SyllabusBuilder() {
   }, [pendingDelete]);
 
   const setLab = (k, v) => setD((p) => ({ ...p, lab: { ...p.lab, [k]: v } }));
+  const toggleLabDay = (n) => setD((p) => ({
+    ...p,
+    lab: {
+      ...p.lab,
+      meetDays: (p.lab.meetDays || []).includes(n)
+        ? p.lab.meetDays.filter((x) => x !== n)
+        : [...(p.lab.meetDays || []), n].sort(),
+    },
+  }));
 
   function calculateWeightTotal(items) {
     const total = items.reduce((sum, item) => sum + parseWeight(item.weight), 0);
@@ -754,6 +890,10 @@ export default function SyllabusBuilder() {
   const meetingDisplay = [meetingDays, String(d.meetingTime || "").trim()]
    .filter(Boolean)
    .join(", ") || String(d.meeting || "").trim();
+  const labMeetingDays = (d.lab.meetDays || []).map((day) => DAY_NAMES[day]).join(", ");
+  const labMeetingDisplay = [labMeetingDays, String(d.lab.meeting || "").trim()]
+    .filter(Boolean)
+    .join(", ") || String(d.lab.meeting || "").trim();
 
   /* ---------- readiness: report whether required syllabus content is complete ---------- */
   const hasText = (value) => typeof value === "string" && value.trim().length > 0;
@@ -803,7 +943,7 @@ export default function SyllabusBuilder() {
       <td class="hdr-l"><img src="${LOGO}" alt="The University of Tennessee at Martin" width="230"/></td>
       <td class="hdr-r"><div class="ct">${esc(d.code || "COURSE 000")}</div>
       <h1 class="tt">${esc(d.title || "Course Title")}</h1>
-      <div class="st">${esc(d.term)}${d.modality ? " &nbsp;|&nbsp; " + esc(d.modality) : ""}${d.dept ? " &nbsp;|&nbsp; " + esc(d.dept) : ""}</div></td></tr></table>`);
+      <div class="st">${esc(d.term)}${d.modality ? " &nbsp;|&nbsp; " + esc(d.modality) : ""}${d.dept && d.dept !== "Select a department..." ? " &nbsp;|&nbsp; " + esc(d.dept) : ""}</div></td></tr></table>`);
 
     // Course facts
     const facts = [
@@ -812,6 +952,7 @@ export default function SyllabusBuilder() {
       ["Section", d.section],
       ["Term", d.term],
       ["Delivery", d.modality],
+      ["Semester Length", d.semester],
       ["Credit hours", d.credits],
       ["Meeting time", meetingDisplay],
       ["Location", d.location],
@@ -874,7 +1015,7 @@ export default function SyllabusBuilder() {
     if (live.length) {
       const hasDueDates = live.some((x) => x.due?.trim());
       sec("Assessment and Grading");
-      h.push(`<table class="grid"><tr><th>Assignment</th><th class="w">Weight</th>${hasDueDates ? '<th class="assignment-due">Due date</th>' : ""}<th>What it is</th></tr>${
+      h.push(`<table class="grid"><tr><th>Assignment or category</th><th class="w">Weight</th>${hasDueDates ? '<th class="assignment-due">Due date</th>' : ""}<th>What it is</th></tr>${
         live.map((x) => `<tr><td><strong>${esc(x.name)}</strong>${
           x.slos.length ? `<div class="tag">Outcome${x.slos.length > 1 ? "s" : ""} ${x.slos.map((i) => i + 1).join(", ")}</div>` : ""
         }</td><td class="w">${fmtWeight(parseWeight(x.weight))}%</td>${hasDueDates ? `<td class="assignment-due">${esc(x.due || "")}</td>` : ""}<td>${esc(x.desc)}</td></tr>`).join("")
@@ -887,7 +1028,7 @@ export default function SyllabusBuilder() {
       sec("Laboratory Component");
       const lf = [
         ["Lab section / CRN", L.crn],
-        ["Lab meeting time", L.meeting],
+        ["Lab meeting time", labMeetingDisplay],
         ["Lab location", L.location],
         ["Lab instructor", L.instructor],
       ].filter((r) => r[1] && String(r[1]).trim());
@@ -909,10 +1050,9 @@ export default function SyllabusBuilder() {
     if (d.attendance) pol.push(["Attendance and Participation", d.attendance]);
     if (d.participation) pol.push(["What Engagement Looks Like Here", d.participation]);
     if (lateText) pol.push(["Late Work and Make-Up Policy", lateText]);
-    if (d.subjectLine || d.responseTime || d.address)
+    if (d.subjectLine || d.address)
       pol.push(["Reaching Me", [
         d.subjectLine && `Use this subject line on every email: ${d.subjectLine}`,
-        d.responseTime && `I respond to email within ${d.responseTime}.`,
         d.address && `You can address me as ${d.address}.`,
       ].filter(Boolean).join("\n")]);
     if (aiText.trim()) pol.push(["Artificial Intelligence Policy", aiText]);
@@ -950,7 +1090,7 @@ export default function SyllabusBuilder() {
     }
 
     return h.join("");
-  }, [d, weightTotal, realOutcomes, aiText, meetingDisplay, schedRows]);
+  }, [d, weightTotal, realOutcomes, aiText, meetingDisplay, labMeetingDisplay, schedRows]);
 
   const DOC_CSS = `
     body{font-family:Cambria,Georgia,serif;font-size:11pt;line-height:1.5;color:#1a1a1a;margin:0}
@@ -981,6 +1121,29 @@ export default function SyllabusBuilder() {
     .primer-h{font-weight:bold;color:${C.navy};margin-bottom:6px}
     .pnote{border:1px solid ${C.orange};background:#FFF8F0;padding:10px 14px;margin:10px 0;font-size:10.5pt}
     .off{color:${C.warn};font-weight:bold;font-size:10pt;margin-bottom:3px}
+  `;
+  const PREVIEW_CSS = `
+    .doc-preview{font-family:Cambria,Georgia,serif;font-size:11pt;line-height:1.5;color:#1a1a1a;background:#fff}
+    .doc-preview{
+       ${DOC_CSS}
+    }
+    /* dark theme override on the preview only, not the exported document */
+    [data-theme="dark"] .doc-preview.themed{background:var(--paper);color:var(--ink)}
+    [data-theme="dark"] .doc-preview.themed h2,
+    [data-theme="dark"] .doc-preview.themed h3,
+    [data-theme="dark"] .doc-preview.themed .tt{color:var(--navy)}
+    [data-theme="dark"] .doc-preview.themed table.hdr{border-bottom-color:var(--navy)}
+    [data-theme="dark"] .doc-preview.themed .soft,
+    [data-theme="dark"] .doc-preview.themed .st{color:var(--muted)}
+    [data-theme="dark"] .doc-preview.themed .grid th,
+    [data-theme="dark"] .doc-preview.themed .grid td{border-color:var(--line)}
+    [data-theme="dark"] .doc-preview.themed .grid th{background:var(--tint); color:var(--navy)}
+    [data-theme="dark"] .doc-preview.themed .grid tr.tot td{background:var(--tint)}
+    [data-theme="dark"] .doc-preview.themed .primer{background:var(--tint)}
+    [data-theme="dark"] .doc-preview.themed .primer-h{color:var(--navy)}
+    [data-theme="dark"] .doc-preview.themed .pnote{background:var(--warnBg)}
+    [data-theme="dark"] .doc-preview.themed .off{color:var(--warn)}
+    [data-theme="dark"] .doc-preview.themed .hdr-l img{filter:invert(1) hue-rotate(180deg);mix-blend-mode:lighten}
   `;
 
   const fullHtml = () =>
@@ -1059,7 +1222,7 @@ export default function SyllabusBuilder() {
             style={{ width: "min(100%, 420px)", background: "#fff", borderRadius: 4, padding: 24, boxShadow: "0 12px 36px rgba(11,34,64,.24)" }}>
             <div id="delete-dialog-title" style={{ color: C.navy, fontSize: 18, fontWeight: "bold", marginBottom: 8 }}>Delete this entry?</div>
             <div style={{ color: C.slate, fontSize: 14, lineHeight: 1.5, marginBottom: 20 }}>
-              This {({ outcomes: "learning outcome", items: "assignment", weeks: "schedule entry" }[pendingDelete.k] || "entry")} contains information. Are you sure you want to delete it?
+              This {({ outcomes: "learning outcome", items: "assignment or category", weeks: "schedule entry" }[pendingDelete.k] || "entry")} contains information. Are you sure you want to delete it?
             </div>
             <div className="flex justify-end gap-2">
               <Btn onClick={() => setPendingDelete(null)}>Cancel</Btn>
@@ -1146,7 +1309,7 @@ export default function SyllabusBuilder() {
               </div>
             </div>
             <div className="flex gap-3 flex-wrap">
-              <div style={{ flex: "1 1 130px" }}><Field label="CRN" hint="the 5-digit registration number"><T value={d.crn} onChange={(v) => set("crn", v)} placeholder="12345" /></Field></div>
+              <div style={{ flex: "1 1 130px" }}><Field label="CRN" hint="the 5-digit registration number"><T value={d.crn} onChange={(v) => set("crn", v)} placeholder="12345" maxLength={5} /></Field></div>
               <div style={{ flex: "1 1 130px" }}><Field label="Section"><T value={d.section} onChange={(v) => set("section", v)} placeholder="001" /></Field></div>
             </div>
             <div className="flex gap-3 flex-wrap">
@@ -1157,6 +1320,11 @@ export default function SyllabusBuilder() {
               </Field></div>
               <div style={{ flex: "1 1 130px" }}><Field label="Credit hours"><T value={d.credits} onChange={(v) => set("credits", v)} /></Field></div>
             </div>
+            <Field label="Semester Length" hint="students read this before they register">
+              <select style={inputBase} value={d.semester} onChange={(e) => set("semester", e.target.value)}>
+                {["Full Semester", "Half of a Semester", "Third of a Semester"].map((m) => <option key={m}>{m}</option>)}
+              </select>
+            </Field>
             <Field label="Delivery" hint="students read this before they register">
               <select style={inputBase} value={d.modality} onChange={(e) => set("modality", e.target.value)}>
                 {["In person", "Hybrid", "Online synchronous", "Online asynchronous", "Dual Enrollment", "Internship"].map((m) => <option key={m}>{m}</option>)}
@@ -1192,87 +1360,123 @@ export default function SyllabusBuilder() {
             </Field>
             <Field label="Room"><T value={d.location} onChange={(v) => set("location", v)} placeholder="Humanities 407" /></Field>
             <Field label="Other Meeting Room" hint="Only fill this if some classes take place in other room during the week"><T value={d.exlocation} onChange={(v) => set("exlocation", v)} placeholder="Humanities 409 on Fridays" /></Field>
-<Field label="Department">
-  <select
-    style={inputBase}
-    value={d.dept}
-    onChange={(e) => set("dept", e.target.value)}
-  >
-    <option value="">Select a department...</option>
+            <Field label="Department">
+              <select
+                style={inputBase}
+                value={
+                  [
+                    "Select a department...",
+                    "Agriculture, Geosciences, and Natural Resources", "Family and Consumer Sciences",
+                    "Accounting, Finance, Economics, and Political Science", "Management, Marketing, and Information Systems",
+                    "Behavioral Sciences", "Educational Studies", "Health and Human Performance", "Nursing", "Psychology",
+                    "Biological Sciences", "Chemistry and Physics", "Computer Science", "Engineering", "Mathematics and Statistics",
+                    "Communications", "English and Modern Foreign Languages", "History and Philosophy", "Music", "Visual and Theatre Arts"
+                  ].includes(d.dept)
+                    ? d.dept
+                    : "Custom Department"
+                }
+                onChange={(e) => {
+                  const val = e.target.value;
+                  set("dept", val === "Custom Department" ? "" : val);
+                }}
+              >
+                <option value="Select a department...">Select a department...</option>
 
-    <optgroup label="College of Agriculture and Applied Sciences">
-      <option value="Agriculture, Geosciences, and Natural Resources">
-        Agriculture, Geosciences, and Natural Resources
-      </option>
-      <option value="Family and Consumer Sciences">
-        Family and Consumer Sciences
-      </option>
-    </optgroup>
+                <optgroup label="College of Agriculture and Applied Sciences">
+                  <option value="Agriculture, Geosciences, and Natural Resources">
+                    Agriculture, Geosciences, and Natural Resources
+                  </option>
+                  <option value="Family and Consumer Sciences">
+                    Family and Consumer Sciences
+                  </option>
+                </optgroup>
 
-    <optgroup label="College of Business and Global Affairs">
-      <option value="Accounting, Finance, Economics, and Political Science">
-        Accounting, Finance, Economics, and Political Science
-      </option>
-      <option value="Management, Marketing, and Information Systems">
-        Management, Marketing, and Information Systems
-      </option>
-    </optgroup>
+                <optgroup label="College of Business and Global Affairs">
+                  <option value="Accounting, Finance, Economics, and Political Science">
+                    Accounting, Finance, Economics, and Political Science
+                  </option>
+                  <option value="Management, Marketing, and Information Systems">
+                    Management, Marketing, and Information Systems
+                  </option>
+                </optgroup>
 
-    <optgroup label="College of Education, Health, and Behavioral Sciences">
-      <option value="Behavioral Sciences">
-        Behavioral Sciences
-      </option>
-      <option value="Educational Studies">
-        Educational Studies
-      </option>
-      <option value="Health and Human Performance">
-        Health and Human Performance
-      </option>
-      <option value="Nursing">
-        Nursing
-      </option>
-      <option value="Psychology">
-        Psychology
-      </option>
-    </optgroup>
+                <optgroup label="College of Education, Health, and Behavioral Sciences">
+                  <option value="Behavioral Sciences">
+                    Behavioral Sciences
+                  </option>
+                  <option value="Educational Studies">
+                    Educational Studies
+                  </option>
+                  <option value="Health and Human Performance">
+                    Health and Human Performance
+                  </option>
+                  <option value="Nursing">
+                    Nursing
+                  </option>
+                  <option value="Psychology">
+                    Psychology
+                  </option>
+                </optgroup>
 
-    <optgroup label="College of Engineering and Natural Sciences">
-      <option value="Biological Sciences">
-        Biological Sciences
-      </option>
-      <option value="Chemistry and Physics">
-        Chemistry and Physics
-      </option>
-      <option value="Computer Science">
-        Computer Science
-      </option>
-      <option value="Engineering">
-        Engineering
-      </option>
-      <option value="Mathematics and Statistics">
-        Mathematics and Statistics
-      </option>
-    </optgroup>
+                <optgroup label="College of Engineering and Natural Sciences">
+                  <option value="Biological Sciences">
+                    Biological Sciences
+                  </option>
+                  <option value="Chemistry and Physics">
+                    Chemistry and Physics
+                  </option>
+                  <option value="Computer Science">
+                    Computer Science
+                  </option>
+                  <option value="Engineering">
+                    Engineering
+                  </option>
+                  <option value="Mathematics and Statistics">
+                    Mathematics and Statistics
+                  </option>
+                </optgroup>
 
-    <optgroup label="College of Humanities and Fine Arts">
-      <option value="Communications">
-        Communications
-      </option>
-      <option value="English and Modern Foreign Languages">
-        English and Modern Foreign Languages
-      </option>
-      <option value="History and Philosophy">
-        History and Philosophy
-      </option>
-      <option value="Music">
-        Music
-      </option>
-      <option value="Visual and Theatre Arts">
-        Visual and Theatre Arts
-      </option>
-    </optgroup>
-  </select>
-</Field>
+                <optgroup label="College of Humanities and Fine Arts">
+                  <option value="Communications">
+                    Communications
+                  </option>
+                  <option value="English and Modern Foreign Languages">
+                    English and Modern Foreign Languages
+                  </option>
+                  <option value="History and Philosophy">
+                    History and Philosophy
+                  </option>
+                  <option value="Music">
+                    Music
+                  </option>
+                  <option value="Visual and Theatre Arts">
+                    Visual and Theatre Arts
+                  </option>
+                </optgroup>
+
+                <option value="Custom Department">Custom Department</option>
+              </select>
+            </Field>
+
+            {/* Custom Input dynamically renders when d.dept has been edited away from standard predefined options */}
+            {![
+              "Select a department...",
+              "Agriculture, Geosciences, and Natural Resources", "Family and Consumer Sciences",
+              "Accounting, Finance, Economics, and Political Science", "Management, Marketing, and Information Systems",
+              "Behavioral Sciences", "Educational Studies", "Health and Human Performance", "Nursing", "Psychology",
+              "Biological Sciences", "Chemistry and Physics", "Computer Science", "Engineering", "Mathematics and Statistics",
+              "Communications", "English and Modern Foreign Languages", "History and Philosophy", "Music", "Visual and Theatre Arts"
+            ].includes(d.dept) && (
+              <div className="mt-[-8px] mb-4">
+                <Field label="Custom Department Name">
+                  <T 
+                    value={d.dept} 
+                    onChange={(v) => set("dept", v)} 
+                    placeholder="Enter custom department name" 
+                  />
+                </Field>
+              </div>
+            )}
             <Field label="Prerequisites"><T value={d.prereq} onChange={(v) => set("prereq", v)} placeholder="None" /></Field>
           </>)}
 
@@ -1280,7 +1484,7 @@ export default function SyllabusBuilder() {
             <H>Instructor</H>
             <Note>Office hours are the single most under-used thing on a syllabus. Students who work shifts or commute from Dresden or Union City often cannot make a fixed midday block. Naming an alternative, even just "email me and we will find a time," changes who walks through the door.</Note>
             <Field label="Your name"><T value={d.instructor} onChange={(v) => set("instructor", v)} placeholder="Dr. Jane Doe" /></Field>
-            <Field label="Email"><T value={d.email} onChange={(v) => set("email", v)} onBlur={() => {const username = d.email.trim().split("@")[0]; set("email", username ? `${username}@utm.edu` : "");}} placeholder="jdoe (autofills @utm.edu)" /></Field>
+            <Field label="Email"><T value={d.email} onChange={(v) => set("email", v)} onBlur={() => {const email = d.email.trim(); if (!email || email.includes("@")) return; set("email", `${email}@utm.edu`);}} placeholder="jdoe (autofills @utm.edu)" /></Field>
             <Field label="Phone"><T type="tel" value={d.phone} onChange={(v) => set("phone", v)} placeholder="731-555-0123" /></Field>
             <Field label="Office"><T value={d.office} onChange={(v) => set("office", v)} placeholder="Humanities 212" /></Field>
             <Field label="Office hours"><A rows={2} value={d.hours} onChange={(v) => set("hours", v)} placeholder="Monday and Wednesday, 10 a.m. to noon, and by appointment. Email me and we will find a time that works." /></Field>
@@ -1386,6 +1590,7 @@ export default function SyllabusBuilder() {
 
           {tab === 5 && (<>
             <H>Assessment and Grading</H>
+            <Note>Use one row for an individual assignment, such as a final paper, or a grading category, such as quizzes. For a category, enter its combined course weight.</Note>
             <div className="p-3 mb-4 rounded flex items-center gap-2" style={{
               background: Math.abs(weightTotal - 100) < 0.01 ? UI.goodBg : UI.warnBg,
               color: Math.abs(weightTotal - 100) < 0.01 ? UI.good : UI.warn, fontSize: 14, fontWeight: "bold" }}>
@@ -1393,15 +1598,15 @@ export default function SyllabusBuilder() {
               Weights total {fmtWeight(weightTotal)}%{Math.abs(weightTotal - 100) < 0.01 ? "" : `, which is ${weightTotal > 100 ? "over" : "under"} by ${fmtWeight(Math.abs(100 - weightTotal))}`}
             </div>
             {d.items.map((x, i) => (
-              <div key={i} className="p-3 mb-3 rounded" style={{ background: UI.paper, border: `1px solid ${UI.line}` }}>
+              <div key={i} ref={i === d.items.length - 1 ? lastGradingItemRef : null} className="p-3 mb-3 rounded" style={{ background: UI.paper, border: `1px solid ${UI.line}` }}>
                 <div className="flex gap-2 mb-2">
-                  <div style={{ flex: 3 }}><T value={x.name} onChange={(v) => setDeep("items", i, "name", v)} placeholder="Final paper" /></div>
+                  <div style={{ flex: 3 }}><T value={x.name} onChange={(v) => setDeep("items", i, "name", v)} placeholder="Assignment or category" /></div>
                   <div style={{ flex: 1 }}><T mono value={x.weight} onChange={(v) => setDeep("items", i, "weight", v)} placeholder="%" /></div>
                   <div style={{ flex: 1 }}><T mono value={x.points} onChange={(v) => setDeep("items", i, "points", v)} placeholder="pts" /></div>
                   <div style={{ flex: 1 }}><T value={x.due} onChange={(v) => setDeep("items", i, "due", v)} placeholder="Due date" /></div>
-                  <button onClick={() => drop("items", i)} style={{ color: UI.muted, cursor: "pointer" }}><Trash2 size={15} /></button>
+                  <button onClick={() => drop("items", i)} aria-label={`Remove assignment or category ${i + 1}`} style={{ color: UI.muted, cursor: "pointer" }}><Trash2 size={15} /></button>
                 </div>
-                <A rows={2} value={x.desc} onChange={(v) => setDeep("items", i, "desc", v)} placeholder="What it is and how long." />
+                <A rows={2} value={x.desc} onChange={(v) => setDeep("items", i, "desc", v)} placeholder="Describe the assignment or category." />
                 {realOutcomes.length > 0 && (
                   <div className="mt-2">
                     <div style={{ fontSize: 11, color: C.slate, marginBottom: 4 }}>WHICH OUTCOMES DOES THIS PRODUCE EVIDENCE FOR?</div>
@@ -1421,11 +1626,11 @@ export default function SyllabusBuilder() {
                 )}
               </div>
             ))}
-            <Btn onClick={() => push("items", { name: "", weight: "", points: "", due: "", desc: "", slos: [] })} icon={Plus}>Add assignment</Btn>
+            <Btn onClick={addGradingItem} icon={Plus}>Add Assignment or Category</Btn>
             {unmapped.length > 0 && (
               <div className="mt-4 p-3 rounded flex gap-2" style={{ background: "#FEF6E7", color: C.warn, fontSize: 13 }}>
                 <AlertTriangle size={15} style={{ flexShrink: 0, marginTop: 2 }} />
-                <div>Outcome{unmapped.length > 1 ? "s" : ""} {unmapped.map((i) => i + 1).join(", ")} {unmapped.length > 1 ? "have" : "has"} nothing in the grade breakdown producing evidence for {unmapped.length > 1 ? "them" : "it"}. Either attach an assignment or rewrite the outcome.</div>
+                <div>Outcome{unmapped.length > 1 ? "s" : ""} {unmapped.map((i) => i + 1).join(", ")} {unmapped.length > 1 ? "have" : "has"} nothing in the grade breakdown producing evidence for {unmapped.length > 1 ? "them" : "it"}. Either attach an assignment or category or rewrite the outcome.</div>
               </div>
             )}
             <div className="mt-4"><Field label="Grading scale"><A rows={2} value={d.scale} onChange={(v) => set("scale", v)} /></Field></div>
@@ -1485,7 +1690,7 @@ export default function SyllabusBuilder() {
               <A rows={3} value={d.late} onChange={(v) => set("late", v)} placeholder="Describe your late work deadlines, penalties, extensions, and make-up arrangements." />
             </Field>
             {d.lateAdditional.map((policy, i) => (
-              <Field key={i} label={`Additional policy`} hint="choose a sample, then edit as needed">
+              <Field key={i} label="Additional late work policy" hint="choose a sample, then edit as needed">
                 <select value={policy.sample} onChange={(e) => {
                   const sample = LATE_POLICIES.find((option) => option.label === e.target.value);
                   setDeep("lateAdditional", i, "sample", e.target.value);
@@ -1500,7 +1705,7 @@ export default function SyllabusBuilder() {
                 </div>
               </Field>
             ))}
-            <Btn onClick={() => push("lateAdditional", { sample: "", text: "" })} icon={Plus}>Add another policy</Btn>
+            <Btn onClick={() => push("lateAdditional", { sample: "", text: "" })} icon={Plus}>Add additional late work policy/paragraph</Btn>
 
             <div className="mt-6 mb-2" style={{ color: UI.navy, fontWeight: "bold", fontSize: 14 }}>Artificial Intelligence Policy</div>
             <Note>UTM's AI policy, effective July 1, 2025, requires every syllabus to state your expectations for student AI use. This is not optional, so pick a tier below. The three tiers match the policy: unrestricted, mixed, and total prohibition.</Note>
@@ -1587,7 +1792,9 @@ export default function SyllabusBuilder() {
                     <T type="date" value={d.semesterStart} onChange={(v) => set("semesterStart", v)} />
                   </div>
                   <Btn onClick={autofillScheduleDates} icon={CalendarDays}>Autofill dates</Btn>
-                  <Btn onClick={buildSemesterSchedule} icon={CalendarDays}>Build 15 weeks with dates</Btn>
+                  {d.scheduleType !== "modular" && (
+                    <Btn onClick={buildSemesterSchedule} icon={CalendarDays}>Build 15 weeks with dates</Btn>
+                  )}
                 </div>
               </>
             )}
@@ -1626,13 +1833,13 @@ export default function SyllabusBuilder() {
                 const dates = buildWeekDates(d.semesterStart, i + 1);
                 push("weeks", { label: `${d.scheduleType === "modular" ? "Module" : "Week"} ${i + 1}`, dates: dates[i] || "", topics: "", due: "" });
               }} icon={Plus}>Add {d.scheduleType === "modular" ? "module" : "week"}</Btn>
-              {d.scheduleType !== "modular" && (<div style={{ flex: "0 0 250px" }}>
+              <div style={{ flex: "0 0 250px" }}>
                 <div className="flex gap-2">
                   <input //text box
                     type="text" 
                     inputMode="numeric"
                     pattern="[0-9]*"
-                    aria-label="Number of weeks"
+                    aria-label={`Number of ${d.scheduleType === "modular" ? "modules" : "weeks"}`}
                     aria-invalid={weekCountWarning}
                     placeholder="1-15"
                     style={{ ...inputBase, width: 110 }}
@@ -1654,13 +1861,21 @@ export default function SyllabusBuilder() {
                       return;
                     }
                     setWeekCountWarning(false); 
-                    setD((p) => ({ ...p, weeks: Array.from({ length: count }, (_, i) => p.weeks[i] || { label: `Week ${i + 1}`, dates: "", topics: "", due: "" }) }));
-                  }}>Build weeks</Btn>
+                    setD((p) => ({
+                      ...p,
+                      weeks: Array.from({ length: count }, (_, i) => p.weeks[i] || {
+                        label: `${p.scheduleType === "modular" ? "Module" : "Week"} ${i + 1}`,
+                        dates: "",
+                        topics: "",
+                        due: "",
+                      }),
+                    }));
+                  }}>{d.scheduleType === "modular" ? "Build modules" : "Build weeks"}</Btn>
                 </div>
                 <div role="alert" className="mt-1 text-xs" style={{ color: C.warn, minHeight: 32 }}>
                   {weekCountWarning ? "Enter a whole number between 1-15." : ""/* displays a warning if the week count is invalid */}
                 </div>
-              </div>)}
+              </div>
             </div>)}
           </>)}
 
@@ -1673,10 +1888,26 @@ export default function SyllabusBuilder() {
             {d.hasLab && (<>
               <Note>Students often ask three things about a lab: does it count toward my course grade, what happens if I miss one, and what do I need to bring. Answering those here saves you the emails.</Note>
               <div className="flex gap-3 flex-wrap">
-                <div style={{ flex: "1 1 130px" }}><Field label="Lab section / CRN"><T value={d.lab.crn} onChange={(v) => setLab("crn", v)} placeholder="12346" /></Field></div>
+                <div style={{ flex: "1 1 130px" }}><Field label="Lab section / CRN"><T value={d.lab.crn} onChange={(v) => setLab("crn", v)} placeholder="12346" maxLength={5} /></Field></div>
                 <div style={{ flex: "2 1 220px" }}><Field label="Lab instructor" hint="if different from you"><T value={d.lab.instructor} onChange={(v) => setLab("instructor", v)} /></Field></div>
               </div>
-              <Field label="Lab meeting time"><T value={d.lab.meeting} onChange={(v) => setLab("meeting", v)} placeholder="Wednesday, 2:00 to 4:50 p.m." /></Field>
+              <Field label="Lab meets on" hint="Select the days this lab meets">
+                <div className="flex flex-wrap gap-1">
+                  {CLASS_DAYS.map(([n, name]) => {
+                    const on = (d.lab.meetDays || []).includes(n);
+                    return (
+                      <button key={n} type="button" aria-pressed={on} aria-label={DAY_NAMES[n]} onClick={() => toggleLabDay(n)}
+                        style={{ fontSize: 13, padding: "5px 12px", borderRadius: 14, cursor: "pointer", fontWeight: on ? "bold" : "normal",
+                          border: `1px solid ${on ? C.orange : C.line}`, background: on ? C.orange : "#fff", color: on ? "#fff" : C.slate }}>
+                        {name}
+                      </button>
+                    );
+                  })}
+                </div>
+              </Field>
+              <Field label="Lab meeting time">
+                <T value={d.lab.meeting} onChange={(v) => setLab("meeting", v)} placeholder="2:00 to 4:50 p.m." />
+              </Field>
               <Field label="Lab location"><T value={d.lab.location} onChange={(v) => setLab("location", v)} placeholder="Science Complex 118" /></Field>
               <Field label="What happens in lab" hint="how it connects to lecture"><A rows={3} value={d.lab.description} onChange={(v) => setLab("description", v)} /></Field>
               <Field label="How the lab counts toward the course grade" hint="separate grade, percent of the total, or must pass both"><A rows={3} value={d.lab.gradeNote} onChange={(v) => setLab("gradeNote", v)} placeholder="Lab is 25 percent of your final grade. Lab reports are graded within one week." /></Field>
@@ -1713,39 +1944,54 @@ export default function SyllabusBuilder() {
 
         {/* preview */}
         <div className={previewFullscreen ? "" : "p-5"} style={previewFullscreen
-          ? { position: "fixed", inset: 0, zIndex: 1000, display: "flex", flexDirection: "column", background: C.wash }
+          ? { position: "fixed", inset: 0, zIndex: 1000, display: "flex", flexDirection: "column", background: UI.wash }
           : { flex: "1 1 460px", minWidth: 360 }}>
           <div className="flex items-center justify-between gap-3 mb-2" style={{
-            color: C.slate, fontSize: 12, letterSpacing: 1,
-            ...(previewFullscreen ? { background: "#fff", borderBottom: `1px solid ${C.line}`, padding: "12px 20px", marginBottom: 0 } : {}),
+            color: UI.slate, fontSize: 12, letterSpacing: 1,
+            ...(previewFullscreen ? { background: UI.paper, borderBottom: `1px solid ${UI.line}`, padding: "12px 20px", marginBottom: 0 } : {}),
           }}>
-            <div className="flex items-center gap-2">
-              <ChevronRight size={13} style={{ color: C.orange }} />THIS IS EXACTLY WHAT EXPORTS
+                        <div className="flex items-center gap-2">
+              <ChevronRight size={13} style={{ color: C.orange }} />
+              {printColors ? "THIS IS EXACTLY WHAT EXPORTS" : "DARK PREVIEW · EXPORTS PRINT IN LIGHT"}
             </div>
-            <button
-              type="button"
-              onClick={() => setPreviewFullscreen((fullscreen) => !fullscreen)}
-              aria-label={previewFullscreen ? "Exit fullscreen preview" : "Open fullscreen preview"}
-              aria-pressed={previewFullscreen}
-              title={previewFullscreen ? "Exit fullscreen (Esc)" : "Open fullscreen preview"}
-              className="flex items-center gap-2 px-3 py-2 rounded text-sm font-semibold"
-              style={{ background: "#fff", color: C.navy, border: `1px solid ${C.line}`, cursor: "pointer", letterSpacing: 0 }}
-            >
-              {previewFullscreen ? <Minimize2 size={15} /> : <Maximize2 size={15} />}
-              {previewFullscreen ? "Exit fullscreen" : "Fullscreen"}
-            </button>
+            <div className="flex items-center gap-2">
+              {theme === "dark" && (
+                <button
+                  type="button"
+                  onClick={() => setShowPrinted((on) => !on)}
+                  aria-pressed={showPrinted}
+                  title="Show the preview in the light colors it prints in"
+                  className="px-3 py-2 rounded text-sm font-semibold"
+                  style={{ background: showPrinted ? UI.tint : UI.paper, color: UI.navy, border: `1px solid ${UI.line}`, cursor: "pointer", letterSpacing: 0 }}
+                >
+                  Show as printed
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => setPreviewFullscreen((fullscreen) => !fullscreen)}
+                aria-label={previewFullscreen ? "Exit fullscreen preview" : "Open fullscreen preview"}
+                aria-pressed={previewFullscreen}
+                title={previewFullscreen ? "Exit fullscreen (Esc)" : "Open fullscreen preview"}
+                className="flex items-center gap-2 px-3 py-2 rounded text-sm font-semibold"
+                style={{ background: UI.paper, color: UI.navy, border: `1px solid ${UI.line}`, cursor: "pointer", letterSpacing: 0 }}
+              >
+                {previewFullscreen ? <Minimize2 size={15} /> : <Maximize2 size={15} />}
+                {previewFullscreen ? "Exit fullscreen" : "Fullscreen"}
+              </button>
+            </div>
           </div>
           <div style={previewFullscreen
             ? { flex: 1, minHeight: 0, overflow: "auto", padding: "24px clamp(16px, 5vw, 72px)" }
             : {}}>
-            <div ref={previewRef} style={{
-              background: "#fff", border: `1px solid ${C.line}`, borderRadius: 3, boxSizing: "border-box",
+                        <div ref={previewRef} className={showPrinted ? "doc-preview" : "doc-preview themed"} style={{
+              border: `1px solid ${UI.line}`, borderRadius: 3, boxSizing: "border-box",
               width: "8.5in", maxWidth: "100%", padding: "0.8in",
               maxHeight: previewFullscreen ? "none" : "calc(100vh - 130px)", overflow: previewFullscreen ? "visible" : "auto",
               boxShadow: "0 1px 4px rgba(11,34,64,.08)",
               ...(previewFullscreen ? { maxWidth: 1100, minHeight: "100%", margin: "0 auto" } : {}),
             }}>
-              <style>{DOC_CSS}</style>
+              <style>{PREVIEW_CSS}</style>
               <div dangerouslySetInnerHTML={{ __html: docBody || `<p class="soft">Start on the left. The document builds itself here.</p>` }} />
             </div>
           </div>
