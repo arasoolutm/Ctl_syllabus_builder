@@ -960,6 +960,7 @@ export default function SyllabusBuilder() {
       ["Section", d.section],
       ["Term", d.term],
       ["Delivery", d.modality],
+      ["Semester Length", d.semester],
       ["Credit hours", d.credits],
       ["Meeting time", meetingDisplay],
       ["Location", d.location],
@@ -1328,6 +1329,11 @@ export default function SyllabusBuilder() {
               </Field></div>
               <div style={{ flex: "1 1 130px" }}><Field label="Credit hours"><T value={d.credits} onChange={(v) => set("credits", v)} /></Field></div>
             </div>
+            <Field label="Semester Length" hint="students read this before they register">
+              <select style={inputBase} value={d.semester} onChange={(e) => set("semester", e.target.value)}>
+                {["Full Semester", "Half of a Semester", "Third of a Semester"].map((m) => <option key={m}>{m}</option>)}
+              </select>
+            </Field>
             <Field label="Delivery" hint="students read this before they register">
               <select style={inputBase} value={d.modality} onChange={(e) => set("modality", e.target.value)}>
                 {["In person", "Hybrid", "Online synchronous", "Online asynchronous", "Dual Enrollment", "Internship"].map((m) => <option key={m}>{m}</option>)}
