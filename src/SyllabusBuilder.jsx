@@ -1161,8 +1161,10 @@ export default function SyllabusBuilder() {
     { n: "Course", i: BookOpen }, { n: "Instructor", i: User }, { n: "Welcome", i: MessageSquare },
     { n: "Outcomes", i: Target }, { n: "Materials", i: Library }, { n: "Grading", i: Scale },
     { n: "Policies", i: Gavel }, { n: "University", i: ShieldCheck }, { n: "Schedule", i: CalendarDays },
-    {n: "Labs", i: FlaskConical},{ n: "Export", i: FileDown },
+    {n: "Labs", i: FlaskConical}, { n: "Accessibility" }, { n: "Export", i: FileDown },
   ];
+  // Look tabs up by name so adding a tab doesn't break hardcoded index numbers.
+  const tabIndex = (name) => TABS.findIndex((t) => t.n === name);
 
   /** Renders a consistently styled action button with an optional icon. */
   const Btn = ({ onClick, children, icon: I, primary }) => (
@@ -1223,7 +1225,7 @@ export default function SyllabusBuilder() {
                 className="flex items-center gap-2 w-full px-3 py-2 text-sm text-left"
                 style={{ background: on ? UI.tint : "transparent", color: on ? UI.navy : UI.slate,
                   borderLeft: `3px solid ${on ? C.orange : "transparent"}`, fontWeight: on ? "bold" : "normal", cursor: "pointer" }}>
-                <I size={15} />{t.n}
+                {I ? <I size={15} /> : <span aria-hidden="true" style={{ width: 15, flexShrink: 0 }} />}{t.n}
               </button>
             );
           })}
@@ -1849,7 +1851,17 @@ export default function SyllabusBuilder() {
           </>)}
 
 
-          {tab === 10 && (<>
+          {tab === tabIndex("Accessibility") && (<>
+            <H>Accessibility Check</H>
+            <p style={{ fontSize: 13.5, color: UI.slate, lineHeight: 1.55, marginBottom: 14 }}>
+              These checks look for common problems that make a syllabus hard to use with a screen reader
+              or hard to read, similar to what YuJa Panorama flags in Canvas. Everything runs here in your
+              browser; nothing is sent anywhere. Fixing these is recommended but does not block export.
+            </p>
+            <Note>Checks are coming in the next step.</Note>
+          </>)}
+
+          {tab === tabIndex("Export") && (<>
             <H>Review and Export</H>
             <div className="mb-5">
               {checks.map(([label, ok]) => (
