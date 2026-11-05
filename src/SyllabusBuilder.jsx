@@ -1900,11 +1900,11 @@ export default function SyllabusBuilder() {
 
         {/* preview */}
         <div className={previewFullscreen ? "" : "p-5"} style={previewFullscreen
-          ? { position: "fixed", inset: 0, zIndex: 1000, display: "flex", flexDirection: "column", background: C.wash }
+          ? { position: "fixed", inset: 0, zIndex: 1000, display: "flex", flexDirection: "column", background: UI.wash }
           : { flex: "1 1 460px", minWidth: 360 }}>
           <div className="flex items-center justify-between gap-3 mb-2" style={{
-            color: C.slate, fontSize: 12, letterSpacing: 1,
-            ...(previewFullscreen ? { background: "#fff", borderBottom: `1px solid ${C.line}`, padding: "12px 20px", marginBottom: 0 } : {}),
+            color: UI.slate, fontSize: 12, letterSpacing: 1,
+            ...(previewFullscreen ? { background: UI.paper, borderBottom: `1px solid ${UI.line}`, padding: "12px 20px", marginBottom: 0 } : {}),
           }}>
                         <div className="flex items-center gap-2">
               <ChevronRight size={13} style={{ color: C.orange }} />
@@ -1930,7 +1930,7 @@ export default function SyllabusBuilder() {
                 aria-pressed={previewFullscreen}
                 title={previewFullscreen ? "Exit fullscreen (Esc)" : "Open fullscreen preview"}
                 className="flex items-center gap-2 px-3 py-2 rounded text-sm font-semibold"
-                style={{ background: "#fff", color: C.navy, border: `1px solid ${C.line}`, cursor: "pointer", letterSpacing: 0 }}
+                style={{ background: UI.paper, color: UI.navy, border: `1px solid ${UI.line}`, cursor: "pointer", letterSpacing: 0 }}
               >
                 {previewFullscreen ? <Minimize2 size={15} /> : <Maximize2 size={15} />}
                 {previewFullscreen ? "Exit fullscreen" : "Fullscreen"}
