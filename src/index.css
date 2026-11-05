@@ -1,3 +1,96 @@
 @import "tailwindcss";
 
 html, body, #root { margin: 0; padding: 0; }
+
+:root {
+    --wash: #F4F6F9;
+}
+[data-theme="dark"] {
+    --wash: #0F1724;
+}
+
+:root {
+    --paper: #FFFFFF; 
+}
+[data-theme="dark"] {
+    --paper: #1a2333;
+}
+
+:root {
+    --tint: #f0f5fa;
+}
+[data-theme="dark"] {
+    --tint: #243049;
+}
+
+:root {
+    --line: #d8dee7;
+}
+[data-theme="dark"] {
+    --line: #334155;
+}
+
+:root {
+    --ink: #1a1a1a;
+}
+[data-theme="dark"] {
+    --ink: #e5e7eb;
+}
+
+:root {
+    --slate: #4a5568;
+}
+[data-theme="dark"] {
+    --slate: #cbd5e1;
+}
+
+:root {
+    --muted: #8894a8;
+}
+[data-theme="dark"] {
+    --muted: #94a3b8;
+}
+
+:root {
+    --navy: #0B2240;
+}
+[data-theme="dark"] {
+    --navy: #93c5fd;
+}
+
+:root {
+    --orange: #ff8300;
+}
+[data-theme="dark"] {
+    --orange: #ff8300;
+}
+
+:root {
+    --good: #1e7a46;
+}
+[data-theme="dark"] {
+    --good: #4ADE80;
+}
+
+:root {
+    --goodBg: #EAF6EF;
+}
+[data-theme="dark"] {
+    --goodBg: #12301f;
+}
+
+:root {
+    --warn: #b45309;
+}
+[data-theme="dark"] {
+    --warn: #fbbf24;
+}
+
+:root {
+    --warnBg: #FEF6E7;
+}
+[data-theme="dark"] {
+    --warnBg: #3a2a10;
+}
+
+
