@@ -683,6 +683,7 @@ export default function SyllabusBuilder() {
   useEffect(() => {
     document.documentElement.setAttribute("data-theme", theme);
   }, [theme]);
+  const [showPrinted, setShowPrinted] = useState(false);
   const [pendingDelete, setPendingDelete] = useState(null);
   const [weekCount, setWeekCount] = useState("15");
   const [weekCountWarning, setWeekCountWarning] = useState(false);
@@ -1106,6 +1107,12 @@ export default function SyllabusBuilder() {
     .primer-h{font-weight:bold;color:${C.navy};margin-bottom:6px}
     .pnote{border:1px solid ${C.orange};background:#FFF8F0;padding:10px 14px;margin:10px 0;font-size:10.5pt}
     .off{color:${C.warn};font-weight:bold;font-size:10pt;margin-bottom:3px}
+  `;
+  const PREVIEW_CSS = `
+    .doc-preview{font-family:Cambria,Georgia,serif;font-size:11pt;line-height:1.5;color:#1a1a1a;background:#fff}
+    .doc-preview{
+       ${DOC_CSS}
+    }
   `;
 
   const fullHtml = () =>
@@ -1899,14 +1906,14 @@ export default function SyllabusBuilder() {
           <div style={previewFullscreen
             ? { flex: 1, minHeight: 0, overflow: "auto", padding: "24px clamp(16px, 5vw, 72px)" }
             : {}}>
-            <div ref={previewRef} style={{
-              background: "#fff", border: `1px solid ${C.line}`, borderRadius: 3, boxSizing: "border-box",
+                        <div ref={previewRef} className={showPrinted ? "doc-preview" : "doc-preview themed"} style={{
+              border: `1px solid ${UI.line}`, borderRadius: 3, boxSizing: "border-box",
               width: "8.5in", maxWidth: "100%", padding: "0.8in",
               maxHeight: previewFullscreen ? "none" : "calc(100vh - 130px)", overflow: previewFullscreen ? "visible" : "auto",
               boxShadow: "0 1px 4px rgba(11,34,64,.08)",
               ...(previewFullscreen ? { maxWidth: 1100, minHeight: "100%", margin: "0 auto" } : {}),
             }}>
-              <style>{DOC_CSS}</style>
+              <style>{PREVIEW_CSS}</style>
               <div dangerouslySetInnerHTML={{ __html: docBody || `<p class="soft">Start on the left. The document builds itself here.</p>` }} />
             </div>
           </div>
