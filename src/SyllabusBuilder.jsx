@@ -2341,9 +2341,9 @@ export default function SyllabusBuilder() {
             <H>Review and Export</H>
             <div className="mb-5">
               {checks.map(([label, ok]) => (
-                <div key={label} className="flex items-start gap-2 py-1" style={{ fontSize: 13.5, color: ok ? C.ink : C.warn }}>
-                  {ok ? <Check size={15} style={{ color: C.good, flexShrink: 0, marginTop: 2 }} />
-                      : <AlertTriangle size={15} style={{ color: C.warn, flexShrink: 0, marginTop: 2 }} />}
+                <div key={label} className="flex items-start gap-2 py-1" style={{ fontSize: 13.5, color: ok ? UI.ink : UI.warn }}>
+                  {ok ? <Check size={15} style={{ color: UI.good, flexShrink: 0, marginTop: 2 }} />
+                      : <AlertTriangle size={15} style={{ color: UI.warn, flexShrink: 0, marginTop: 2 }} />}
                   <span>{label}</span>
                 </div>
               ))}
