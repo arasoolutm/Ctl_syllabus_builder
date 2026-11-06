@@ -2,9 +2,10 @@ import React, { useState, useMemo, useRef, useEffect } from "react";
 import {
   BookOpen, User, MessageSquare, Target, Library, Scale, Gavel,
   ShieldCheck, CalendarDays, FileDown, Check, AlertTriangle, Plus, Trash2,
-  Save, Upload, Printer, Lock, Info, ChevronRight, Maximize2, Minimize2, FlaskConical,
+  Save, Upload, Printer, Lock, Info, ChevronRight, Maximize2, Minimize2, FlaskConical, ChevronDown, X, Loader2,
   ClipboardCheck
 } from "lucide-react";
+import { SUBJECTS } from "./subjectCodes.js";
 
 /* ============================================================
    UTM SYLLABUS BUILDER  ·  Center for Teaching and Learning
@@ -34,6 +35,7 @@ const C = {
   wash: "#F4F6F9",
   good: "#1E7A46",
   warn: "#B45309",
+  bad: "#C0392B",
 };
 
 const UI = {
@@ -270,120 +272,6 @@ const buildSummerScheduleRows = (key) => {
   return rows;
 };
 
-const COURSE_PREFIX_TO_DEPT = {
-  "AGEC": "Agriculture, Geosciences, and Natural Resources",
-  "AGED": "Agriculture, Geosciences, and Natural Resources",
-  "AGET": "Agriculture, Geosciences, and Natural Resources",
-  "AGRI": "Agriculture, Geosciences, and Natural Resources",
-  "GEOL": "Agriculture, Geosciences, and Natural Resources",
-  "GEOS": "Agriculture, Geosciences, and Natural Resources",
-  "GEOG": "Agriculture, Geosciences, and Natural Resources",
-  "METR": "Agriculture, Geosciences, and Natural Resources",
-  "SOIL": "Agriculture, Geosciences, and Natural Resources",
-  "NRM": "Agriculture, Geosciences, and Natural Resources",
-  "WBIO": "Agriculture, Geosciences, and Natural Resources",
-  "ANSC": "Agriculture, Geosciences, and Natural Resources",
-  "PLSC": "Agriculture, Geosciences, and Natural Resources",
-  "VET": "Agriculture, Geosciences, and Natural Resources",
-
-  "CFS": "Family and Consumer Sciences",
-  "CRMG": "Family and Consumer Sciences",
-  "FASH": "Family and Consumer Sciences",
-  "FCS": "Family and Consumer Sciences",
-  "FSCI": "Family and Consumer Sciences",
-  "FSVC": "Family and Consumer Sciences",
-  "FSMG": "Family and Consumer Sciences",
-  "HPMG": "Family and Consumer Sciences",
-  "NUTR": "Family and Consumer Sciences",
-  "GERO": "Family and Consumer Sciences",
-
-  "ACCT": "Accounting, Finance, Economics, and Political Science",
-  "POSC": "Accounting, Finance, Economics, and Political Science",
-  "ECON": "Accounting, Finance, Economics, and Political Science",
-  "FIN": "Accounting, Finance, Economics, and Political Science",
-  "GLST": "Accounting, Finance, Economics, and Political Science",
-
-  "MGT": "Management, Marketing, and Information Systems",
-  "MKTG": "Management, Marketing, and Information Systems",
-  "INFS": "Management, Marketing, and Information Systems",
-  "BADM": "Management, Marketing, and Information Systems",
-  "BCOM": "Management, Marketing, and Information Systems",
-  "SPMG": "Management, Marketing, and Information Systems",
-
-  "CJ": "Behavioral Sciences",
-  "SOC": "Behavioral Sciences",
-  "SWRK": "Behavioral Sciences",
-
-  "TCED": "Educational Studies",
-  "SPED": "Educational Studies",
-  "READ": "Educational Studies",
-  "SEDU": "Educational Studies",
-  "ECED": "Educational Studies",
-  "BUED": "Educational Studies",
-  "ELED": "Educational Studies",
-  "EDST": "Educational Studies",
-  "FCSE": "Educational Studies",
-
-  "EXSC": "Health and Human Performance",
-  "HLTH": "Health and Human Performance",
-  "HPED": "Health and Human Performance",
-  "ATRN": "Health and Human Performance",
-  "PACT": "Health and Human Performance",
-  "HHP": "Health and Human Performance",
-  "HPER": "Health and Human Performance",
-
-  "NURS": "Nursing",
-
-  "PSYC": "Psychology",
-  "NEUR": "Psychology",
-
-  "BIOL": "Biological Sciences",
-  "BOT": "Biological Sciences",
-  "MBIO": "Biological Sciences",
-  "ZOOL": "Biological Sciences",
-
-  "CHEM": "Chemistry and Physics",
-  "PHYS": "Chemistry and Physics",
-  "ASTR": "Chemistry and Physics",
-  "BCHE": "Chemistry and Physics",
-
-  "CSCI": "Computer Science",
-  "CYBR": "Computer Science",
-
-  "AMAE": "Engineering",
-  "ENGR": "Engineering",
-  "CIEG": "Engineering",
-  "CMGT": "Engineering",
-
-  "MATH": "Mathematics and Statistics",
-  "STAT": "Mathematics and Statistics",
-
-  "MMSC": "Communications",
-
-  "ENGL": "English and Modern Foreign Languages",
-  "FREN": "English and Modern Foreign Languages",
-  "GERM": "English and Modern Foreign Languages",
-  "JAPN": "English and Modern Foreign Languages",
-  "PORT": "English and Modern Foreign Languages",
-  "SPAN": "English and Modern Foreign Languages",
-
-  "HIST": "History and Philosophy",
-  "PHIL": "History and Philosophy",
-  "RLST": "History and Philosophy",
-
-  "MUS": "Music",
-  "MUAP": "Music",
-  "MUED": "Music",
-  "MUEN": "Music",
-
-  "THEA": "Visual and Theatre Arts",
-  "ART": "Visual and Theatre Arts",
-  "ARTH": "Visual and Theatre Arts",
-  "FA": "Visual and Theatre Arts",
-  "GDES": "Visual and Theatre Arts",
-  "DANC": "Visual and Theatre Arts"
-};
-
 /* Registrar's academic calendar, one entry per term. Dates are "YYYY-MM-DD".
    noClass: holidays and breaks. The schedule skips these on the days a class meets. */
 
@@ -524,12 +412,88 @@ const MEETING_PATTERNS = [
   { value: "custom", label: "Custom" },
 ];
 
+// Guesses the term people are planning for: once a term is a month in, it's the next one.
+// Only used until Banner says which term is open, or if Banner can't be reached.
+function defaultTerm(today = new Date()) {
+  const y = today.getFullYear();
+  const terms = [y - 1, y, y + 1].flatMap((yr) => [
+    { label: `Spring ${yr}`, start: new Date(yr, 0, 7) },
+    { label: `Summer ${yr}`, start: new Date(yr, 5, 1) },
+    { label: `Fall ${yr}`, start: new Date(yr, 7, 22) },
+  ]);
+  let last = 0;
+  terms.forEach((t, i) => {
+    const monthIn = new Date(t.start.getFullYear(), t.start.getMonth() + 1, t.start.getDate());
+    if (monthIn <= today) last = i;
+  });
+  return terms[last + 1].label;
+}
+
+// Departments and their subjects, checked against utm.edu.
+// Also the fallback when Banner's department info is wrong.
+const DEPARTMENT_DATA = [
+  { college: "College of Agriculture and Applied Sciences", departments: [
+    { name: "Agriculture, Geosciences, and Natural Resources", subjects: ["AGEC", "AGED", "AGET", "AGRI", "ANSC", "GEOL", "GEOS", "METR", "NRM", "PARK", "PLSC", "SOIL", "VET", "WBIO"] },
+    { name: "Family and Consumer Sciences", subjects: ["FCS", "CFS", "FCSE", "FASH", "GERO", "HPMG", "FSMG", "NUTR"] },
+    { name: "Military Science and Leadership", subjects: ["MSL"] },
+  ] },
+  { college: "College of Business and Global Affairs", departments: [
+    { name: "School of Business", subjects: ["ACCT", "ECON", "FIN", "MGT", "MKTG", "BCOM", "INFS", "SPMG", "BLAW"] },
+  ] },
+  { college: "College of Education, Health, and Behavioral Sciences", departments: [
+    { name: "Behavioral Sciences", subjects: ["CJ", "SWRK", "SOC"] },
+    { name: "Educational Studies", subjects: ["EDST", "ELED", "ECED", "SEDU", "SPED", "COUN", "TCED", "EDFN", "READ"] },
+    { name: "Health and Human Performance", subjects: ["HHP", "EXSC", "HPER", "ATRN", "HPED", "HLTH", "PACT"] },
+    { name: "Interdisciplinary Studies", subjects: ["IDST"] },
+    { name: "Nursing", subjects: ["NURS"] },
+    { name: "Psychology", subjects: ["PSYC"] },
+  ] },
+  { college: "College of Engineering and Natural Sciences", departments: [
+    { name: "Biological Sciences", subjects: ["BIOL", "ZOOL", "BOT", "MBIO", "BCHE"] },
+    { name: "Chemistry and Physics", subjects: ["CHEM", "PHYS", "ASTR"] },
+    { name: "Computer Science", subjects: ["CSCI", "CYBR"] },
+    { name: "Engineering", subjects: ["ENGR", "CIEG", "CMGT"] },
+    { name: "Mathematics and Statistics", subjects: ["MATH", "STAT"] },
+  ] },
+  { college: "College of Humanities and Fine Arts", departments: [
+    { name: "English and Modern Foreign Languages", subjects: ["ENGL", "FREN", "GERM", "JAPN", "SPAN"] },
+    { name: "History and Philosophy", subjects: ["AAST", "HIST", "PHIL", "RLST", "WMST"] },
+    { name: "Mass Media and Strategic Communication", subjects: ["MMSC"] },
+    { name: "Music", subjects: ["MUS", "MUAP", "MUED", "MUEN"] },
+    { name: "Political Science and Global Studies", subjects: ["POSC", "INST"] },
+    { name: "Visual and Theatre Arts", subjects: ["ART", "ARTE", "ARTH", "DANC", "DNED", "THEA", "GDES"] },
+  ] },
+];
+
+// grouped list for the Department dropdown
+const DEPARTMENTS = DEPARTMENT_DATA.map(({ college, departments }) => ({
+  college, names: departments.map((d) => d.name),
+}));
+
+// subject code -> "Department of X". Unclear ones like GENS and HNRS are left out.
+// Preloads the whole term's catalog so typing is instant. Off because it's a lot
+// of requests to Banner every visit and live search is fast enough.
+// Turn it on if typing feels slow.
+const WARM_CATALOG = false;
+
+// true when the live lookup can't be reached at all (no server, or Banner is down),
+// not when Banner just didn't find anything
+const liveLookupUnreachable = (res) =>
+  res.status >= 500 || !(res.headers.get("content-type") || "").includes("application/json");
+
+const SUBJECT_DEPARTMENTS = new Map();
+for (const { departments } of DEPARTMENT_DATA) {
+  for (const { name, subjects } of departments) {
+    for (const code of subjects) SUBJECT_DEPARTMENTS.set(code, `Department of ${name}`);
+  }
+}
+
 // Builds a fresh blank draft. Returning a new object each time keeps the
 // initial state and every reset independent of each other.
 const createBlank = () => ({
-  code: "", title: "", crn: "", section: "", term: "Spring 2027", modality: "In person",
+  code: "", title: "", crn: "", section: "", term: defaultTerm(), modality: "In person",
   credits: "3", meetingPattern: "", meeting: "", meetingTime: "",
-  location: "", exlocation: "", dept: "Select a department...", prereq: "",
+  location: "", exlocation: "", dept: "", prereq: "",
   instructor: "", email: "", phone: "", office: "", hours: "", address: "",
   subjectLine: "",
   description: "", welcome: "", customDescriptions: [],
@@ -575,17 +539,6 @@ const sanitizePart = (s) => {
     ).slice(0, 60)                         // length cap
   );
   return RESERVED.test(out) ? `${out}_` : out;
-};
-
-/**
- * Normalizes a course code string to match the course catalog JSON keys.
- * Example: "csci 325", "CSCI-325", or "  Csci325 " → "CSCI325"
- */
-const normalizeCourseKey = (str) => {
-  if (!str) return "";
-  return String(str)
-    .replace(/[^A-Za-z0-9]/g, "") // Strip spaces, hyphens, and punctuation
-    .toUpperCase();               // Force to uppercase to match JSON keys
 };
 
 
@@ -816,80 +769,6 @@ const Note = ({ children }) => (
 export default function SyllabusBuilder() {
   const [d, setD] = useState(createBlank);
 
-  const [catalog, setCatalog] = useState({});
-  const [catalogLoading, setCatalogLoading] = useState(true);
-  const [catalogError, setCatalogError] = useState(null);
-
-  useEffect(() => {
-    fetch("/utm_course_catalog_26_27.json")
-      .then((response) => {
-        if (!response.ok) {
-          throw new Error(`Failed to load catalog asset: ${response.status}`);
-        }
-        return response.json();
-      })
-      .then((data) => {
-        setCatalog(data);
-        setCatalogLoading(false);
-      })
-      .catch((error) => {
-        console.error("Course catalog fetch error:", error);
-        setCatalogError(error.message);
-        setCatalogLoading(false);
-      });
-  }, []); 
-
-  // Tracks the last normalized catalog key that was automatically populated
-  const [lastAutofilledKey, setLastAutofilledKey] = useState("");
-
-  // Handles course code changes, lookups, and clean formatting safely
-  const handleCourseCodeChange = (inputValue) => {
-    const cleanedKey = normalizeCourseKey(inputValue);
-
-    if (catalog && catalog[cleanedKey]) {
-      const course = catalog[cleanedKey];
-
-      // 1. Format helper: Enforce standard "POSC 322" space layout rules
-      let formattedCode = inputValue;
-      const match = cleanedKey.match(/^([A-Z]{4})(\d{3,4}.*)$/);
-      if (match) {
-        formattedCode = `${match[1]} ${match[2]}`; // Constructs clean "POSC 322" layout
-      }
-
-      // 2. Extract Prefix for Department autofill lookup
-      const prefix = match ? match[1] : "";
-      const inferredDept = COURSE_PREFIX_TO_DEPT[prefix] || "";
-
-      setD((prev) => {
-        const isDefaultCredits = prev.credits === "3";
-
-        // Safety switch: Drops guards temporarily if changing courses entirely
-        const isSwitchingCourse = lastAutofilledKey && lastAutofilledKey !== cleanedKey;
-
-        return {
-          ...prev,
-          code: formattedCode,
-
-          // Overwrite if field is empty, matching baseline templates, or switching courses completely
-          title: (!prev.title.trim() || isSwitchingCourse) ? (course.courseTitle || "") : prev.title,
-          description: (!prev.description.trim() || isSwitchingCourse) ? (course.description || "") : prev.description,
-          prereq: (!prev.prereq.trim() || isSwitchingCourse) ? (course.prerequisites || "") : prev.prereq,
-          credits: (!prev.credits.trim() || isDefaultCredits || isSwitchingCourse) ? (course.creditHours || "3") : prev.credits,
-          dept: (inferredDept && (!prev.dept.trim() || prev.dept === "Select a department..." || isSwitchingCourse)) ? inferredDept : prev.dept
-        };
-      });
-
-      setLastAutofilledKey(cleanedKey);
-
-    } else {
-      // If no catalog entry is found yet, update the text box as they type normally
-      setD((prev) => ({ ...prev, code: inputValue }));
-    }
-
-    // Keep your existing auto-scroll preview window functional
-    setTimeout(() => scrollPreviewTo(SECTION_FOR_TAB[tab]), 0);
-  };
-
 
   // adds a warning before the user leaves the page changes will not be saved.
   const hasUnsavedChanges = JSON.stringify(d) !== JSON.stringify(blank);
@@ -920,6 +799,381 @@ export default function SyllabusBuilder() {
   const [weekCountWarning, setWeekCountWarning] = useState(false);
   const [previewFullscreen, setPreviewFullscreen] = useState(false);
   const [showTextKeybinds, setShowTextKeybinds] = useState(false);
+
+  const [lookupStatus, setLookupStatus] = useState(null);
+  const [deliveryOpen, setDeliveryOpen] = useState(false);
+  const deliveryRef = useRef(null);
+
+  useEffect(() => {
+    if (!deliveryOpen) return undefined;
+    const onDocClick = (e) => {
+      if (deliveryRef.current && !deliveryRef.current.contains(e.target)) setDeliveryOpen(false);
+    };
+    const onKey = (e) => { if (e.key === "Escape") setDeliveryOpen(false); };
+    document.addEventListener("mousedown", onDocClick);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDocClick);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [deliveryOpen]);
+
+  const [termOptions, setTermOptions] = useState([]);
+  const [termOpen, setTermOpen] = useState(false);
+  const termRef = useRef(null);
+
+  // If the live lookup can't be reached, use the offline JSON catalog instead.
+  // Tries live again after 2 minutes so one Banner hiccup doesn't stick.
+  const [liveDownUntil, setLiveDownUntil] = useState(0);
+  const markLiveDown = () => setLiveDownUntil(Date.now() + 2 * 60 * 1000);
+  const liveDown = liveDownUntil > Date.now();
+
+  // offline catalog, only loaded once it's actually needed
+  const offlineCatalogRef = useRef(null);
+  const loadOfflineCatalog = () => {
+    if (!offlineCatalogRef.current) {
+      offlineCatalogRef.current = fetch("/utm_course_catalog_26_27.json")
+        .then((r) => (r.ok ? r.json() : {}))
+        .catch(() => ({}));
+    }
+    return offlineCatalogRef.current;
+  };
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/banner?action=terms")
+      .then((r) => {
+        if (liveLookupUnreachable(r)) { markLiveDown(); return { terms: [] }; }
+        return r.ok ? r.json() : { terms: [] };
+      })
+      .then((payload) => {
+        if (cancelled) return;
+        setTermOptions(payload.terms || []);
+        // switch to the term Banner has open, unless the term was already changed
+        if (payload.current) setD((p) => (p.term === defaultTerm() ? { ...p, term: payload.current } : p));
+      })
+      .catch(() => { if (!cancelled) markLiveDown(); });
+    return () => { cancelled = true; };
+  }, []);
+
+  useEffect(() => {
+    if (!termOpen) return undefined;
+    const onDocClick = (e) => {
+      if (termRef.current && !termRef.current.contains(e.target)) setTermOpen(false);
+    };
+    const onKey = (e) => { if (e.key === "Escape") setTermOpen(false); };
+    document.addEventListener("mousedown", onDocClick);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDocClick);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [termOpen]);
+
+  const [deptOpen, setDeptOpen] = useState(false);
+  const deptRef = useRef(null);
+
+  useEffect(() => {
+    if (!deptOpen) return undefined;
+    const onDocClick = (e) => {
+      if (deptRef.current && !deptRef.current.contains(e.target)) setDeptOpen(false);
+    };
+    const onKey = (e) => { if (e.key === "Escape") setDeptOpen(false); };
+    document.addEventListener("mousedown", onDocClick);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDocClick);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [deptOpen]);
+
+  const [codeSuggestions, setCodeSuggestions] = useState([]);
+  const [codeSuggestOpen, setCodeSuggestOpen] = useState(false);
+  const [codeSuggestLoading, setCodeSuggestLoading] = useState(false);
+  const codeSuggestRef = useRef(null);
+  const codeJustSelectedRef = useRef(false);
+  // saves search results so retyping doesn't hit Banner again
+  const courseListCacheRef = useRef(new Map());
+
+  useEffect(() => {
+    if (!codeSuggestOpen) return undefined;
+    const onDocClick = (e) => {
+      if (codeSuggestRef.current && !codeSuggestRef.current.contains(e.target)) setCodeSuggestOpen(false);
+    };
+    const onKey = (e) => { if (e.key === "Escape") setCodeSuggestOpen(false); };
+    document.addEventListener("mousedown", onDocClick);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDocClick);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [codeSuggestOpen]);
+
+  const pickCodeSuggestion = (s) => {
+    if (s.type === "subject") {
+      // picked a subject, so show its courses
+      setD((p) => ({ ...p, code: `${s.code} ` }));
+    } else {
+      // picked a full course, no need to search again
+      codeJustSelectedRef.current = true;
+      setD((p) => ({ ...p, code: s.code, title: s.title || p.title }));
+    }
+    setCodeSuggestOpen(false);
+  };
+
+  // As you type: letters match subjects locally, subject + numbers searches Banner.
+  useEffect(() => {
+    if (codeJustSelectedRef.current) { codeJustSelectedRef.current = false; return undefined; }
+
+    const raw = String(d.code || "");
+    const match = raw.match(/^\s*([A-Za-z]*)\s*(\d*)/);
+    const subjectPart = (match?.[1] || "").toUpperCase();
+    const numberPart = match?.[2] || "";
+
+    if (!subjectPart) { setCodeSuggestLoading(false); setCodeSuggestions([]); setCodeSuggestOpen(false); return undefined; }
+
+    const knownSubject = SUBJECTS.some((s) => s.code === subjectPart);
+
+    if (!knownSubject) {
+      // still typing the subject, e.g. "CS"
+      const matches = SUBJECTS.filter((s) => s.code.startsWith(subjectPart)).slice(0, 8)
+        .map((s) => ({ type: "subject", code: s.code, description: s.description }));
+      setCodeSuggestLoading(false);
+      setCodeSuggestions(matches);
+      setCodeSuggestOpen(matches.length > 0);
+      return undefined;
+    }
+
+    // full subject like "CSCI", so show its courses right away
+
+    // live lookup is down, so search the offline catalog instead
+    if (liveDownUntil > Date.now()) {
+      let cancelled = false;
+      setCodeSuggestions([]);
+      setCodeSuggestLoading(true);
+      setCodeSuggestOpen(true);
+      loadOfflineCatalog().then((catalog) => {
+        if (cancelled) return;
+        const matches = Object.values(catalog)
+          .filter((c) => {
+            const [subj, num = ""] = String(c.courseCode || "").split(" ");
+            return subj === subjectPart && num.startsWith(numberPart);
+          })
+          .sort((a, b) => a.courseCode.localeCompare(b.courseCode, undefined, { numeric: true }))
+          .map((c) => ({ type: "course", code: c.courseCode, title: c.courseTitle }));
+        setCodeSuggestLoading(false);
+        setCodeSuggestions(matches);
+        setCodeSuggestOpen(true);
+      });
+      return () => { cancelled = true; };
+    }
+
+    // only use the warm-up cache once it's completely done loading
+    const warmedList = warmCompleteRef.current.has(d.term)
+      ? courseListCacheRef.current.get(`${d.term}|${subjectPart}|`)
+      : null;
+    if (warmedList) {
+      const filtered = numberPart
+        ? warmedList.filter((c) => c.code.slice(subjectPart.length).trim().startsWith(numberPart))
+        : warmedList;
+      setCodeSuggestLoading(false);
+      setCodeSuggestions(filtered);
+      setCodeSuggestOpen(filtered.length > 0);
+      return undefined;
+    }
+
+    // "q:" keeps live search results separate from the warm-up cache
+    const cacheKey = `q:${d.term}|${subjectPart}|${numberPart}`;
+    const cached = courseListCacheRef.current.get(cacheKey);
+    if (cached) {
+      setCodeSuggestLoading(false);
+      setCodeSuggestions(cached);
+      setCodeSuggestOpen(cached.length > 0);
+      return undefined;
+    }
+
+    // clear old suggestions while the new search runs
+    setCodeSuggestions([]);
+    setCodeSuggestLoading(true);
+    setCodeSuggestOpen(true);
+
+    const controller = new AbortController();
+    const timer = setTimeout(async () => {
+      try {
+        const url = `/api/banner?action=course-search&term=${encodeURIComponent(d.term)}&subject=${encodeURIComponent(subjectPart)}&q=${encodeURIComponent(numberPart)}`;
+        const res = await fetch(url, { signal: controller.signal });
+        if (liveLookupUnreachable(res)) { markLiveDown(); return; }
+        if (!res.ok) throw new Error("search failed");
+        const payload = await res.json();
+        const matches = (payload.courses || []).map((c) => ({ type: "course", code: c.code, title: c.title }));
+        courseListCacheRef.current.set(cacheKey, matches);
+        setCodeSuggestLoading(false);
+        setCodeSuggestions(matches);
+        setCodeSuggestOpen(matches.length > 0);
+      } catch (error) {
+        if (error.name === "AbortError") return;
+        if (error instanceof TypeError) { markLiveDown(); return; } // couldn't reach the server
+        setCodeSuggestLoading(false); setCodeSuggestions([]); setCodeSuggestOpen(false);
+      }
+    }, 250);
+
+    return () => { clearTimeout(timer); controller.abort(); };
+  }, [d.code, d.term, liveDownUntil]);
+
+  // When offline, fill course info from the offline catalog. Only fills empty
+  // fields, unless you switch to a different course.
+  const lastOfflineCodeRef = useRef("");
+  useEffect(() => {
+    if (liveDownUntil <= Date.now()) return undefined;
+    const parsed = String(d.code || "").trim().match(/^([A-Za-z]{2,5})\s*-?\s*(\d{3,4}[A-Za-z]?)$/);
+    if (!parsed) return undefined;
+    const subject = parsed[1].toUpperCase();
+    const key = subject + parsed[2].toUpperCase();
+    let cancelled = false;
+    loadOfflineCatalog().then((catalog) => {
+      const course = catalog[key];
+      if (cancelled || !course || lastOfflineCodeRef.current === key) return;
+      const switching = lastOfflineCodeRef.current !== "";
+      lastOfflineCodeRef.current = key;
+      setD((p) => ({
+        ...p,
+        title: (!p.title.trim() || switching) ? (course.courseTitle || "") : p.title,
+        description: (!p.description.trim() || switching) ? (course.description || "") : p.description,
+        prereq: (!p.prereq.trim() || switching) ? (course.prerequisites || "") : p.prereq,
+        credits: (!p.credits.trim() || p.credits === "3" || switching) ? (course.creditHours || "3") : p.credits,
+        dept: (!p.dept.trim() || switching) ? (SUBJECT_DEPARTMENTS.get(subject) || p.dept) : p.dept,
+      }));
+    });
+    return () => { cancelled = true; };
+  }, [d.code, liveDownUntil]);
+
+  const [sectionSuggestions, setSectionSuggestions] = useState([]);
+  const [sectionSuggestOpen, setSectionSuggestOpen] = useState(false);
+  const sectionSuggestRef = useRef(null);
+  // same idea as the course cache, but for sections
+  const sectionListCacheRef = useRef(new Map());
+
+  useEffect(() => {
+    if (!sectionSuggestOpen) return undefined;
+    const onDocClick = (e) => {
+      if (sectionSuggestRef.current && !sectionSuggestRef.current.contains(e.target)) setSectionSuggestOpen(false);
+    };
+    const onKey = (e) => { if (e.key === "Escape") setSectionSuggestOpen(false); };
+    document.addEventListener("mousedown", onDocClick);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDocClick);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [sectionSuggestOpen]);
+
+  const pickSectionSuggestion = (s) => {
+    setD((p) => ({ ...p, section: s.section }));
+    setSectionSuggestOpen(false);
+  };
+
+  // once the course code is complete, show its sections so you don't have to know one
+  useEffect(() => {
+    const code = String(d.code || "").trim();
+    const parsed = code.match(/^([A-Za-z]{2,5})\s*-?\s*(\d{3,4}[A-Za-z]?)$/);
+    if (!parsed || liveDownUntil > Date.now()) { setSectionSuggestions([]); setSectionSuggestOpen(false); return undefined; }
+
+    const subject = parsed[1].toUpperCase();
+    const courseNumber = parsed[2].toUpperCase();
+    const cacheKey = `${d.term}|${subject}|${courseNumber}`;
+    const cached = sectionListCacheRef.current.get(cacheKey);
+    if (cached) {
+      setSectionSuggestions(cached);
+      if (cached.length && !String(d.section || "").trim()) setSectionSuggestOpen(true);
+      return undefined;
+    }
+
+    // clear old sections while the new search runs
+    setSectionSuggestions([]);
+
+    const controller = new AbortController();
+    const timer = setTimeout(async () => {
+      try {
+        const url = `/api/banner?action=section-search&term=${encodeURIComponent(d.term)}&subject=${encodeURIComponent(subject)}&courseNumber=${encodeURIComponent(courseNumber)}`;
+        const res = await fetch(url, { signal: controller.signal });
+        if (liveLookupUnreachable(res)) { markLiveDown(); return; }
+        if (!res.ok) throw new Error("search failed");
+        const payload = await res.json();
+        const sections = payload.sections || [];
+        sectionListCacheRef.current.set(cacheKey, sections);
+        setSectionSuggestions(sections);
+        if (sections.length && !String(d.section || "").trim()) setSectionSuggestOpen(true);
+      } catch (error) {
+        if (error.name === "AbortError") return;
+        if (error instanceof TypeError) markLiveDown();
+        setSectionSuggestions([]);
+      }
+    }, 450);
+
+    return () => { clearTimeout(timer); controller.abort(); };
+  }, [d.code, d.term, liveDownUntil]);
+  // Warm-up: loads the whole term's catalog in the background (off, see WARM_CATALOG).
+  const warmedTermsRef = useRef(new Set());
+  // set once every page has loaded (warmedTermsRef is set at the start)
+  const warmCompleteRef = useRef(new Set());
+
+  useEffect(() => {
+    const term = String(d.term || "").trim();
+    if (!WARM_CATALOG || !term || warmedTermsRef.current.has(term)) return undefined;
+
+    const PAGE_SIZE = 500;
+    const controller = new AbortController();
+
+    const applyPage = (payload) => {
+      for (const course of payload.courses || []) {
+        const subject = course.code.split(" ")[0];
+        const key = `${term}|${subject}|`;
+        const list = courseListCacheRef.current.get(key) || [];
+        if (!list.some((c) => c.code === course.code)) list.push({ type: "course", code: course.code, title: course.title });
+        courseListCacheRef.current.set(key, list);
+      }
+      for (const [code, sections] of Object.entries(payload.sectionsByCode || {})) {
+        const [subject, courseNumber] = code.split(" ");
+        sectionListCacheRef.current.set(`${term}|${subject}|${courseNumber}`, sections);
+      }
+    };
+
+    const fetchPage = async (pageOffset) => {
+      const url = `/api/banner?action=catalog-page&term=${encodeURIComponent(term)}&offset=${pageOffset}&size=${PAGE_SIZE}`;
+      const res = await fetch(url, { signal: controller.signal });
+      if (!res.ok) throw new Error("warm-up page failed");
+      return res.json();
+    };
+
+    // wait a bit so typing a term doesn't start a warm-up every keystroke
+    const timer = setTimeout(() => {
+      warmedTermsRef.current.add(term);
+      (async () => {
+        try {
+          const first = await fetchPage(0);
+          applyPage(first);
+
+          const totalCount = first.totalCount || 0;
+          const remainingOffsets = [];
+          for (let o = PAGE_SIZE; o < totalCount; o += PAGE_SIZE) remainingOffsets.push(o);
+
+          // one page at a time, Banner's paging breaks if they overlap
+          for (const offset of remainingOffsets) {
+            const payload = await fetchPage(offset);
+            applyPage(payload);
+          }
+
+          warmCompleteRef.current.add(term);
+        } catch {
+          // failed or cancelled, so unmark the term and it'll try again later
+          warmedTermsRef.current.delete(term);
+        }
+      })();
+    }, 450);
+
+    return () => { clearTimeout(timer); controller.abort(); };
+  }, [d.term]);
+
   const frameRef = useRef(null);
   const previewRef = useRef(null);
   const formRef = useRef(null);
@@ -975,6 +1229,100 @@ export default function SyllabusBuilder() {
     setD((p) => ({ ...p, [k]: v }));
     setTimeout(() => scrollPreviewTo(SECTION_FOR_TAB[tab]), 0);
   };
+
+  const lookupCourseBySection = async (triggerCode, term, subject, courseNumber, section, signal) => {
+    try {
+      const res = await fetch("/api/banner?action=details", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ term, subject, courseNumber, section }),
+        signal,
+      });
+
+      if (liveLookupUnreachable(res)) { markLiveDown(); setLookupStatus(null); return; }
+      if (!res.ok) {
+        const errorText = await res.text();
+        throw new Error(errorText || "Lookup failed");
+      }
+
+      const payload = await res.json();
+      if (!payload.crn || !payload.title) throw new Error("The portal returned no course details");
+      setD((p) => {
+        // ignore the result if the course, section, or term changed while it was loading
+        const stillCurrent = p.code.trim() === triggerCode && p.section.trim() === section && p.term.trim() === term;
+        if (!stillCurrent) return p;
+        return {
+          ...p,
+          crn: payload.crn || p.crn,
+          code: payload.code || p.code,
+          title: payload.title || p.title,
+          section: payload.section || p.section,
+          term: payload.term || p.term,
+          credits: payload.credits || p.credits,
+          modality: payload.modality || p.modality,
+          // clear these instead of keeping old values from a different course
+          // Banner gives days and times as one string, so put it in Meeting time
+          // and clear the days dropdown so it doesn't show twice
+          meetingTime: payload.meeting || "",
+          ...(payload.meeting ? { meetingPattern: "", meeting: "" } : {}),
+          location: payload.location || "",
+          // use our department list first, Banner's names are shortened and don't match the dropdown
+          dept: SUBJECT_DEPARTMENTS.get(subject) || payload.dept || "",
+          prereq: payload.prereq || "",
+          instructor: payload.instructor || "",
+          email: payload.email || "",
+          description: payload.description || "",
+        };
+      });
+      setLookupStatus("ok");
+    } catch (error) {
+      if (error instanceof TypeError) { markLiveDown(); setLookupStatus(null); return; } // couldn't reach the server
+      if (error.name !== "AbortError") {
+        setLookupStatus("error");
+        // lookup failed, so clear the looked-up fields so old data doesn't stick around
+        // (department still uses the subject fallback)
+        setD((p) => {
+          const stillCurrent = p.code.trim() === triggerCode && p.section.trim() === section && p.term.trim() === term;
+          if (!stillCurrent) return p;
+          return {
+            ...p,
+            crn: "",
+            title: "",
+            meetingTime: "",
+            location: "",
+            dept: SUBJECT_DEPARTMENTS.get(subject) || "",
+            prereq: "",
+            instructor: "",
+            email: "",
+            description: "",
+          };
+        });
+      }
+    }
+  };
+
+  useEffect(() => {
+    const code = String(d.code || "").trim();
+    const section = String(d.section || "").trim();
+    const term = String(d.term || "").trim();
+    const parsed = code.match(/^([A-Za-z]{2,5})\s*-?\s*(\d{3,4}[A-Za-z]?)$/);
+    if (!parsed || !section || !term || liveDownUntil > Date.now()) { setLookupStatus(null); return undefined; }
+
+    const controller = new AbortController();
+    setLookupStatus("loading");
+    const timer = setTimeout(() => {
+      lookupCourseBySection(code, term, parsed[1].toUpperCase(), parsed[2].toUpperCase(), section, controller.signal);
+    }, 450);
+    return () => { clearTimeout(timer); controller.abort(); };
+  }, [d.code, d.section, d.term, liveDownUntil]);
+
+  // fills in the email subject line from the course code until you type in it yourself
+  const subjectLineAutoRef = useRef(true);
+  useEffect(() => {
+    const code = String(d.code || "").trim();
+    if (!subjectLineAutoRef.current || !/^[A-Za-z]{2,5}\s*-?\s*\d{3,4}[A-Za-z]?$/.test(code)) return;
+    setD((p) => ({ ...p, subjectLine: `${code} - [your question]` }));
+  }, [d.code]);
   // Update one property inside a repeated array item, such as an assignment or week.
   const setDeep = (k, i, key, v) => {
     setD((p) => { const a = [...p[k]]; a[i] = { ...a[i], [key]: v }; return { ...p, [k]: a }; });
@@ -1577,47 +1925,153 @@ export default function SyllabusBuilder() {
         <div ref={formRef} className="p-5 editor-form" style={{ flex: "1 1 420px", minWidth: 340, maxWidth: 620 }}>
           {tab === 0 && (<>
             <H>Course</H>
-            <div className="flex gap-3 flex-wrap">
+            <div className="flex gap-3 flex-wrap items-end">
               <div style={{ flex: "1 1 150px" }}>
                 <Field label="Course code" hint="POSC 322">
-                  <T
-                    value={d.code}
-                    onChange={handleCourseCodeChange} // Connected to your safe lookup handler
-                    placeholder="POSC 322"
-                  />
-
-                  {/* Autofill Match Indicator Banner */}
-                  {d.code && catalog && catalog[normalizeCourseKey(d.code)] && (
-                    <div
-                      className="flex items-center gap-1.5 mt-1.5 px-2 py-1 rounded text-xs font-semibold"
+                  <div ref={codeSuggestRef} style={{ position: "relative" }}>
+                    <input
+                      style={inputBase}
+                      value={d.code}
+                      placeholder="POSC 322"
+                      autoComplete="off"
+                      onChange={(e) => set("code", e.target.value)}
+                      onFocus={() => { if (codeSuggestions.length) setCodeSuggestOpen(true); }}
+                    />
+                    <div role="listbox" className="transition-all duration-200"
                       style={{
-                        background: UI.goodBg || "#E8F5E9",
-                        color: UI.good || "#1E7A46",
-                        border: `1px solid ${UI.line || "#D8DEE7"}`
-                      }}
-                    >
-                      <Check size={12} />
-                      Matched catalog data loaded!
+                        position: "absolute", left: 0, right: 0, top: "calc(100% + 4px)", zIndex: 30,
+                        background: UI.paper, border: `1px solid ${UI.line}`, borderRadius: 4,
+                        boxShadow: "0 6px 16px rgba(0,0,0,.12)", overflow: "hidden", maxHeight: 220, overflowY: "auto",
+                        opacity: codeSuggestOpen ? 1 : 0,
+                        transform: codeSuggestOpen ? "translateY(0) scaleY(1)" : "translateY(-4px) scaleY(0.96)",
+                        transformOrigin: "top", pointerEvents: codeSuggestOpen ? "auto" : "none",
+                      }}>
+                      {liveDown && (
+                        <div className="flex items-center gap-2" style={{ padding: "8px 10px", fontSize: 12.5, color: UI.warn, borderBottom: `1px solid ${UI.line}` }}>
+                          <AlertTriangle size={13} />Live catalog unavailable. Using offline catalog.
+                        </div>
+                      )}
+                      {codeSuggestLoading && codeSuggestions.length === 0 && (
+                        <div className="flex items-center gap-2" style={{ padding: "8px 10px", fontSize: 12.5, color: UI.slate }}>
+                          <Loader2 size={13} className="animate-spin" />{liveDown ? "Loading offline catalog" : "Searching live course catalog"}&hellip;
+                        </div>
+                      )}
+                      {liveDown && !codeSuggestLoading && codeSuggestions.length === 0 && (
+                        <div style={{ padding: "8px 10px", fontSize: 12.5, color: UI.slate }}>No matching courses.</div>
+                      )}
+                      {codeSuggestions.map((s) => (
+                        <div key={s.type + s.code} role="option"
+                          onClick={() => pickCodeSuggestion(s)}
+                          onMouseEnter={(e) => { e.currentTarget.style.background = UI.tint; }}
+                          onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
+                          style={{ padding: "7px 10px", fontSize: 13, cursor: "pointer" }}>
+                          <div style={{ fontWeight: "bold", color: UI.navy }}>{s.code}</div>
+                          <div style={{ fontSize: 11.5, color: UI.slate }}>{s.type === "subject" ? s.description : s.title}</div>
+                        </div>
+                      ))}
                     </div>
-                  )}
+                  </div>
                 </Field>
               </div>
-              <div style={{ flex: "2 1 240px" }}>
-                <Field label="Course title">
-                  <T value={d.title} onChange={(v) => set("title", v)} placeholder="American Foreign Policy" />
+              <div style={{ flex: "1 1 130px" }}>
+                <Field label="Section" hint="e.g. 001">
+                  <div ref={sectionSuggestRef} style={{ position: "relative" }}>
+                    <input
+                      style={{ ...inputBase, paddingRight: 30 }}
+                      value={d.section}
+                      placeholder="001"
+                      autoComplete="off"
+                      onChange={(e) => set("section", e.target.value)}
+                      onFocus={() => { if (sectionSuggestions.length) setSectionSuggestOpen(true); }}
+                    />
+                    {lookupStatus === "loading" &&
+                      <div style={{ position: "absolute", right: 9, top: 0, bottom: 0, display: "flex", alignItems: "center" }}>
+                        <Loader2 size={15} className="animate-spin" style={{ color: UI.slate }} />
+                      </div>}
+                    {lookupStatus === "ok" &&
+                      <Check size={15} style={{ position: "absolute", right: 9, top: "50%", transform: "translateY(-50%)", color: UI.good }} />}
+                    {lookupStatus === "error" &&
+                      <X size={15} style={{ position: "absolute", right: 9, top: "50%", transform: "translateY(-50%)", color: UI.warn }} />}
+                    <div role="listbox" className="transition-all duration-200"
+                      style={{
+                        position: "absolute", left: 0, right: 0, top: "calc(100% + 4px)", zIndex: 30,
+                        background: UI.paper, border: `1px solid ${UI.line}`, borderRadius: 4,
+                        boxShadow: "0 6px 16px rgba(0,0,0,.12)", overflow: "hidden", maxHeight: 220, overflowY: "auto",
+                        opacity: sectionSuggestOpen ? 1 : 0,
+                        transform: sectionSuggestOpen ? "translateY(0) scaleY(1)" : "translateY(-4px) scaleY(0.96)",
+                        transformOrigin: "top", pointerEvents: sectionSuggestOpen ? "auto" : "none",
+                      }}>
+                      {sectionSuggestions.map((s) => (
+                        <div key={s.crn} role="option"
+                          onClick={() => pickSectionSuggestion(s)}
+                          onMouseEnter={(e) => { e.currentTarget.style.background = UI.tint; }}
+                          onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
+                          style={{ padding: "7px 10px", fontSize: 13, cursor: "pointer" }}>
+                          <div style={{ fontWeight: "bold", color: UI.navy }}>Section {s.section}</div>
+                          <div style={{ fontSize: 11.5, color: UI.slate }}>{s.meeting} &middot; {s.instructor}</div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
                 </Field>
               </div>
             </div>
             <div className="flex gap-3 flex-wrap">
-              <div style={{ flex: "1 1 130px" }}><Field label="CRN" hint="the 5-digit registration number"><T value={d.crn} onChange={(v) => set("crn", v)} placeholder="12345" maxLength={5} /></Field></div>
-              <div style={{ flex: "1 1 130px" }}><Field label="Section"><T value={d.section} onChange={(v) => set("section", v)} placeholder="001" /></Field></div>
+              <div style={{ flex: "2 1 240px" }}><Field label="Course title"><T value={d.title} onChange={(v) => set("title", v)} placeholder="American Foreign Policy" /></Field></div>
+              <div style={{ flex: "0 0 100px" }}>
+                <Field label="CRN"><T value={d.crn} onChange={(v) => set("crn", v.replace(/\D/g, "").slice(0, 5))} placeholder="12345" /></Field>
+              </div>
             </div>
             <div className="flex gap-3 flex-wrap">
-              <div style={{ flex: "1 1 130px" }}><Field label="Term">
-                <select style={inputBase} value={d.term} onChange={(e) => set("term", e.target.value)}>
-                  {[...new Set([...Object.keys(ACADEMIC_CALENDARS), d.term])].map((t) => <option key={t}>{t}</option>)}
-                </select>
-              </Field></div>
+              <div style={{ flex: "1 1 130px" }}>
+                <Field label="Term" hint="used for the lookup too">
+                  <div ref={termRef} style={{ position: "relative" }}>
+                    <input
+                      style={{ ...inputBase, paddingRight: 30 }}
+                      value={d.term}
+                      placeholder="Fall 2026"
+                      autoComplete="off"
+                      onChange={(e) => set("term", e.target.value)}
+                      onFocus={() => { if (termOptions.length) setTermOpen(true); }}
+                    />
+                    {termOptions.length > 0 && (
+                      <button type="button" onClick={() => setTermOpen((o) => !o)}
+                        aria-haspopup="listbox" aria-expanded={termOpen} aria-label="Choose a term"
+                        style={{
+                          position: "absolute", right: 0, top: 0, bottom: 0, width: 28,
+                          display: "flex", alignItems: "center", justifyContent: "center",
+                          background: "transparent", cursor: "pointer",
+                        }}>
+                        <ChevronDown size={14} className="transition-transform duration-200"
+                          style={{ color: UI.slate, transform: termOpen ? "rotate(180deg)" : "none" }} />
+                      </button>
+                    )}
+                    <div role="listbox" className="transition-all duration-200"
+                      style={{
+                        position: "absolute", left: 0, right: 0, top: "calc(100% + 4px)", zIndex: 30,
+                        background: UI.paper, border: `1px solid ${UI.line}`, borderRadius: 4,
+                        boxShadow: "0 6px 16px rgba(0,0,0,.12)", overflow: "hidden", maxHeight: 220, overflowY: "auto",
+                        opacity: termOpen ? 1 : 0,
+                        transform: termOpen ? "translateY(0) scaleY(1)" : "translateY(-4px) scaleY(0.96)",
+                        transformOrigin: "top", pointerEvents: termOpen ? "auto" : "none",
+                      }}>
+                      {termOptions.map((t) => (
+                        <div key={t} role="option" aria-selected={d.term === t}
+                          onClick={() => { set("term", t); setTermOpen(false); }}
+                          onMouseEnter={(e) => { e.currentTarget.style.background = UI.tint; }}
+                          onMouseLeave={(e) => { e.currentTarget.style.background = d.term === t ? UI.tint : "transparent"; }}
+                          style={{
+                            padding: "7px 10px", fontSize: 13.5, cursor: "pointer",
+                            color: d.term === t ? UI.navy : UI.ink, fontWeight: d.term === t ? "bold" : "normal",
+                            background: d.term === t ? UI.tint : "transparent",
+                          }}>
+                          {t}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </Field>
+              </div>
               <div style={{ flex: "1 1 130px" }}><Field label="Credit hours"><T value={d.credits} onChange={(v) => set("credits", v)} /></Field></div>
             </div>
             <Field label="Semester Length" hint="students read this before they register">
@@ -1626,9 +2080,38 @@ export default function SyllabusBuilder() {
               </select>
             </Field>
             <Field label="Delivery" hint="students read this before they register">
-              <select style={inputBase} value={d.modality} onChange={(e) => set("modality", e.target.value)}>
-                {["In person", "Hybrid", "Online synchronous", "Online asynchronous", "Dual Enrollment", "Internship"].map((m) => <option key={m}>{m}</option>)}
-              </select>
+              <div ref={deliveryRef} style={{ position: "relative" }}>
+                <button type="button" onClick={() => setDeliveryOpen((o) => !o)}
+                  aria-haspopup="listbox" aria-expanded={deliveryOpen}
+                  style={{ ...inputBase, display: "flex", alignItems: "center", justifyContent: "space-between", cursor: "pointer" }}>
+                  <span>{d.modality}</span>
+                  <ChevronDown size={14} className="transition-transform duration-200"
+                    style={{ color: UI.slate, flexShrink: 0, marginLeft: 8, transform: deliveryOpen ? "rotate(180deg)" : "none" }} />
+                </button>
+                <div role="listbox" className="transition-all duration-200"
+                  style={{
+                    position: "absolute", left: 0, right: 0, top: "calc(100% + 4px)", zIndex: 20,
+                    background: UI.paper, border: `1px solid ${UI.line}`, borderRadius: 4,
+                    boxShadow: "0 6px 16px rgba(0,0,0,.12)", overflow: "hidden",
+                    opacity: deliveryOpen ? 1 : 0,
+                    transform: deliveryOpen ? "translateY(0) scaleY(1)" : "translateY(-4px) scaleY(0.96)",
+                    transformOrigin: "top", pointerEvents: deliveryOpen ? "auto" : "none",
+                  }}>
+                  {["In person", "Hybrid", "Online synchronous", "Online asynchronous", "Dual Enrollment", "Internship"].map((m) => (
+                    <div key={m} role="option" aria-selected={d.modality === m}
+                      onClick={() => { set("modality", m); setDeliveryOpen(false); }}
+                      onMouseEnter={(e) => { e.currentTarget.style.background = UI.tint; }}
+                      onMouseLeave={(e) => { e.currentTarget.style.background = d.modality === m ? UI.tint : "transparent"; }}
+                      style={{
+                        padding: "8px 10px", fontSize: 14, cursor: "pointer",
+                        color: d.modality === m ? UI.navy : UI.ink, fontWeight: d.modality === m ? "bold" : "normal",
+                        background: d.modality === m ? UI.tint : "transparent",
+                      }}>
+                      {m}
+                    </div>
+                  ))}
+                </div>
+              </div>
             </Field>
                         <Field label="Meeting days" hint="leave blank if fully asynchronous">
               <select
@@ -1660,123 +2143,62 @@ export default function SyllabusBuilder() {
             </Field>
             <Field label="Room"><T value={d.location} onChange={(v) => set("location", v)} placeholder="Humanities 407" /></Field>
             <Field label="Other Meeting Room" hint="Only fill this if some classes take place in other room during the week"><T value={d.exlocation} onChange={(v) => set("exlocation", v)} placeholder="Humanities 409 on Fridays" /></Field>
-            <Field label="Department">
-              <select
-                style={inputBase}
-                value={
-                  [
-                    "Select a department...",
-                    "Agriculture, Geosciences, and Natural Resources", "Family and Consumer Sciences",
-                    "Accounting, Finance, Economics, and Political Science", "Management, Marketing, and Information Systems",
-                    "Behavioral Sciences", "Educational Studies", "Health and Human Performance", "Nursing", "Psychology",
-                    "Biological Sciences", "Chemistry and Physics", "Computer Science", "Engineering", "Mathematics and Statistics",
-                    "Communications", "English and Modern Foreign Languages", "History and Philosophy", "Music", "Visual and Theatre Arts"
-                  ].includes(d.dept)
-                    ? d.dept
-                    : "Custom Department"
-                }
-                onChange={(e) => {
-                  const val = e.target.value;
-                  set("dept", val === "Custom Department" ? "" : val);
-                }}
-              >
-                <option value="Select a department...">Select a department...</option>
-
-                <optgroup label="College of Agriculture and Applied Sciences">
-                  <option value="Agriculture, Geosciences, and Natural Resources">
-                    Agriculture, Geosciences, and Natural Resources
-                  </option>
-                  <option value="Family and Consumer Sciences">
-                    Family and Consumer Sciences
-                  </option>
-                </optgroup>
-
-                <optgroup label="College of Business and Global Affairs">
-                  <option value="Accounting, Finance, Economics, and Political Science">
-                    Accounting, Finance, Economics, and Political Science
-                  </option>
-                  <option value="Management, Marketing, and Information Systems">
-                    Management, Marketing, and Information Systems
-                  </option>
-                </optgroup>
-
-                <optgroup label="College of Education, Health, and Behavioral Sciences">
-                  <option value="Behavioral Sciences">
-                    Behavioral Sciences
-                  </option>
-                  <option value="Educational Studies">
-                    Educational Studies
-                  </option>
-                  <option value="Health and Human Performance">
-                    Health and Human Performance
-                  </option>
-                  <option value="Nursing">
-                    Nursing
-                  </option>
-                  <option value="Psychology">
-                    Psychology
-                  </option>
-                </optgroup>
-
-                <optgroup label="College of Engineering and Natural Sciences">
-                  <option value="Biological Sciences">
-                    Biological Sciences
-                  </option>
-                  <option value="Chemistry and Physics">
-                    Chemistry and Physics
-                  </option>
-                  <option value="Computer Science">
-                    Computer Science
-                  </option>
-                  <option value="Engineering">
-                    Engineering
-                  </option>
-                  <option value="Mathematics and Statistics">
-                    Mathematics and Statistics
-                  </option>
-                </optgroup>
-
-                <optgroup label="College of Humanities and Fine Arts">
-                  <option value="Communications">
-                    Communications
-                  </option>
-                  <option value="English and Modern Foreign Languages">
-                    English and Modern Foreign Languages
-                  </option>
-                  <option value="History and Philosophy">
-                    History and Philosophy
-                  </option>
-                  <option value="Music">
-                    Music
-                  </option>
-                  <option value="Visual and Theatre Arts">
-                    Visual and Theatre Arts
-                  </option>
-                </optgroup>
-
-                <option value="Custom Department">Custom Department</option>
-              </select>
-            </Field>
-
-            {/* Custom Input dynamically renders when d.dept has been edited away from standard predefined options */}
-            {![
-              "Select a department...",
-              "Agriculture, Geosciences, and Natural Resources", "Family and Consumer Sciences",
-              "Accounting, Finance, Economics, and Political Science", "Management, Marketing, and Information Systems",
-              "Behavioral Sciences", "Educational Studies", "Health and Human Performance", "Nursing", "Psychology",
-              "Biological Sciences", "Chemistry and Physics", "Computer Science", "Engineering", "Mathematics and Statistics",
-              "Communications", "English and Modern Foreign Languages", "History and Philosophy", "Music", "Visual and Theatre Arts"
-            ].includes(d.dept) && (
-              <div className="mt-[-8px] mb-4">
-                <Field label="Custom Department Name">
-                  <T 
-                    value={d.dept} 
-                    onChange={(v) => set("dept", v)} 
-                    placeholder="Enter custom department name" 
-                  />
-                </Field>
+            <Field label="Department" hint="type freely, or pick from the list">
+              <div ref={deptRef} style={{ position: "relative" }}>
+                <input
+                  style={{ ...inputBase, paddingRight: 30 }}
+                  value={d.dept}
+                  placeholder="Department of Computer Science"
+                  autoComplete="off"
+                  onChange={(e) => set("dept", e.target.value)}
+                  onFocus={() => setDeptOpen(true)}
+                />
+                <button type="button" onClick={() => setDeptOpen((o) => !o)}
+                  aria-haspopup="listbox" aria-expanded={deptOpen} aria-label="Choose a department"
+                  style={{
+                    position: "absolute", right: 0, top: 0, bottom: 0, width: 28,
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    background: "transparent", cursor: "pointer",
+                  }}>
+                  <ChevronDown size={14} className="transition-transform duration-200"
+                    style={{ color: UI.slate, transform: deptOpen ? "rotate(180deg)" : "none" }} />
+                </button>
+                <div role="listbox" className="transition-all duration-200"
+                  style={{
+                    position: "absolute", left: 0, right: 0, top: "calc(100% + 4px)", zIndex: 30,
+                    background: UI.paper, border: `1px solid ${UI.line}`, borderRadius: 4,
+                    boxShadow: "0 6px 16px rgba(0,0,0,.12)", overflow: "hidden", maxHeight: 260, overflowY: "auto",
+                    opacity: deptOpen ? 1 : 0,
+                    transform: deptOpen ? "translateY(0) scaleY(1)" : "translateY(-4px) scaleY(0.96)",
+                    transformOrigin: "top", pointerEvents: deptOpen ? "auto" : "none",
+                  }}>
+                  {DEPARTMENTS.map((g) => (
+                    <div key={g.college}>
+                      <div style={{ padding: "8px 10px 4px", fontSize: 12, fontWeight: "bold", textTransform: "uppercase", letterSpacing: .4, color: UI.slate }}>
+                        {g.college}
+                      </div>
+                      {g.names.map((name) => {
+                        const value = `Department of ${name}`;
+                        const on = d.dept === value;
+                        return (
+                          <div key={name} role="option" aria-selected={on}
+                            onClick={() => { set("dept", value); setDeptOpen(false); }}
+                            onMouseEnter={(e) => { e.currentTarget.style.background = UI.tint; }}
+                            onMouseLeave={(e) => { e.currentTarget.style.background = on ? UI.tint : "transparent"; }}
+                            style={{
+                              padding: "7px 10px 7px 20px", fontSize: 13.5, cursor: "pointer",
+                              color: on ? UI.navy : UI.ink, fontWeight: on ? "bold" : "normal",
+                              background: on ? UI.tint : "transparent",
+                            }}>
+                            {name}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ))}
+                </div>
               </div>
-            )}
+            </Field>
             <Field label="Prerequisites"><T value={d.prereq} onChange={(v) => set("prereq", v)} placeholder="None" /></Field>
           </>)}
 
@@ -1788,7 +2210,7 @@ export default function SyllabusBuilder() {
             <Field label="Phone"><T type="tel" value={d.phone} onChange={(v) => set("phone", v)} placeholder="731-555-0123" /></Field>
             <Field label="Office"><T value={d.office} onChange={(v) => set("office", v)} placeholder="Humanities 212" /></Field>
             <Field label="Office hours"><A rows={2} value={d.hours} onChange={(v) => set("hours", v)} placeholder="Monday and Wednesday, 10 a.m. to noon, and by appointment. Email me and we will find a time that works." /></Field>
-            <Field label="Email subject line you want" hint="cuts your response time"><T value={d.subjectLine} onChange={(v) => set("subjectLine", v)} placeholder="POSC 322 - [your question]" /></Field>
+            <Field label="Email subject line you want" hint="cuts your response time"><T value={d.subjectLine} onChange={(v) => { subjectLineAutoRef.current = false; set("subjectLine", v); }} placeholder="POSC 322 - [your question]" /></Field>
             <Field label="How students should address you"><T value={d.address} onChange={(v) => set("address", v)} placeholder="Dr. Doe" /></Field>
           </>)}
 
@@ -1901,7 +2323,7 @@ export default function SyllabusBuilder() {
                     { label: "Term", value: d.term, required: true, tab: 0 },
                     { label: "Credit hours", value: d.credits, required: true, tab: 0 },
                     { label: "Delivery", value: d.modality, required: true, tab: 0 },
-                    { label: "Meeting time", value: d.meeting, required: !d.modality.startsWith("Online"), tab: 0 },
+                    { label: "Meeting time", value: meetingDisplay, required: !d.modality.startsWith("Online"), tab: 0 },
                     { label: "Room", value: d.location, tab: 0 },
                     { label: "CRN / Section", value: [d.crn, d.section].filter(Boolean).join(" / "), tab: 0 },
                     { label: "Instructor", value: d.instructor, required: true, tab: 1 },
