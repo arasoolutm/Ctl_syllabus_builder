@@ -1,5 +1,4 @@
-// Shared between the frontend (subject autocomplete) and the serverless
-// lookup function (mapping Banner's full subject name back to its code).
+// Subject names and codes, used by the autocomplete and the Banner lookup.
 export const SUBJECT_CODES = {
   "African American Studies": "AAST",
   Accounting: "ACCT",
@@ -116,7 +115,7 @@ export const SUBJECT_CODES = {
   "Computer Science": "CSCI",
 };
 
-// Deduped, sorted by code, for autocomplete.
+// one entry per code, sorted, for the autocomplete
 const seen = new Map();
 for (const [description, code] of Object.entries(SUBJECT_CODES)) {
   if (!seen.has(code)) seen.set(code, description);

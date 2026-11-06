@@ -3,9 +3,7 @@ import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import { createApi } from "./api/app.js";
 
-// Serves /api/banner from Vite's own dev and preview servers, so the live
-// course lookup works under plain `npm run dev` without building first.
-// Editing anything under api/ restarts the dev server automatically.
+// Adds /api/banner to npm run dev and npm run preview, so the lookup works without building.
 const bannerApi = () => ({
   name: "banner-api",
   configureServer(server) { server.middlewares.use(createApi()); },

@@ -412,9 +412,8 @@ const MEETING_PATTERNS = [
   { value: "custom", label: "Custom" },
 ];
 
-// Self-updating default term: approximates each semester's start date (no
-// per-year table to keep current) and switches to the next one 2 weeks
-// early, since that's when a professor is realistically starting to prep it.
+// Picks the current term from today's date, switching 2 weeks early
+// since that's when professors start prepping.
 function defaultTermLabel(today = new Date()) {
   const approxStart = (year, monthIndex, day) => new Date(year, monthIndex, day);
   const year = today.getFullYear();
@@ -432,8 +431,8 @@ function defaultTermLabel(today = new Date()) {
   return chosen;
 }
 
-// Verified against each department's own page at utm.edu (not guessed); also
-// used as a fallback when Banner's own department lookup fails or is unreliable.
+// Departments and their subjects, checked against utm.edu.
+// Also the fallback when Banner's department info is wrong.
 const DEPARTMENT_DATA = [
   { college: "College of Agriculture and Applied Sciences", departments: [
     { name: "Agriculture, Geosciences, and Natural Resources", subjects: ["AGEC", "AGED", "AGET", "AGRI", "ANSC", "GEOL", "GEOS", "METR", "NRM", "PARK", "PLSC", "SOIL", "VET", "WBIO"] },
@@ -468,18 +467,15 @@ const DEPARTMENT_DATA = [
   ] },
 ];
 
-// For the Department combo-box's grouped option list.
+// grouped list for the Department dropdown
 const DEPARTMENTS = DEPARTMENT_DATA.map(({ college, departments }) => ({
   college, names: departments.map((d) => d.name),
 }));
 
-// Subject code -> "Department of X", used when Banner's own lookup fails.
-// Ambiguous/general-ed codes (GENS, HNRS, NEUR, ...) are left out rather than guessed.
-// Background pre-load of a term's whole course catalog from Banner, so typing
-// a course code hits a local cache instead of a live search. Off by default:
-// it pulls every section of the term in 500-row pages on each visit, which is
-// a lot of load on UTM's server, and live search is fast enough without it.
-// Set to true if course-code typing ever feels slow.
+// subject code -> "Department of X". Unclear ones like GENS and HNRS are left out.
+// Preloads the whole term's catalog so typing is instant. Off because it's a lot
+// of requests to Banner every visit and live search is fast enough.
+// Turn it on if typing feels slow.
 const WARM_CATALOG = false;
 
 const SUBJECT_DEPARTMENTS = new Map();
@@ -804,7 +800,6 @@ export default function SyllabusBuilder() {
   const [lookupStatus, setLookupStatus] = useState(null);
   const [deliveryOpen, setDeliveryOpen] = useState(false);
   const deliveryRef = useRef(null);
-  const fileRef = useRef(null);
 
   useEffect(() => {
     if (!deliveryOpen) return undefined;
@@ -869,7 +864,7 @@ export default function SyllabusBuilder() {
   const [codeSuggestLoading, setCodeSuggestLoading] = useState(false);
   const codeSuggestRef = useRef(null);
   const codeJustSelectedRef = useRef(false);
-  // Caches course-search results by term|subject|q so retyping doesn't re-hit Banner.
+  // saves search results so retyping doesn't hit Banner again
   const courseListCacheRef = useRef(new Map());
 
   useEffect(() => {
@@ -888,18 +883,17 @@ export default function SyllabusBuilder() {
 
   const pickCodeSuggestion = (s) => {
     if (s.type === "subject") {
-      // Let the search effect run normally so it shows this subject's course list.
+      // picked a subject, so show its courses
       setD((p) => ({ ...p, code: `${s.code} ` }));
     } else {
-      // Skip the next search effect - a full course pick needs no further narrowing.
+      // picked a full course, no need to search again
       codeJustSelectedRef.current = true;
       setD((p) => ({ ...p, code: s.code, title: s.title || p.title }));
     }
     setCodeSuggestOpen(false);
   };
 
-  // Live "as you type" lookup: letters alone show matching subjects (no
-  // network); a subject + digits searches Banner for matching course numbers.
+  // As you type: letters match subjects locally, subject + numbers searches Banner.
   useEffect(() => {
     if (codeJustSelectedRef.current) { codeJustSelectedRef.current = false; return undefined; }
 
@@ -913,7 +907,7 @@ export default function SyllabusBuilder() {
     const knownSubject = SUBJECTS.some((s) => s.code === subjectPart);
 
     if (!knownSubject) {
-      // Still narrowing down the subject itself (e.g. "C", "CS").
+      // still typing the subject, e.g. "CS"
       const matches = SUBJECTS.filter((s) => s.code.startsWith(subjectPart)).slice(0, 8)
         .map((s) => ({ type: "subject", code: s.code, description: s.description }));
       setCodeSuggestLoading(false);
@@ -922,12 +916,9 @@ export default function SyllabusBuilder() {
       return undefined;
     }
 
-    // subjectPart is already a complete, known subject code (e.g. "CSCI") -
-    // no need to wait for a space or a digit before showing its courses.
+    // full subject like "CSCI", so show its courses right away
 
-    // Only trust this cache once the warm-up pass has FULLY finished for this
-    // term - pages land at different times, so a subject's entry can exist
-    // while still missing courses from a page still in flight.
+    // only use the warm-up cache once it's completely done loading
     const warmedList = warmCompleteRef.current.has(d.term)
       ? courseListCacheRef.current.get(`${d.term}|${subjectPart}|`)
       : null;
@@ -941,9 +932,7 @@ export default function SyllabusBuilder() {
       return undefined;
     }
 
-    // "q:" prefix keeps this distinct from the warm-up accumulator's key above
-    // (same key minus prefix) - they used to collide and leak the full warm-up
-    // list into what should've been a narrow live-search result.
+    // "q:" keeps live search results separate from the warm-up cache
     const cacheKey = `q:${d.term}|${subjectPart}|${numberPart}`;
     const cached = courseListCacheRef.current.get(cacheKey);
     if (cached) {
@@ -953,8 +942,7 @@ export default function SyllabusBuilder() {
       return undefined;
     }
 
-    // Clear the stale (subject-list) suggestions right away instead of leaving
-    // them showing while the live course search is still in flight.
+    // clear old suggestions while the new search runs
     setCodeSuggestions([]);
     setCodeSuggestLoading(true);
     setCodeSuggestOpen(true);
@@ -982,7 +970,7 @@ export default function SyllabusBuilder() {
   const [sectionSuggestions, setSectionSuggestions] = useState([]);
   const [sectionSuggestOpen, setSectionSuggestOpen] = useState(false);
   const sectionSuggestRef = useRef(null);
-  // Mirrors courseListCacheRef for section-search, keyed by term|subject|courseNumber.
+  // same idea as the course cache, but for sections
   const sectionListCacheRef = useRef(new Map());
 
   useEffect(() => {
@@ -1004,8 +992,7 @@ export default function SyllabusBuilder() {
     setSectionSuggestOpen(false);
   };
 
-  // Once the code is a complete "SUBJ 000", proactively surface the real
-  // sections offered that term so the professor doesn't have to already know one.
+  // once the course code is complete, show its sections so you don't have to know one
   useEffect(() => {
     const code = String(d.code || "").trim();
     const parsed = code.match(/^([A-Za-z]{2,5})\s*-?\s*(\d{3,4}[A-Za-z]?)$/);
@@ -1021,8 +1008,7 @@ export default function SyllabusBuilder() {
       return undefined;
     }
 
-    // Not cached - clear stale sections immediately rather than leaving them
-    // looking like they belong to the new course while the search is in flight.
+    // clear old sections while the new search runs
     setSectionSuggestions([]);
 
     const controller = new AbortController();
@@ -1043,12 +1029,9 @@ export default function SyllabusBuilder() {
 
     return () => { clearTimeout(timer); controller.abort(); };
   }, [d.code, d.term]);
-  // "Warm up" the whole term's catalog into the course/section caches above,
-  // once per term, paging through Banner's results in the background so
-  // later typing hits cache instead of a live lookup.
+  // Warm-up: loads the whole term's catalog in the background (off, see WARM_CATALOG).
   const warmedTermsRef = useRef(new Set());
-  // Set only once every page has landed, unlike warmedTermsRef (set when the
-  // pass starts). Callers must check this before trusting a cache entry as complete.
+  // set once every page has loaded (warmedTermsRef is set at the start)
   const warmCompleteRef = useRef(new Set());
 
   useEffect(() => {
@@ -1079,8 +1062,7 @@ export default function SyllabusBuilder() {
       return res.json();
     };
 
-    // Debounced the same way the other term-driven lookups are, so typing
-    // out a term doesn't fire (and immediately abort) a warm-up per keystroke.
+    // wait a bit so typing a term doesn't start a warm-up every keystroke
     const timer = setTimeout(() => {
       warmedTermsRef.current.add(term);
       (async () => {
@@ -1092,8 +1074,7 @@ export default function SyllabusBuilder() {
           const remainingOffsets = [];
           for (let o = PAGE_SIZE; o < totalCount; o += PAGE_SIZE) remainingOffsets.push(o);
 
-          // Sequential, not Promise.all: Banner's paging is stateful per session,
-          // so pages fetched in parallel could interfere with each other.
+          // one page at a time, Banner's paging breaks if they overlap
           for (const offset of remainingOffsets) {
             const payload = await fetchPage(offset);
             applyPage(payload);
@@ -1101,8 +1082,7 @@ export default function SyllabusBuilder() {
 
           warmCompleteRef.current.add(term);
         } catch {
-          // Aborted or failed - un-mark the term so a later mount retries instead
-          // of leaving its cache empty forever.
+          // failed or cancelled, so unmark the term and it'll try again later
           warmedTermsRef.current.delete(term);
         }
       })();
@@ -1184,9 +1164,7 @@ export default function SyllabusBuilder() {
       const payload = await res.json();
       if (!payload.crn || !payload.title) throw new Error("The portal returned no course details");
       setD((p) => {
-        // The response may have been superseded by further edits while in flight
-        // (AbortController can lose that race) - drop it if it no longer matches
-        // what's on screen instead of clobbering newer input.
+        // ignore the result if the course, section, or term changed while it was loading
         const stillCurrent = p.code.trim() === triggerCode && p.section.trim() === section && p.term.trim() === term;
         if (!stillCurrent) return p;
         return {
@@ -1198,17 +1176,13 @@ export default function SyllabusBuilder() {
           term: payload.term || p.term,
           credits: payload.credits || p.credits,
           modality: payload.modality || p.modality,
-          // Blank these rather than falling back to p.X - a fallback would silently
-          // leave a different, previously-looked-up course's value on screen.
-          // Banner returns days and times as one string, so it goes in the
-          // visible Meeting time box, and the days dropdown is cleared so the
-          // preview doesn't print the days twice.
+          // clear these instead of keeping old values from a different course
+          // Banner gives days and times as one string, so put it in Meeting time
+          // and clear the days dropdown so it doesn't show twice
           meetingTime: payload.meeting || "",
           ...(payload.meeting ? { meetingPattern: "", meeting: "" } : {}),
           location: payload.location || "",
-          // Prefer our verified SUBJECT_DEPARTMENTS table over Banner's own lookup,
-          // which is unreliable and returns abbreviated text that doesn't match
-          // our Department dropdown's canonical names.
+          // use our department list first, Banner's names are shortened and don't match the dropdown
           dept: SUBJECT_DEPARTMENTS.get(subject) || payload.dept || "",
           prereq: payload.prereq || "",
           instructor: payload.instructor || "",
@@ -1220,9 +1194,8 @@ export default function SyllabusBuilder() {
     } catch (error) {
       if (error.name !== "AbortError") {
         setLookupStatus("error");
-        // No CRN resolved - clear lookup-sourced fields instead of leaving a
-        // different course's leftover data on screen. Department keeps its
-        // subject-level fallback since that doesn't need the section to resolve.
+        // lookup failed, so clear the looked-up fields so old data doesn't stick around
+        // (department still uses the subject fallback)
         setD((p) => {
           const stillCurrent = p.code.trim() === triggerCode && p.section.trim() === section && p.term.trim() === term;
           if (!stillCurrent) return p;
@@ -1258,10 +1231,7 @@ export default function SyllabusBuilder() {
     return () => { clearTimeout(timer); controller.abort(); };
   }, [d.code, d.section, d.term]);
 
-  // Not Banner data — just a sensible default for a field we invented,
-  // derived from the course code once it's valid. Tracks code changes until
-  // the professor actually types in the field themselves, at which point
-  // subjectLineAutoRef flips and this stops touching it.
+  // fills in the email subject line from the course code until you type in it yourself
   const subjectLineAutoRef = useRef(true);
   useEffect(() => {
     const code = String(d.code || "").trim();

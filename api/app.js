@@ -1,14 +1,11 @@
 import express from "express";
 import banner from "./banner.js";
 
-// The /api/banner routes as a small Express app. Mounted by server.js in
-// production and by vite.config.js during `npm run dev` / `npm run preview`,
-// so both serve the exact same handler.
+// The /api/banner route. Used by server.js and by vite.config.js for npm run dev.
 export function createApi() {
   const app = express();
   app.use(express.json());
-  // Express's req/res already provide the req.query, req.body and
-  // res.status().json() that banner.js uses, so it needs no adapter.
+  // banner.js works with Express as-is, no changes needed
   app.all("/api/banner", (req, res) => banner(req, res));
   return app;
 }

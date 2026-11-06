@@ -27,8 +27,7 @@ function cleanText(value) {
     .trim();
 }
 
-/* ---------- action=details: resolve a subject + courseNumber + section
-   to the full set of syllabus fields ---------- */
+/* ---------- action=details: course + section -> all the syllabus fields ---------- */
 
 function extractMappedText(html, label) {
   const text = cleanText(html)
@@ -112,9 +111,7 @@ function formatMeetingRange(beginTime, endTime) {
 }
 
 function isPhysicalMeeting(mt) {
-  // Building CODE alone isn't reliable - UTM uses "XX" for online sections,
-  // which doesn't match an "onl"/"web"/"tba" prefix check. Check the readable
-  // description fields too, not just the code.
+  // online sections use building "XX", so check the description text too, not just the code
   const text = `${mt.building || ""} ${mt.buildingDescription || ""} ${mt.campusDescription || ""}`;
   if (/online|\bweb\b|\btba\b/i.test(text)) return false;
   return Boolean(mt.building) && mt.building.toUpperCase() !== "XX";
@@ -159,11 +156,8 @@ function parseSectionCatalogDetails(html) {
   return name ? `Department of ${name}` : null;
 }
 
-// Banner returns prerequisites as an actual <table> (And/Or, Test, Score,
-// Subject, Course Number, Level, Grade columns) - stripping tags without
-// reading its structure collapses headers and data into one unreadable
-// run-on string. Walk the rows instead and rebuild a plain-English line,
-// e.g. "CSCI 302 (min. grade D) and CSCI 325 (min. grade D)".
+// Banner sends prereqs as a table, so read it row by row and turn it into a normal
+// sentence, e.g. "CSCI 302 (min. grade D) and CSCI 325 (min. grade D)".
 function parseSectionPrerequisites(html) {
   if (/no prerequisite information available/i.test(html)) return "None";
 
@@ -278,9 +272,7 @@ async function handleDetails(req, res) {
   }
 }
 
-/* ---------- action=course-search: live autocomplete for the course-code
-   field (exact subject + optional course-number prefix -> matching
-   courses, deduped across sections) ---------- */
+/* ---------- action=course-search: course code autocomplete ---------- */
 
 async function handleCourseSearch(req, res) {
   if (req.method !== "GET") {
@@ -316,8 +308,7 @@ async function handleCourseSearch(req, res) {
   }
 }
 
-/* ---------- action=section-search: live list of real sections (with
-   instructor + meeting time) for a known subject + course number ---------- */
+/* ---------- action=section-search: a course's sections, with instructor and time ---------- */
 
 const SECTION_DAY_ABBR = [
   ["monday", "M"], ["tuesday", "T"], ["wednesday", "W"],
@@ -384,11 +375,7 @@ async function handleSectionSearch(req, res) {
   }
 }
 
-/* ---------- action=catalog-page: one raw, unfiltered page of a term's
-   entire section list (Banner caps pages at 500 rows), shaped the same way
-   as course-search/section-search so the client can drop it straight into
-   its autocomplete caches. Paging through every page this way "warms" the
-   client cache for the whole catalog instead of per-keystroke. ---------- */
+/* ---------- action=catalog-page: one page of a whole term, for the warm-up ---------- */
 
 async function handleCatalogPage(req, res) {
   if (req.method !== "GET") {
@@ -430,8 +417,7 @@ async function handleCatalogPage(req, res) {
   }
 }
 
-/* ---------- action=terms: real terms UTM's registration system currently
-   offers, for the Term field's picker ---------- */
+/* ---------- action=terms: terms for the Term dropdown ---------- */
 
 async function handleTerms(req, res) {
   if (req.method !== "GET") {
@@ -443,7 +429,7 @@ async function handleTerms(req, res) {
     const terms = raw
       .map((t) => String(t.description || "").replace(/\s*\(View Only\)\s*$/i, "").trim())
       .filter(Boolean)
-      .slice(0, 8); // newest-first; a handful of recent + upcoming terms is plenty for a picker
+      .slice(0, 8); // newest first, 8 is plenty
     return res.status(200).json({ terms });
   } catch (error) {
     return res.status(500).json({ error: error.message || "Could not load terms" });

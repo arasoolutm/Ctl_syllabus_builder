@@ -1,7 +1,4 @@
-// Shared helpers for talking to UTM's public (anonymous, no student login
-// involved) Banner 9 Self-Service "Browse Classes" endpoints. Used by
-// banner.js's "details" (resolve a section to full info) and
-// "course-search"/"section-search" (live autocomplete) actions.
+// Helpers for talking to UTM's Banner "Browse Classes" pages.
 
 export function decodeEntities(value) {
   return String(value || "")
@@ -23,19 +20,15 @@ export function bannerHeaders(accept) {
   };
 }
 
-// Module-scope caches. The server is one long-running Node process, so these
-// persist across every lookup, turning a multi-request Banner round trip
-// into a single fast call after the first one.
+// These caches stick around for as long as the server runs, so repeat lookups are fast.
 const TERM_CODE_TTL_MS = 60 * 60 * 1000; // term list barely changes
-const SESSION_TTL_MS = 8 * 60 * 1000; // conservative vs Banner's actual session timeout
+const SESSION_TTL_MS = 8 * 60 * 1000; // a bit under Banner's own timeout
 const termCodeCache = new Map(); // normalized label -> { code, expires }
 const sessionCache = new Map(); // termCode -> { cookie, expires }
 
-// Banner's searchResults endpoint cross-contaminates under concurrent requests
-// on the same session cookie (one request's response can carry a different
-// request's data). Rather than chase Banner's exact session semantics, just
-// never let two searchResults calls on the same cookie be in flight at once.
-const cookieLocks = new Map(); // cookie -> tail of the queue for that session
+// Banner mixes up results if two searches run on the same session at once,
+// so searches on a session wait their turn.
+const cookieLocks = new Map(); // cookie -> its queue
 
 function withCookieLock(cookie, fn) {
   const prior = cookieLocks.get(cookie) || Promise.resolve();
@@ -43,8 +36,7 @@ function withCookieLock(cookie, fn) {
   const run = settled.then(fn);
   const tracked = run.catch(() => {});
   cookieLocks.set(cookie, tracked);
-  // Sessions get replaced when they expire, so without this cleanup each
-  // retired cookie would leave a dead entry here forever.
+  // clean up so old cookies don't pile up
   tracked.finally(() => { if (cookieLocks.get(cookie) === tracked) cookieLocks.delete(cookie); });
   return run;
 }
@@ -77,9 +69,8 @@ export async function resolveTermCode(termLabel) {
 
 let termListCache = null; // { terms: [{code, description}], expires }
 
-// Raw list of terms UTM's registration system currently offers (newest
-// first), for populating a term picker. Descriptions still carry Banner's
-// "(View Only)" suffix here; callers that display these should strip it.
+// Terms Banner has right now, newest first.
+// Names still end in "(View Only)", so strip that before showing them.
 export async function listTermsRaw() {
   if (termListCache && termListCache.expires > Date.now()) return termListCache.terms;
 
@@ -130,18 +121,10 @@ async function openFreshSearchSession(termCode) {
   return cookie;
 }
 
-// Banner's class search is anonymous but stateful: a session has to be opened
-// and pointed at a term before searchResults returns anything. Opening one
-// costs three round trips, so we keep one per term instead of redoing it per
-// keystroke.
-//
-// cacheKey defaults to termCode, but callers that would otherwise share a
-// session with unrelated concurrent searches (notably the bulk catalog
-// warm-up) pass a distinct key, since sharing let an unfiltered bulk request
-// return wrong results for a filtered one racing it on the same cookie.
-//
-// In-flight opens for the same cacheKey, so concurrent callers await one
-// shared open instead of each starting their own cookie.
+// Banner needs a session set to a term before it'll search, and opening one
+// takes 3 requests, so we keep one per term and reuse it.
+// The warm-up uses its own session (cacheKey) so it can't mess up normal searches.
+// If two requests open the same session at the same time, they share it.
 const sessionOpening = new Map();
 
 async function openSearchSession(termCode, { cacheKey = termCode } = {}) {
@@ -164,12 +147,10 @@ async function openSearchSession(termCode, { cacheKey = termCode } = {}) {
   }
 }
 
-// Returns null (not []) when the request itself failed, so the caller can
-// tell "Banner said no results" apart from "this session is dead".
+// Returns null if the request failed, [] if there were just no results.
 async function searchSections(termCode, cookie, { subject, courseNumber } = {}) {
   const base = "https://ban9ssb1.utm.edu/StudentRegistrationSsb/ssb";
-  // 500 is Banner's own per-page maximum. At 100, big subjects were cut off:
-  // MATH has 167 sections, so only 6 of its 18 courses ever showed up.
+  // 500 is Banner's max. At 100, big subjects got cut off (MATH showed 6 of 18 courses).
   const params = new URLSearchParams({
     txt_term: termCode,
     pageOffset: "0",
@@ -180,10 +161,8 @@ async function searchSections(termCode, cookie, { subject, courseNumber } = {}) 
 
   return withCookieLock(cookie, async () => {
     try {
-      // Banner remembers a session's previous search: without this reset, a
-      // POSC search on a session that already searched CSCI returns CSCI's
-      // rows again. One reset is still far cheaper than a fresh 3-request
-      // session handshake.
+      // Banner remembers the last search on a session, so reset first or you get
+      // the old results back (searching POSC after CSCI gave CSCI).
       const reset = await fetch(`${base}/classSearch/resetDataForm`, {
         method: "POST",
         headers: { ...bannerHeaders("application/json, text/javascript, */*; q=0.01"), Cookie: cookie },
@@ -198,15 +177,13 @@ async function searchSections(termCode, cookie, { subject, courseNumber } = {}) 
       const json = await response.json();
       return Array.isArray(json?.data) ? json.data : null;
     } catch {
-      return null; // network error or a non-JSON page (expired session)
+      return null; // network error or expired session
     }
   });
 }
 
-// Reuses the term's cached session (reset before each search, serialized by
-// the cookie lock). If that session fails or comes back empty, it may have
-// expired, so it's dropped and the search is retried once on a fresh one -
-// a dead session can't hand back stale or empty results.
+// Searches using the term's saved session. If it fails or comes back empty,
+// the session might be expired, so it tries once more with a new one.
 export async function searchTerm(termCode, filters) {
   for (let attempt = 0; attempt < 2; attempt++) {
     const cookie = await openSearchSession(termCode);
@@ -218,11 +195,9 @@ export async function searchTerm(termCode, filters) {
   return [];
 }
 
-// A full term's worth of sections, paged (Banner caps pageMaxSize at 500
-// server-side). Used by the client-side cache "warm up" pass: no filter,
-// just raw pagination so later keystroke lookups hit cache instead of Banner.
+// One page of every section in a term. Only used by the warm-up.
 export async function fetchCatalogPage(termCode, { pageOffset = 0, pageMaxSize = 500 } = {}) {
-  // Isolated session namespace - see the comment on openSearchSession for why.
+  // separate session from normal searches
   const cookie = await openSearchSession(termCode, { cacheKey: `${termCode}:bulk` });
   if (!cookie) return { rows: [], totalCount: 0 };
 
@@ -232,9 +207,7 @@ export async function fetchCatalogPage(termCode, { pageOffset = 0, pageMaxSize =
     pageMaxSize: String(pageMaxSize),
   });
   const url = `https://ban9ssb1.utm.edu/StudentRegistrationSsb/ssb/searchResults/searchResults?${params.toString()}`;
-  // Same cookie lock as searchSections - concurrent requests on one session
-  // cross-contaminate even when they only differ by pageOffset, so warm-up
-  // pages run serialized instead of parallel.
+  // one page at a time, same reason as searches
   return withCookieLock(cookie, async () => {
     const response = await fetch(url, { headers: { ...bannerHeaders("application/json, text/javascript, */*; q=0.01"), Cookie: cookie } });
     if (!response.ok) { await response.text().catch(() => {}); return { rows: [], totalCount: 0 }; }
@@ -243,17 +216,14 @@ export async function fetchCatalogPage(termCode, { pageOffset = 0, pageMaxSize =
   });
 }
 
-// Returns the full matched search-result row (not just the CRN) so callers
-// can also pull faculty info etc. off it without a second request.
+// Returns the whole row so callers can grab the instructor too.
 export async function findSectionRow(termCode, subject, courseNumber, section) {
   const rows = await searchTerm(termCode, { subject, courseNumber });
   const normalizedSection = String(section || "").trim().toUpperCase();
   return rows.find((r) => String(r.sequenceNumber || "").trim().toUpperCase() === normalizedSection) || null;
 }
 
-// The catalog (not section-specific) course description. Separate endpoint
-// from the search results, keyed by subject+courseNumber+term rather than a
-// CRN, and independent of which section is picked.
+// Course description from the catalog. Only needs subject + number, not a section.
 export async function fetchCourseDescription(termCode, subject, courseNumber) {
   const url = "https://ban9ssb1.utm.edu/StudentRegistrationSsb/ssb/courseSearchResults/getCourseDescription";
   const body = new URLSearchParams({ term: termCode, subjectCode: subject, courseNumber }).toString();
@@ -266,11 +236,9 @@ export async function fetchCourseDescription(termCode, subject, courseNumber) {
   const html = await response.text();
   const termCodeParen = /\(\s*[A-Za-z][A-Za-z.,\s]{0,20}\)/;
   let text = html.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim()
-    // Catalog convention prefixes the credit hours in parens, e.g. "(3) ...";
-    // that's already shown as its own field, so drop it here.
+    // drop the credit hours at the start, e.g. "(3) ...", we show those separately
     .replace(/^\(\s*\d+(?:\s*-\s*\d+)?\s*\)\s*/, "");
-  // Catalog also brackets which terms it's offered in, e.g. "(F, Sp)" —
-  // can appear right after the credit-hour parens, or at the very end.
+  // drop which terms it's offered, e.g. "(F, Sp)", at the start or end
   text = text.replace(new RegExp(`^${termCodeParen.source}\\s*`), "");
   text = text.replace(new RegExp(`\\s*${termCodeParen.source}\\s*$`), "");
   if (!text || /no course description is available/i.test(text)) return null;
