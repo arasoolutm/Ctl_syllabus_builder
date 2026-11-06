@@ -412,23 +412,21 @@ const MEETING_PATTERNS = [
   { value: "custom", label: "Custom" },
 ];
 
-// Picks the current term from today's date, switching 2 weeks early
-// since that's when professors start prepping.
-function defaultTermLabel(today = new Date()) {
-  const approxStart = (year, monthIndex, day) => new Date(year, monthIndex, day);
-  const year = today.getFullYear();
-  const candidates = [
-    { label: `Spring ${year}`, start: approxStart(year, 0, 13) },
-    { label: `Summer ${year}`, start: approxStart(year, 4, 25) },
-    { label: `Fall ${year}`, start: approxStart(year, 7, 22) },
-    { label: `Spring ${year + 1}`, start: approxStart(year + 1, 0, 13) },
-  ];
-  const earlySwitch = 14 * 24 * 60 * 60 * 1000;
-  let chosen = candidates[0].label;
-  for (const c of candidates) {
-    if (c.start.getTime() - earlySwitch <= today.getTime()) chosen = c.label;
-  }
-  return chosen;
+// Guesses the term people are planning for: once a term is a month in, it's the next one.
+// Only used until Banner says which term is open, or if Banner can't be reached.
+function defaultTerm(today = new Date()) {
+  const y = today.getFullYear();
+  const terms = [y - 1, y, y + 1].flatMap((yr) => [
+    { label: `Spring ${yr}`, start: new Date(yr, 0, 7) },
+    { label: `Summer ${yr}`, start: new Date(yr, 5, 1) },
+    { label: `Fall ${yr}`, start: new Date(yr, 7, 22) },
+  ]);
+  let last = 0;
+  terms.forEach((t, i) => {
+    const monthIn = new Date(t.start.getFullYear(), t.start.getMonth() + 1, t.start.getDate());
+    if (monthIn <= today) last = i;
+  });
+  return terms[last + 1].label;
 }
 
 // Departments and their subjects, checked against utm.edu.
@@ -478,6 +476,11 @@ const DEPARTMENTS = DEPARTMENT_DATA.map(({ college, departments }) => ({
 // Turn it on if typing feels slow.
 const WARM_CATALOG = false;
 
+// true when the live lookup can't be reached at all (no server, or Banner is down),
+// not when Banner just didn't find anything
+const liveLookupUnreachable = (res) =>
+  res.status >= 500 || !(res.headers.get("content-type") || "").includes("application/json");
+
 const SUBJECT_DEPARTMENTS = new Map();
 for (const { departments } of DEPARTMENT_DATA) {
   for (const { name, subjects } of departments) {
@@ -488,7 +491,7 @@ for (const { departments } of DEPARTMENT_DATA) {
 // Builds a fresh blank draft. Returning a new object each time keeps the
 // initial state and every reset independent of each other.
 const createBlank = () => ({
-  code: "", title: "", crn: "", section: "", term: defaultTermLabel(), modality: "In person",
+  code: "", title: "", crn: "", section: "", term: defaultTerm(), modality: "In person",
   credits: "3", meetingPattern: "", meeting: "", meetingTime: "",
   location: "", exlocation: "", dept: "", prereq: "",
   instructor: "", email: "", phone: "", office: "", hours: "", address: "",
@@ -819,12 +822,37 @@ export default function SyllabusBuilder() {
   const [termOpen, setTermOpen] = useState(false);
   const termRef = useRef(null);
 
+  // If the live lookup can't be reached, use the offline JSON catalog instead.
+  // Tries live again after 2 minutes so one Banner hiccup doesn't stick.
+  const [liveDownUntil, setLiveDownUntil] = useState(0);
+  const markLiveDown = () => setLiveDownUntil(Date.now() + 2 * 60 * 1000);
+  const liveDown = liveDownUntil > Date.now();
+
+  // offline catalog, only loaded once it's actually needed
+  const offlineCatalogRef = useRef(null);
+  const loadOfflineCatalog = () => {
+    if (!offlineCatalogRef.current) {
+      offlineCatalogRef.current = fetch("/utm_course_catalog_26_27.json")
+        .then((r) => (r.ok ? r.json() : {}))
+        .catch(() => ({}));
+    }
+    return offlineCatalogRef.current;
+  };
+
   useEffect(() => {
     let cancelled = false;
     fetch("/api/banner?action=terms")
-      .then((r) => (r.ok ? r.json() : { terms: [] }))
-      .then((payload) => { if (!cancelled) setTermOptions(payload.terms || []); })
-      .catch(() => {});
+      .then((r) => {
+        if (liveLookupUnreachable(r)) { markLiveDown(); return { terms: [] }; }
+        return r.ok ? r.json() : { terms: [] };
+      })
+      .then((payload) => {
+        if (cancelled) return;
+        setTermOptions(payload.terms || []);
+        // switch to the term Banner has open, unless the term was already changed
+        if (payload.current) setD((p) => (p.term === defaultTerm() ? { ...p, term: payload.current } : p));
+      })
+      .catch(() => { if (!cancelled) markLiveDown(); });
     return () => { cancelled = true; };
   }, []);
 
@@ -918,6 +946,28 @@ export default function SyllabusBuilder() {
 
     // full subject like "CSCI", so show its courses right away
 
+    // live lookup is down, so search the offline catalog instead
+    if (liveDownUntil > Date.now()) {
+      let cancelled = false;
+      setCodeSuggestions([]);
+      setCodeSuggestLoading(true);
+      setCodeSuggestOpen(true);
+      loadOfflineCatalog().then((catalog) => {
+        if (cancelled) return;
+        const matches = Object.values(catalog)
+          .filter((c) => {
+            const [subj, num = ""] = String(c.courseCode || "").split(" ");
+            return subj === subjectPart && num.startsWith(numberPart);
+          })
+          .sort((a, b) => a.courseCode.localeCompare(b.courseCode, undefined, { numeric: true }))
+          .map((c) => ({ type: "course", code: c.courseCode, title: c.courseTitle }));
+        setCodeSuggestLoading(false);
+        setCodeSuggestions(matches);
+        setCodeSuggestOpen(true);
+      });
+      return () => { cancelled = true; };
+    }
+
     // only use the warm-up cache once it's completely done loading
     const warmedList = warmCompleteRef.current.has(d.term)
       ? courseListCacheRef.current.get(`${d.term}|${subjectPart}|`)
@@ -952,6 +1002,7 @@ export default function SyllabusBuilder() {
       try {
         const url = `/api/banner?action=course-search&term=${encodeURIComponent(d.term)}&subject=${encodeURIComponent(subjectPart)}&q=${encodeURIComponent(numberPart)}`;
         const res = await fetch(url, { signal: controller.signal });
+        if (liveLookupUnreachable(res)) { markLiveDown(); return; }
         if (!res.ok) throw new Error("search failed");
         const payload = await res.json();
         const matches = (payload.courses || []).map((c) => ({ type: "course", code: c.code, title: c.title }));
@@ -960,12 +1011,41 @@ export default function SyllabusBuilder() {
         setCodeSuggestions(matches);
         setCodeSuggestOpen(matches.length > 0);
       } catch (error) {
-        if (error.name !== "AbortError") { setCodeSuggestLoading(false); setCodeSuggestions([]); setCodeSuggestOpen(false); }
+        if (error.name === "AbortError") return;
+        if (error instanceof TypeError) { markLiveDown(); return; } // couldn't reach the server
+        setCodeSuggestLoading(false); setCodeSuggestions([]); setCodeSuggestOpen(false);
       }
     }, 250);
 
     return () => { clearTimeout(timer); controller.abort(); };
-  }, [d.code, d.term]);
+  }, [d.code, d.term, liveDownUntil]);
+
+  // When offline, fill course info from the offline catalog. Only fills empty
+  // fields, unless you switch to a different course.
+  const lastOfflineCodeRef = useRef("");
+  useEffect(() => {
+    if (liveDownUntil <= Date.now()) return undefined;
+    const parsed = String(d.code || "").trim().match(/^([A-Za-z]{2,5})\s*-?\s*(\d{3,4}[A-Za-z]?)$/);
+    if (!parsed) return undefined;
+    const subject = parsed[1].toUpperCase();
+    const key = subject + parsed[2].toUpperCase();
+    let cancelled = false;
+    loadOfflineCatalog().then((catalog) => {
+      const course = catalog[key];
+      if (cancelled || !course || lastOfflineCodeRef.current === key) return;
+      const switching = lastOfflineCodeRef.current !== "";
+      lastOfflineCodeRef.current = key;
+      setD((p) => ({
+        ...p,
+        title: (!p.title.trim() || switching) ? (course.courseTitle || "") : p.title,
+        description: (!p.description.trim() || switching) ? (course.description || "") : p.description,
+        prereq: (!p.prereq.trim() || switching) ? (course.prerequisites || "") : p.prereq,
+        credits: (!p.credits.trim() || p.credits === "3" || switching) ? (course.creditHours || "3") : p.credits,
+        dept: (!p.dept.trim() || switching) ? (SUBJECT_DEPARTMENTS.get(subject) || p.dept) : p.dept,
+      }));
+    });
+    return () => { cancelled = true; };
+  }, [d.code, liveDownUntil]);
 
   const [sectionSuggestions, setSectionSuggestions] = useState([]);
   const [sectionSuggestOpen, setSectionSuggestOpen] = useState(false);
@@ -996,7 +1076,7 @@ export default function SyllabusBuilder() {
   useEffect(() => {
     const code = String(d.code || "").trim();
     const parsed = code.match(/^([A-Za-z]{2,5})\s*-?\s*(\d{3,4}[A-Za-z]?)$/);
-    if (!parsed) { setSectionSuggestions([]); setSectionSuggestOpen(false); return undefined; }
+    if (!parsed || liveDownUntil > Date.now()) { setSectionSuggestions([]); setSectionSuggestOpen(false); return undefined; }
 
     const subject = parsed[1].toUpperCase();
     const courseNumber = parsed[2].toUpperCase();
@@ -1016,6 +1096,7 @@ export default function SyllabusBuilder() {
       try {
         const url = `/api/banner?action=section-search&term=${encodeURIComponent(d.term)}&subject=${encodeURIComponent(subject)}&courseNumber=${encodeURIComponent(courseNumber)}`;
         const res = await fetch(url, { signal: controller.signal });
+        if (liveLookupUnreachable(res)) { markLiveDown(); return; }
         if (!res.ok) throw new Error("search failed");
         const payload = await res.json();
         const sections = payload.sections || [];
@@ -1023,12 +1104,14 @@ export default function SyllabusBuilder() {
         setSectionSuggestions(sections);
         if (sections.length && !String(d.section || "").trim()) setSectionSuggestOpen(true);
       } catch (error) {
-        if (error.name !== "AbortError") setSectionSuggestions([]);
+        if (error.name === "AbortError") return;
+        if (error instanceof TypeError) markLiveDown();
+        setSectionSuggestions([]);
       }
     }, 450);
 
     return () => { clearTimeout(timer); controller.abort(); };
-  }, [d.code, d.term]);
+  }, [d.code, d.term, liveDownUntil]);
   // Warm-up: loads the whole term's catalog in the background (off, see WARM_CATALOG).
   const warmedTermsRef = useRef(new Set());
   // set once every page has loaded (warmedTermsRef is set at the start)
@@ -1156,6 +1239,7 @@ export default function SyllabusBuilder() {
         signal,
       });
 
+      if (liveLookupUnreachable(res)) { markLiveDown(); setLookupStatus(null); return; }
       if (!res.ok) {
         const errorText = await res.text();
         throw new Error(errorText || "Lookup failed");
@@ -1192,6 +1276,7 @@ export default function SyllabusBuilder() {
       });
       setLookupStatus("ok");
     } catch (error) {
+      if (error instanceof TypeError) { markLiveDown(); setLookupStatus(null); return; } // couldn't reach the server
       if (error.name !== "AbortError") {
         setLookupStatus("error");
         // lookup failed, so clear the looked-up fields so old data doesn't stick around
@@ -1221,7 +1306,7 @@ export default function SyllabusBuilder() {
     const section = String(d.section || "").trim();
     const term = String(d.term || "").trim();
     const parsed = code.match(/^([A-Za-z]{2,5})\s*-?\s*(\d{3,4}[A-Za-z]?)$/);
-    if (!parsed || !section || !term) { setLookupStatus(null); return undefined; }
+    if (!parsed || !section || !term || liveDownUntil > Date.now()) { setLookupStatus(null); return undefined; }
 
     const controller = new AbortController();
     setLookupStatus("loading");
@@ -1229,7 +1314,7 @@ export default function SyllabusBuilder() {
       lookupCourseBySection(code, term, parsed[1].toUpperCase(), parsed[2].toUpperCase(), section, controller.signal);
     }, 450);
     return () => { clearTimeout(timer); controller.abort(); };
-  }, [d.code, d.section, d.term]);
+  }, [d.code, d.section, d.term, liveDownUntil]);
 
   // fills in the email subject line from the course code until you type in it yourself
   const subjectLineAutoRef = useRef(true);
@@ -1861,10 +1946,18 @@ export default function SyllabusBuilder() {
                         transform: codeSuggestOpen ? "translateY(0) scaleY(1)" : "translateY(-4px) scaleY(0.96)",
                         transformOrigin: "top", pointerEvents: codeSuggestOpen ? "auto" : "none",
                       }}>
+                      {liveDown && (
+                        <div className="flex items-center gap-2" style={{ padding: "8px 10px", fontSize: 12.5, color: UI.warn, borderBottom: `1px solid ${UI.line}` }}>
+                          <AlertTriangle size={13} />Live catalog unavailable. Using offline catalog.
+                        </div>
+                      )}
                       {codeSuggestLoading && codeSuggestions.length === 0 && (
                         <div className="flex items-center gap-2" style={{ padding: "8px 10px", fontSize: 12.5, color: UI.slate }}>
-                          <Loader2 size={13} className="animate-spin" />Searching live course catalog&hellip;
+                          <Loader2 size={13} className="animate-spin" />{liveDown ? "Loading offline catalog" : "Searching live course catalog"}&hellip;
                         </div>
+                      )}
+                      {liveDown && !codeSuggestLoading && codeSuggestions.length === 0 && (
+                        <div style={{ padding: "8px 10px", fontSize: 12.5, color: UI.slate }}>No matching courses.</div>
                       )}
                       {codeSuggestions.map((s) => (
                         <div key={s.type + s.code} role="option"

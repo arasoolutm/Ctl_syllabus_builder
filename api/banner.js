@@ -426,11 +426,13 @@ async function handleTerms(req, res) {
 
   try {
     const raw = await listTermsRaw();
-    const terms = raw
-      .map((t) => String(t.description || "").replace(/\s*\(View Only\)\s*$/i, "").trim())
-      .filter(Boolean)
-      .slice(0, 8); // newest first, 8 is plenty
-    return res.status(200).json({ terms });
+    const label = (t) => String(t.description || "").replace(/\s*\(View Only\)\s*$/i, "").trim();
+    const terms = raw.map(label).filter(Boolean).slice(0, 8); // newest first, 8 is plenty
+    // Banner marks every term "(View Only)" except the ones open for registration.
+    // The oldest open one is the term people are building syllabi for.
+    const open = raw.filter((t) => !/\(View Only\)/i.test(t.description || ""));
+    const current = open.length ? label(open[open.length - 1]) : "";
+    return res.status(200).json({ terms, current });
   } catch (error) {
     return res.status(500).json({ error: error.message || "Could not load terms" });
   }
