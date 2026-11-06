@@ -933,11 +933,21 @@ export default function SyllabusBuilder() {
   }, [previewFullscreen]);
 
   // Which syllabus heading each editor tab and each repeated section maps to.
+  // One entry per tab in TABS, in the same order. null means that tab has no
+  // matching section in the preview, so the preview doesn't scroll.
   const SECTION_FOR_TAB = [
-    "COURSE INFORMATION", "COURSE INFORMATION", "WELCOME TO THIS COURSE",
-    "STUDENT LEARNING OUTCOMES", "REQUIRED MATERIALS", "ASSESSMENT AND GRADING",
-    "COURSE POLICIES", "UNIVERSITY POLICIES AND STUDENT SUPPORT", "COURSE SCHEDULE",
-    "LABORATORY COMPONENT",
+    "COURSE INFORMATION",                        // 0 Course
+    "COURSE INFORMATION",                        // 1 Instructor
+    "WELCOME TO THIS COURSE",                    // 2 Welcome
+    "STUDENT LEARNING OUTCOMES",                 // 3 Outcomes
+    "REQUIRED MATERIALS",                        // 4 Materials
+    null,                                        // 5 Review/Summary
+    "ASSESSMENT AND GRADING",                    // 6 Grading
+    "COURSE POLICIES",                           // 7 Policies
+    "UNIVERSITY POLICIES AND STUDENT SUPPORT",   // 8 University
+    "COURSE SCHEDULE",                           // 9 Schedule
+    "LABORATORY COMPONENT",                      // 10 Labs
+    null,                                        // 11 Export
   ];
   const SECTION_FOR_ITEM = {
     weeks: "COURSE SCHEDULE",
