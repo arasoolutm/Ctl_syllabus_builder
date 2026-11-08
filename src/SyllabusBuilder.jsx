@@ -863,23 +863,40 @@ export default function SyllabusBuilder() {
   const toggleDay = (n) => set("meetDays",
     d.meetDays.includes(n) ? d.meetDays.filter((x) => x !== n) : [...d.meetDays, n].sort());
 
-  // Week numbers (1-based) whose topics field is empty. Drives both the
-  // readiness check below and the pre-export confirm.
-  const missingWeeks = schedRows
-    .map((w, i) => ({ w, n: i + 1 }))
-    .filter(({ w }) => !w.topics?.trim())
-    .map(({ n }) => n);
+  // Determine whether this is a weekly or modular schedule.
+  const isWeeklySchedule = d.scheduleType !== "modular";
 
-  // A full UTM semester is 15 weeks. The schedule is "complete" when there are
-  // at least 15 rows and each of the first 15 has its topics filled in.
-  const FULL_TERM = 15;
-  const blankInTerm = missingWeeks.filter((n) => n <= FULL_TERM);
-  const fifteenWeeksReady = schedRows.length >= FULL_TERM && blankInTerm.length === 0;
-  const fifteenWeeksLabel = fifteenWeeksReady
-    ? `All ${FULL_TERM} weeks are filled in`
-    : schedRows.length < FULL_TERM
-      ? `Schedule has ${schedRows.length} of ${FULL_TERM} weeks`
-      : `Week${blankInTerm.length > 1 ? "s" : ""} ${blankInTerm.join(", ")} missing topics (all ${FULL_TERM} weeks need topics)`;
+  // Use the Build Weeks input for manual schedules.
+  // Automatically generated schedules use their actual calendar row count.
+  const expectedWeekCount = auto ? schedRows.length : Number(weekCount);
+
+  // Find weeks with missing topics. Modular schedules skip this validation.
+  const missingWeeks = isWeeklySchedule
+    ? schedRows
+        .map((w, i) => ({ w, n: i + 1 }))
+        .filter(({ w, n }) =>
+          n <= expectedWeekCount && !w.topics?.trim()
+        )
+        .map(({ n }) => n)
+    : [];
+
+  // Weekly schedules are complete when the expected number of weeks
+  // exists and all expected weeks have topics.
+  const weeklyScheduleReady = !isWeeklySchedule ||
+    (
+      Number.isInteger(expectedWeekCount) &&
+      expectedWeekCount > 0 &&
+      schedRows.length >= expectedWeekCount &&
+      missingWeeks.length === 0
+    );
+
+  const weeklyScheduleLabel = !isWeeklySchedule
+    ? "Modular schedule (weekly validation skipped)"
+    : weeklyScheduleReady
+      ? `All ${expectedWeekCount} weeks are filled in`
+      : schedRows.length < expectedWeekCount
+        ? `Schedule has ${schedRows.length} of ${expectedWeekCount} weeks`
+        : `Week${missingWeeks.length > 1 ? "s" : ""} ${missingWeeks.join(", ")} missing topics`;
 
   const selectedMeetingPattern = MEETING_PATTERNS.find(
     (pattern) => pattern.value === d.meetingPattern
@@ -916,11 +933,15 @@ export default function SyllabusBuilder() {
     ["Academic integrity included", d.inc.integrity],
     ["Crisis resources included", d.inc.crisis],
     ["Schedule has at least one entry", auto || d.weeks.some((w) => hasText(w.topics) || hasText(w.dates))],
-    [missingWeeks.length === 0
-      ? "Every week in the schedule has topics"
-      : `Topics missing for week${missingWeeks.length > 1 ? "s" : ""} ${missingWeeks.join(", ")}`,
-      missingWeeks.length === 0],
-    [fifteenWeeksLabel, fifteenWeeksReady],
+    ...(isWeeklySchedule ? [
+      [
+        missingWeeks.length === 0
+          ? "Every week in the schedule has topics"
+          : `Topics missing for week${missingWeeks.length > 1 ? "s" : ""} ${missingWeeks.join(", ")}`,
+        missingWeeks.length === 0
+      ],
+      [weeklyScheduleLabel, weeklyScheduleReady]
+    ] : []),
     ...(d.hasLab ? [
       ["Lab meeting time and location", hasText(d.lab.meeting) && hasText(d.lab.location)],
       ["How the lab counts toward the course grade", hasText(d.lab.gradeNote)],
@@ -1182,10 +1203,9 @@ export default function SyllabusBuilder() {
     setTimeout(() => { f.contentWindow.focus(); f.contentWindow.print(); }, 250);
   };
 
-  // Warn about weeks with no topics before exporting; run the export only if
-  // the schedule is complete or the user chooses to proceed anyway.
+ // Warn about missing topics only for weekly schedules.
   const confirmThenExport = (exportFn) => {
-    if (missingWeeks.length > 0) {
+    if (isWeeklySchedule && missingWeeks.length > 0) {
       const ok = window.confirm(
         `Your schedule is missing topics for week${missingWeeks.length > 1 ? "s" : ""} ${missingWeeks.join(", ")}. Export anyway?`
       );
