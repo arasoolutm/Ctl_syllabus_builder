@@ -842,6 +842,9 @@ export default function SyllabusBuilder() {
   // Tracks the last normalized catalog key that was automatically populated
   const [lastAutofilledKey, setLastAutofilledKey] = useState("");
 
+  const matchedCourse = catalog ? catalog[normalizeCourseKey(d.code)] : null;
+  const availableSections = Array.isArray(matchedCourse?.sections) ? matchedCourse.sections : [];
+
   // Handles course code changes, lookups, and clean formatting safely
   const handleCourseCodeChange = (inputValue) => {
     const cleanedKey = normalizeCourseKey(inputValue);
@@ -871,11 +874,14 @@ export default function SyllabusBuilder() {
           code: formattedCode,
 
           // Overwrite if field is empty, matching baseline templates, or switching courses completely
+          // Clear previous course's section & CRN when switching to a different course
+          ...(isSwitchingCourse ? { section: "", crn: "" } : {}),
           title: (!prev.title.trim() || isSwitchingCourse) ? (course.courseTitle || "") : prev.title,
           description: (!prev.description.trim() || isSwitchingCourse) ? (course.description || "") : prev.description,
           prereq: (!prev.prereq.trim() || isSwitchingCourse) ? (course.prerequisites || "") : prev.prereq,
           credits: (!prev.credits.trim() || isDefaultCredits || isSwitchingCourse) ? (course.creditHours || "3") : prev.credits,
-          dept: (inferredDept && (!prev.dept.trim() || prev.dept === "Select a department..." || isSwitchingCourse)) ? inferredDept : prev.dept
+          dept: (inferredDept && (!prev.dept.trim() || prev.dept === "Select a department..." || isSwitchingCourse)) ? inferredDept : prev.dept,
+          subjectLine: (!prev.subjectLine.trim() || isSwitchingCourse) ? `${formattedCode} - [your question]` : prev.subjectLine,
         };
       });
 
@@ -890,6 +896,31 @@ export default function SyllabusBuilder() {
     setTimeout(() => scrollPreviewTo(SECTION_FOR_TAB[tab]), 0);
   };
 
+  // Autofills CRN, delivery, meeting days/time, room, instructor, and email when a section is chosen
+  const handleSectionSelect = (sectionNumber) => {
+    const sec = availableSections.find((s) => s.section === sectionNumber);
+    if (!sec) {
+      set("section", sectionNumber);
+      return;
+    }
+
+    setD((prev) => ({
+      ...prev,
+      section: sec.section,
+      crn: sec.crn || prev.crn,
+      credits: sec.credits || prev.credits,
+      modality: sec.modality || prev.modality,
+      meetingPattern: sec.meetingPattern ?? prev.meetingPattern,
+      meeting: sec.meeting ?? "",
+      meetingTime: sec.meetingTime ?? "",
+      location: sec.location ?? "",
+      meetDays: Array.isArray(sec.meetDays) ? sec.meetDays : prev.meetDays,
+      instructor: sec.instructor || prev.instructor,
+      email: sec.email || prev.email,
+    }));
+
+    setTimeout(() => scrollPreviewTo(SECTION_FOR_TAB[tab]), 0);
+  };
 
   // adds a warning before the user leaves the page changes will not be saved.
   const hasUnsavedChanges = JSON.stringify(d) !== JSON.stringify(blank);
@@ -1582,12 +1613,12 @@ export default function SyllabusBuilder() {
                 <Field label="Course code" hint="POSC 322">
                   <T
                     value={d.code}
-                    onChange={handleCourseCodeChange} // Connected to your safe lookup handler
+                    onChange={handleCourseCodeChange}
                     placeholder="POSC 322"
                   />
 
                   {/* Autofill Match Indicator Banner */}
-                  {d.code && catalog && catalog[normalizeCourseKey(d.code)] && (
+                  {matchedCourse && (
                     <div
                       className="flex items-center gap-1.5 mt-1.5 px-2 py-1 rounded text-xs font-semibold"
                       style={{
@@ -1596,8 +1627,12 @@ export default function SyllabusBuilder() {
                         border: `1px solid ${UI.line || "#D8DEE7"}`
                       }}
                     >
-                      <Check size={12} />
-                      Matched catalog data loaded!
+                      <Check size={12} style={{ flexShrink: 0 }} />
+                      <span>
+                        {availableSections.length > 0 && !d.section.trim()
+                          ? "Course loaded! Select a Section below to autofill the rest."
+                          : "Matched catalog data loaded!"}
+                      </span>
                     </div>
                   )}
                 </Field>
@@ -1609,8 +1644,67 @@ export default function SyllabusBuilder() {
               </div>
             </div>
             <div className="flex gap-3 flex-wrap">
-              <div style={{ flex: "1 1 130px" }}><Field label="CRN" hint="the 5-digit registration number"><T value={d.crn} onChange={(v) => set("crn", v)} placeholder="12345" maxLength={5} /></Field></div>
-              <div style={{ flex: "1 1 130px" }}><Field label="Section"><T value={d.section} onChange={(v) => set("section", v)} placeholder="001" /></Field></div>
+              <div style={{ flex: "1 1 130px" }}>
+                <Field label="CRN" hint="the 5-digit registration number">
+                  <T value={d.crn} onChange={(v) => set("crn", v)} placeholder="12345" maxLength={5} />
+                </Field>
+              </div>
+              <div style={{ flex: "1 1 130px" }}>
+                <Field
+                  label="Section"
+                  hint={availableSections.length > 0 ? `${availableSections.length} available` : undefined}
+                >
+                  {availableSections.length > 0 ? (
+                    <select
+                      style={{
+                        ...inputBase,
+                        // Highlight the dropdown border in UT Orange until a section is picked
+                        border: !d.section.trim() ? `1.5px solid ${C.orange}` : inputBase.border,
+                      }}
+                      value={d.section}
+                      onChange={(e) => handleSectionSelect(e.target.value)}
+                    >
+                      <option value="">Select section to autofill...</option>
+                      {availableSections.map((s) => (
+                        <option key={s.crn || s.section} value={s.section}>
+                          {s.section} — {s.meetingShort} ({s.instructorShort})
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    <T value={d.section} onChange={(v) => set("section", v)} placeholder="001" />
+                  )}
+
+                  {/* Prompt to pick a section when available, or confirmation once picked */}
+                  {availableSections.length > 0 && !d.section.trim() && (
+                    <div
+                      className="flex items-center gap-1.5 mt-1.5 px-2 py-1 rounded text-xs font-semibold"
+                      style={{
+                        background: UI.warnBg || "#FEF6E7",
+                        color: UI.warn || "#B45309",
+                        border: `1px solid ${C.orange}`
+                      }}
+                    >
+                      <Info size={12} style={{ flexShrink: 0 }} />
+                      <span>Select your section to autofill CRN, time, room &amp; instructor</span>
+                    </div>
+                  )}
+
+                  {availableSections.some((s) => s.section === d.section) && (
+                    <div
+                      className="flex items-center gap-1.5 mt-1.5 px-2 py-1 rounded text-xs font-semibold"
+                      style={{
+                        background: UI.goodBg || "#E8F5E9",
+                        color: UI.good || "#1E7A46",
+                        border: `1px solid ${UI.line || "#D8DEE7"}`
+                      }}
+                    >
+                      <Check size={12} style={{ flexShrink: 0 }} />
+                      <span>Section {d.section} details autofilled!</span>
+                    </div>
+                  )}
+                </Field>
+              </div>
             </div>
             <div className="flex gap-3 flex-wrap">
               <div style={{ flex: "1 1 130px" }}><Field label="Term">
