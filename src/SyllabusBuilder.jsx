@@ -807,6 +807,23 @@ const normalizeRichHtml = (value = "") => {
 
 const formatRichText = (value = "") => normalizeRichHtml(value);
 
+/* Turns a rich-text value back into the plain text the professor sees, for the
+   accessibility checks: <br> and <div>/<p> blocks become line breaks, tags such as
+   <b>/<i>/<u> are dropped, and entities (&amp;, &nbsp; …) are decoded. Line breaks
+   follow the same rules normalizeRichHtml uses for the document, so a blank line
+   here is a paragraph break there. A template is inert, so nothing in it runs or loads. */
+const richToPlain = (value = "") => {
+  const s = String(value ?? "");
+  if (!/[<&]/.test(s)) return s; // already plain text
+  const tpl = document.createElement("template");
+  tpl.innerHTML = s
+    .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/<\/(div|p)>\s*<(div|p)\b[^>]*>/gi, "\n")
+    .replace(/<(div|p)\b[^>]*>/gi, "\n")
+    .replace(/<\/(div|p)>/gi, "");
+  return tpl.content.textContent.replace(/ /g, " ").replace(/^\n/, "");
+};
+
 const A = ({ value, onChange, placeholder, rows = 4, onBlur }) => (
   <TextEditor value={value} onChange={onChange} placeholder={placeholder} rows={rows} onBlur={onBlur} />
 );
@@ -1224,7 +1241,7 @@ export default function SyllabusBuilder() {
   // document already puts inside a real numbered list (the learning outcomes).
   const a11yFields = useMemo(() => {
     const f = (tab, label, text, inList = false) =>
-      ({ tab, label, text: typeof text === "string" ? text : "", inList });
+      ({ tab, label, text: typeof text === "string" ? richToPlain(text) : "", inList });
     const titled = (base, i, title) => `${base} ${i + 1}${title?.trim() ? ` (${title.trim()})` : ""}`;
     return [
       f("Instructor", "Office hours", d.hours),
@@ -1310,13 +1327,13 @@ export default function SyllabusBuilder() {
     // heading; text without a title lands under whatever heading came before it.
     const headingProblems = [];
     const pairUp = (list, tab, base, textKey) => list.forEach((item, i) => {
-      const title = item.title.trim(); const text = (item[textKey] || "").trim();
+      const title = item.title.trim(); const text = richToPlain(item[textKey] || "").trim();
       const label = `${base} ${i + 1}${title ? ` (${title})` : ""}`;
       if (title && !text) headingProblems.push({ tab, label, note: "has a title but no text, so it prints as an empty heading" });
       if (!title && text) headingProblems.push({ tab, label, note: "has text but no title, so it prints under the previous heading" });
     });
     d.customDescriptions.forEach((item, i) => {
-      if (item.title.trim() && !item.description.trim()) headingProblems.push({
+      if (item.title.trim() && !richToPlain(item.description).trim()) headingProblems.push({
         tab: "Welcome", label: `Custom description ${i + 1} (${item.title.trim()})`,
         note: "has a title but no text, so it prints as an empty heading",
       });
@@ -1324,7 +1341,7 @@ export default function SyllabusBuilder() {
     pairUp(d.extraMaterials, "Materials", "Material section", "description");
     pairUp(d.customPolicies, "Policies", "Custom policy", "text");
     if (d.hasLab && ![d.lab.crn, d.lab.meeting, d.lab.location, d.lab.instructor, d.lab.description,
-      d.lab.gradeNote, d.lab.attendance, d.lab.safety, d.lab.supplies, d.lab.makeup].some((v) => v?.trim())) {
+      d.lab.gradeNote, d.lab.attendance, d.lab.safety, d.lab.supplies, d.lab.makeup].some((v) => richToPlain(v).trim())) {
       headingProblems.push({ tab: "Labs", label: "Laboratory component",
         note: "is turned on but empty, so it prints as a heading with nothing under it" });
     }
