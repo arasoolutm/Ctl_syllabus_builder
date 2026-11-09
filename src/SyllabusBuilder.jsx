@@ -1670,6 +1670,9 @@ export default function SyllabusBuilder() {
     [data-theme="dark"] .doc-preview.themed .pnote{background:var(--warnBg)}
     [data-theme="dark"] .doc-preview.themed .off{color:var(--warn)}
     [data-theme="dark"] .doc-preview.themed .hdr-l img{filter:invert(1) hue-rotate(180deg);mix-blend-mode:lighten}
+    /* the print's darker text orange is only 3.3:1 on the dark paper; the theme orange is 6.4:1 */
+    [data-theme="dark"] .doc-preview.themed .ct,
+    [data-theme="dark"] .doc-preview.themed .grid td .tag{color:var(--orange)}
   `;
 
   const fullHtml = () =>
