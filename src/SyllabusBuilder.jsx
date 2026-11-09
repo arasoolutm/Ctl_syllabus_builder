@@ -2079,7 +2079,52 @@ export default function SyllabusBuilder() {
                 placeholder="Say what counts as present, what happens after an absence, and who to tell."
               />
             </Field> 
-            <Field label="What engagement looks like here" hint="optional, but it removes a lot of guesswork"><A rows={3} value={d.participation} onChange={(v) => set("participation", v)} placeholder="Merely showing up and sitting through the class is not participation. Asking questions during Q and A, contributing to project discussions, and showing up to team meetings all count." /></Field>
+            <Field label="What engagement looks like here" hint="optional, but it removes a lot of guesswork">
+              <select
+                style={{ ...inputBase, marginBottom: 8 }}
+                value=""
+                onChange={(e) => {
+                  const text = e.target.value;
+                  if (!text) return;
+                  if (
+                    d.participation.trim() &&
+                    !window.confirm("Replace your current engagement policy?")
+                  ) {
+                    return;
+                  }
+                  set("participation", text);
+                }}
+              >
+                <option value="">Please select a sample engagement policy, then edit it to fit your course</option>
+                {[
+                  [
+                    "Discussion & Q&A",
+                    "Merely showing up and sitting through class is not participation. Active engagement means arriving having read the assigned material, asking and answering questions during class discussions, listening respectfully to classmates, and contributing thoughtfully to small-group activities."
+                  ],
+                  [
+                    "Project & Team-Based",
+                    "Engagement in this course is measured by how you show up for your team and the work. Contributing to project discussions, meeting agreed-upon team deadlines, participating in peer reviews, and communicating early when you hit a roadblock all count toward participation."
+                  ],
+                  [
+                    "Active Learning & Problem Solving",
+                    "This class is built around hands-on practice rather than passive note-taking. Engagement means working through in-class problems, sharing your approach (even when you are not sure it is right yet), collaborating with neighbors during exercises, and putting away distractions during class."
+                  ],
+                  [
+                    "Online & Asynchronous",
+                    "In an online course, engagement means staying visibly connected to the class community each week. Logging into Canvas regularly, posting substantive and timely responses on discussion boards, engaging with your peers' ideas, and reaching out during office hours or by email when questions come up all count."
+                  ],
+                ].map(([label, text]) => (
+                  <option key={label} value={text}>{label}</option>
+                ))}
+              </select>
+
+              <A
+                rows={4}
+                value={d.participation}
+                onChange={(v) => set("participation", v)}
+                placeholder="Merely showing up and sitting through the class is not participation. Asking questions during Q and A, contributing to project discussions, and showing up to team meetings all count."
+              />
+            </Field>
             <Field label="Late work and make-up" hint="choose a sample, then edit as needed">
               <select value={d.lateSample} onChange={(e) => {
                 const sample = LATE_POLICIES.find((policy) => policy.label === e.target.value);
