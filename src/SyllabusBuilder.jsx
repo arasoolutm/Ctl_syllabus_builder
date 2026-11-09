@@ -868,7 +868,7 @@ export default function SyllabusBuilder() {
 
   // Use the Build Weeks input for manual schedules.
   // Automatically generated schedules use their actual calendar row count.
-  const expectedWeekCount = auto ? schedRows.length : Number(weekCount);
+  const expectedWeekCount = schedRows.length;
 
   // Find weeks with missing topics. Modular schedules skip this validation.
   const missingWeeks = isWeeklySchedule
@@ -879,6 +879,30 @@ export default function SyllabusBuilder() {
         )
         .map(({ n }) => n)
     : [];
+
+    
+  // Convert consecutive missing week numbers into readable ranges.
+  const formatWeekRanges = (weeks) => {
+    if (weeks.length === 0) return "";
+
+    const ranges = [];
+    let start = weeks[0];
+    let end = weeks[0];
+
+    for (let i = 1; i < weeks.length; i++) {
+      if (weeks[i] === end + 1) {
+        end = weeks[i];
+      } else {
+        ranges.push(start === end ? `${start}` : `${start}-${end}`);
+        start = end = weeks[i];
+      }
+    }
+
+    ranges.push(start === end ? `${start}` : `${start}-${end}`);
+
+    return ranges.join(", ");
+  };
+
 
   // Weekly schedules are complete when the expected number of weeks
   // exists and all expected weeks have topics.
@@ -896,7 +920,7 @@ export default function SyllabusBuilder() {
       ? `All ${expectedWeekCount} weeks are filled in`
       : schedRows.length < expectedWeekCount
         ? `Schedule has ${schedRows.length} of ${expectedWeekCount} weeks`
-        : `Week${missingWeeks.length > 1 ? "s" : ""} ${missingWeeks.join(", ")} missing topics`;
+        : `Week${missingWeeks.length > 1 ? "s" : ""} ${formatWeekRanges(missingWeeks)} missing topics`;
 
   const selectedMeetingPattern = MEETING_PATTERNS.find(
     (pattern) => pattern.value === d.meetingPattern
@@ -1207,7 +1231,7 @@ export default function SyllabusBuilder() {
   const confirmThenExport = (exportFn) => {
     if (isWeeklySchedule && missingWeeks.length > 0) {
       const ok = window.confirm(
-        `Your schedule is missing topics for week${missingWeeks.length > 1 ? "s" : ""} ${missingWeeks.join(", ")}. Export anyway?`
+        `Your schedule is missing topics for week${missingWeeks.length > 1 ? "s" : ""} ${formatWeekRanges(missingWeeks)}. Export anyway?`
       );
       if (!ok) return;
     }
