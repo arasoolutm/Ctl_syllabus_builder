@@ -24,6 +24,23 @@ const UtmMark = ({ style, textColor = "#fff" }) => (
   </svg>
 );
 
+/** Ear with a behind-the-ear hearing aid, drawn to match the lucide icons (lucide has no hearing-aid icon).
+ *  Accepts the same size and style props, so it can be used in TABS like any other icon. */
+const EarHearingAid = ({ size = 24, style, ...rest }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24"
+    fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"
+    aria-hidden="true" style={style} {...rest}>
+    {/* the ear (lucide "ear" paths, shifted left to make room for the hearing aid) */}
+    <g transform="translate(-3 1)">
+      <path d="M6 8.5a6.5 6.5 0 1 1 13 0c0 6-6 6-6 10a3.5 3.5 0 1 1-7 0" />
+      <path d="M15 8.5a2.5 2.5 0 0 0-5 0v1a2 2 0 1 1 0 4" />
+    </g>
+    {/* the hearing aid body behind the ear, and its tube over the top */}
+    <rect x="18" y="5" width="4" height="9" rx="2" fill="currentColor" />
+    <path d="M20 5c0-2.2-1.8-3.6-4-3.4" />
+  </svg>
+);
+
 const C = {
   navy: "#0B2240",      // UT Martin PMS 289
   orange: "#FF8300",    // UT Martin PMS 151
@@ -1381,7 +1398,7 @@ export default function SyllabusBuilder() {
     { n: "Course", i: BookOpen }, { n: "Instructor", i: User }, { n: "Welcome", i: MessageSquare },
     { n: "Outcomes", i: Target }, { n: "Materials", i: Library }, { n: "Grading", i: Scale },
     { n: "Policies", i: Gavel }, { n: "University", i: ShieldCheck }, { n: "Schedule", i: CalendarDays },
-    {n: "Labs", i: FlaskConical}, { n: "Accessibility" }, { n: "Export", i: FileDown },
+    {n: "Labs", i: FlaskConical}, { n: "Accessibility", i: EarHearingAid }, { n: "Export", i: FileDown },
   ];
   // Look tabs up by name so adding a tab doesn't break hardcoded index numbers.
   const tabIndex = (name) => TABS.findIndex((t) => t.n === name);
@@ -1445,7 +1462,7 @@ export default function SyllabusBuilder() {
                 className="flex items-center gap-2 w-full px-3 py-2 text-sm text-left"
                 style={{ background: on ? UI.tint : "transparent", color: on ? UI.navy : UI.slate,
                   borderLeft: `3px solid ${on ? C.orange : "transparent"}`, fontWeight: on ? "bold" : "normal", cursor: "pointer" }}>
-                {I ? <I size={15} /> : <span aria-hidden="true" style={{ width: 15, flexShrink: 0 }} />}{t.n}
+                <I size={15} />{t.n}
               </button>
             );
           })}
