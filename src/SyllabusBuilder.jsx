@@ -690,10 +690,13 @@ const TextEditor = ({ value, onChange, placeholder, rows = 1, mono = false, sing
     }
   };
 
+  const isEmpty = !String(value || "").replace(/<[^>]*>/g, "").trim();
+
   return (
     <div
       style={{
         ...inputBase,
+        position: "relative",
         minHeight: singleLine ? 34 : rows * 22,
         height: singleLine ? 34 : undefined,
         maxHeight: singleLine ? 34 : 220,
@@ -703,6 +706,24 @@ const TextEditor = ({ value, onChange, placeholder, rows = 1, mono = false, sing
         alignItems: "stretch",
       }}
     >
+      {isEmpty && placeholder && (
+        <div
+          aria-hidden="true"
+          style={{
+            position: "absolute",
+            top: 7,
+            left: 10,
+            right: 10,
+            color: UI.muted,
+            pointerEvents: "none",
+            lineHeight: 1.5,
+            whiteSpace: singleLine ? "nowrap" : "pre-wrap",
+            fontFamily: mono ? "ui-monospace, monospace" : inputBase.fontFamily,
+          }}
+        >
+          {placeholder}
+        </div>
+      )}
       <div
         ref={editorRef}
         contentEditable
