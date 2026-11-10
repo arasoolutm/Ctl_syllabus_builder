@@ -1754,12 +1754,29 @@ export default function SyllabusBuilder() {
       formRef.current?.querySelector("input")?.focus({ preventScroll: true });
     });
   };
-  /** Opens the browser print dialog with the current syllabus formatted for PDF output. */  const exportPdf = () => {
+  /** Resolves once every image in the document has loaded or failed to load. */
+  const imagesReady = (doc) => Promise.all([...doc.images].map((img) =>
+    img.complete ? null : new Promise((done) => {
+      img.addEventListener("load", done, { once: true });
+      img.addEventListener("error", done, { once: true });
+    })));
+
+  /** Opens the browser print dialog with the current syllabus formatted for PDF output. */
+  const exportPdf = async () => {
     const f = frameRef.current; if (!f) return;
     const doc = f.contentWindow.document;
     doc.open(); doc.write(fullHtml()); doc.close();
     doc.title = pdfFilename();
-    setTimeout(() => { f.contentWindow.focus(); f.contentWindow.print(); }, 250);
+    // Wait for the logo, any other images, and fonts to finish loading instead
+    // of guessing a delay. The 5-second cap keeps one stuck resource from
+    // blocking the export forever.
+    const win = f.contentWindow;
+    const loaded = Promise.all([imagesReady(doc), doc.fonts ? doc.fonts.ready : null]);
+    const cap = new Promise((done) => setTimeout(done, 5000));
+    await Promise.race([loaded, cap]);
+    // Give the browser one more frame to finish laying out the page.
+    await new Promise((done) => window.requestAnimationFrame(() => done()));
+    win.focus(); win.print();
   };
 
   // Warn about weeks with no topics before exporting; run the export only if
