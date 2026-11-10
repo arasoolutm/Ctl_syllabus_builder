@@ -1263,6 +1263,16 @@ export default function SyllabusBuilder() {
     items: "ASSESSMENT AND GRADING",
     outcomes: "STUDENT LEARNING OUTCOMES",
   };
+  // Maps a repeated text-box key to the syllabus section its preview items live in.
+  const SECTION_FOR_BOX = {
+    outcomes: "STUDENT LEARNING OUTCOMES",
+    customDescriptions: "COURSE INFORMATION",
+    extraMaterials: "REQUIRED MATERIALS",
+    items: "ASSESSMENT AND GRADING",
+    lateAdditional: "COURSE POLICIES",
+    customPolicies: "COURSE POLICIES",
+    weeks: "COURSE SCHEDULE",
+  };
 
   // The element that actually scrolls the preview: the page itself in normal
   // mode, or its wrapper in fullscreen, where the page is allowed to grow.
@@ -1277,7 +1287,31 @@ export default function SyllabusBuilder() {
   // Scroll the preview to the heading for the section being edited, so the user
   // sees the change without hunting for it. Works in both normal and fullscreen
   // mode, where the scrolling element is the wrapper around the page.
-  const scrollPreviewTo = (sectionName) => {
+  // Per-box vertical step used when an extra text box is added. Each repeated
+  // section has different-sized items, so a single value either under-scrolled
+  // the outcomes boxes or over-scrolled everything else.
+  const boxStepFor = (key) => ({
+    outcomes: 42,
+    customDescriptions: 88,
+    extraMaterials: 68,
+    items: 76,
+    lateAdditional: 58,
+    customPolicies: 62,
+    weeks: 36,
+  }[key] || 44);
+  // Saves a pixel offset for every repeated text box, keyed by `${key}-${index}`,
+  // so editing an earlier box returns the preview to that box's saved spot.
+  const savedBoxOffsets = useRef({});
+
+  const boxOffsetFor = (key, index) => {
+    const id = `${key}-${index}`;
+    if (savedBoxOffsets.current[id] === undefined) {
+      savedBoxOffsets.current[id] = index * boxStepFor(key);
+    }
+    return savedBoxOffsets.current[id];
+  };
+
+  const scrollPreviewTo = (sectionName, offsetPixels = 0, behavior = "smooth") => {
     const paper = previewRef.current;
     if (!sectionName || !paper) return;
     const heading = [...paper.querySelectorAll("h2, h3")]
@@ -1285,14 +1319,193 @@ export default function SyllabusBuilder() {
     if (!heading) return;
     const scroller = previewScroller();
     if (!scroller) return;
-    const top = heading.getBoundingClientRect().top - scroller.getBoundingClientRect().top
-      + scroller.scrollTop - 60;
-    scroller.scrollTo({ top: Math.max(0, top), behavior: "smooth" });
+    const maxScroll = Math.max(0, scroller.scrollHeight - scroller.clientHeight);
+    const tRect = heading.getBoundingClientRect();
+    const sRect = scroller.getBoundingClientRect();
+    if (tRect.top >= sRect.top - 24 && tRect.bottom <= sRect.bottom + 24) return; // already visible
+    const rawTop = tRect.top - sRect.top + scroller.scrollTop - 30 + (Number(offsetPixels) || 0);
+    if (Math.abs(rawTop - scroller.scrollTop) <= 8) return;
+    const top = rawTop;
+    scroller.scrollTo({ top: Math.min(maxScroll, Math.max(0, top)), behavior: behavior === "auto" ? "auto" : "smooth" });
   };
+
+  // Scroll the preview to the exact repeated item being edited when possible,
+  // using the live preview DOM so empty items never overshoot their spot.
+  const scrollPreviewToBox = (key, index, behavior = "smooth") => {
+    const sectionName = SECTION_FOR_BOX[key];
+    if (!sectionName) return;
+
+    const paper = previewRef.current;
+    if (!paper) return;
+    const heading = [...paper.querySelectorAll("h2, h3")]
+      .find((h) => h.innerText.trim() === sectionName);
+    if (!heading) { scrollPreviewTo(sectionName, 0, behavior); return; }
+    const scroller = previewScroller();
+    if (!scroller) return;
+    let target = heading;
+    const direct = paper.querySelector(`[data-preview-key="${key}"][data-preview-index="${index}"]`);
+    if (direct) target = direct;
+    else if (key === "outcomes") {
+      let el = heading.nextElementSibling;
+      while (el && el.tagName !== "OL") el = el.nextElementSibling;
+      const items = el ? [...el.querySelectorAll(":scope > li")] : [];
+      const renderedIndex = d.outcomes.slice(0, index).filter((o) => String(o).trim()).length;
+      if (items[renderedIndex]) target = items[renderedIndex];
+      else if (items.length) target = items[items.length - 1];
+    } else if (key === "weeks") {
+      let el = heading.nextElementSibling;
+      while (el && !(el.tagName === "TABLE" && el.classList.contains("grid"))) el = el.nextElementSibling;
+      const rows = el ? [...el.querySelectorAll("tr")] : [];
+      if (rows.length > index + 1) target = rows[index + 1];
+      else if (rows.length) target = rows[rows.length - 1];
+    } else if (key === "extraMaterials") {
+      let el = heading.nextElementSibling;
+      const headings = [];
+      while (el && el.tagName !== "H2") {
+        if (el.tagName === "H3") headings.push(el);
+        el = el.nextElementSibling;
+      }
+      const title = String(d.extraMaterials[index]?.title || "").trim().toUpperCase();
+      const match = title ? headings.find((h) => h.innerText.trim().toUpperCase() === title) : null;
+      if (match) target = match;
+      else if (headings.length) target = headings[Math.min(headings.length - 1, index)];
+    } else if (key === "customPolicies") {
+      let el = heading.nextElementSibling;
+      const headings = [];
+      while (el && el.tagName !== "H2") {
+        if (el.tagName === "H3") headings.push(el);
+        el = el.nextElementSibling;
+      }
+      const title = String(d.customPolicies[index]?.title || "").trim().toUpperCase();
+      const match = title ? headings.find((h) => h.innerText.trim().toUpperCase() === title) : null;
+      if (match) target = match;
+      else if (headings.length) target = headings[Math.min(headings.length - 1, index)];
+    } else if (key === "customDescriptions") {
+      const title = String(d.customDescriptions[index]?.title || "").trim().toUpperCase() || "CUSTOM COURSE DESCRIPTION";
+      const known = new Set(["COURSE INFORMATION", "WELCOME TO THIS COURSE", "COURSE DESCRIPTION", "STUDENT LEARNING OUTCOMES", "REQUIRED MATERIALS", "ASSESSMENT AND GRADING", "COURSE POLICIES", "UNIVERSITY POLICIES AND STUDENT SUPPORT", "COURSE SCHEDULE", "LABORATORY COMPONENT"]);
+      const candidates = [...paper.querySelectorAll("h2")].filter((h) => !known.has(h.innerText.trim().toUpperCase()));
+      const match = candidates.find((h) => h.innerText.trim().toUpperCase() === title);
+      if (match) target = match;
+      else if (candidates[index]) target = candidates[index];
+      else if (candidates.length) target = candidates[candidates.length - 1];
+      else return;
+    } else if (key === "items") {
+      let el = heading.nextElementSibling;
+      while (el && !(el.tagName === "TABLE" && el.classList.contains("grid"))) el = el.nextElementSibling;
+      const rows = el ? [...el.querySelectorAll("tr")] : [];
+      const name = String(d.items[index]?.name || "").trim();
+      const match = name ? rows.find((r) => {
+        const strong = r.querySelector("strong");
+        return strong && strong.innerText.trim() === name;
+      }) : null;
+      if (match) target = match;
+      else if (rows.length) target = rows[rows.length - 1];
+    }
+    if (target === heading) {
+      scrollPreviewTo(sectionName, index * boxStepFor(key), behavior);
+      return;
+    }
+    const tRect = target.getBoundingClientRect();
+    const sRect = scroller.getBoundingClientRect();
+    if (tRect.top >= sRect.top - 24 && tRect.bottom <= sRect.bottom + 24) return; // visible; avoid top yank
+    const scTop = tRect.top - sRect.top + scroller.scrollTop - 30;
+    if (Math.abs(scTop - scroller.scrollTop) <= 8) return;
+    scroller.scrollTo({ top: Math.max(0, scTop), behavior });
+  };
+
+  // Auto-scroll on tab changes: clicking any editor tab moves the preview to
+  // that tab's syllabus section. (This does not run for every keystroke.)
+  const initialMountRef = useRef(true);
+  useEffect(() => {
+    if (initialMountRef.current) { initialMountRef.current = false; return; }
+    const t = setTimeout(() => scrollPreviewTo(SECTION_FOR_TAB[tab]), 0);
+    return () => clearTimeout(t);
+  }, [tab]);
+
+  // Scroll the preview once when a field receives focus (instead of on every
+  // keystroke). This keeps the preview aligned with what you are editing
+  // without yanking it away while you type in a long section. Repeated text
+  // boxes carry a saved pixel offset so focusing an earlier box scrolls back to
+  // its saved spot instead of jumping to the newest one.
+  // Saved pixel positions for repeated form text boxes, keyed by `${key}-${index}`,
+  // so a box that was pushed later still scrolls back to its saved spot when an
+  // earlier box is focused again.
+  const formBoxPositions = useRef({});
+  const skipNextFocusScrollRef = useRef(false);
+  const formScroller = () => {
+    const el = formRef.current;
+    if (!el) return null;
+    return el.scrollHeight > el.clientHeight + 1 ? el : null;
+  };
+  const scrollFormToPixel = (pixels, behavior = "auto") => {
+    const scroller = formScroller();
+    const maxScroll = scroller ? Math.max(0, scroller.scrollHeight - scroller.clientHeight) : 0;
+    const top = Math.min(maxScroll, Math.max(0, Number(pixels) || 0));
+    if (scroller) scroller.scrollTo({ top, behavior });
+    else window.scrollTo({ top, behavior });
+  };
+
+  useEffect(() => {
+    const form = formRef.current;
+    if (!form) return;
+    const handleFocus = (event) => {
+      if (skipNextFocusScrollRef.current) {
+        skipNextFocusScrollRef.current = false;
+        return;
+      }
+      const target = event && event.target;
+      const box = (target && typeof target.closest === "function")
+        ? target.closest("[data-box-key]")
+        : null;
+      const focusedBox = box;
+      // Keep the preview aligned with the box being edited.
+      const previewT = requestAnimationFrame(() => {
+        const paper = previewRef.current;
+        if (focusedBox) {
+          const key = focusedBox.dataset.boxKey;
+          const index = parseInt(focusedBox.dataset.boxIndex, 10);
+          if (Number.isFinite(index)) {
+            scrollPreviewToBox(key, index, "smooth");
+            return;
+          }
+        }
+        // Standard fields first try to land on their own preview spot (such as
+        // "Reaching Me" or an Office facts row) before falling back to the
+        // nearest section heading.
+        const previewSearch = focusedBox ? null : (target && typeof target.closest === "function"
+          ? target.closest("[data-preview-search]")?.dataset.previewSearch
+          : null);
+        if (previewSearch) {
+          const searchLower = previewSearch.toLowerCase();
+          const exact = (searchLower === "office" || searchLower === "office hours");
+          const match = [...paper.querySelectorAll("h2, h3, th, td, tr, p, li")]
+            .find((el) => exact
+              ? (el.textContent || "").trim().toLowerCase() === searchLower
+              : (el.textContent || "").toLowerCase().includes(searchLower));
+          if (match) {
+            const scroller = previewScroller();
+            if (scroller) {
+              const tRect = match.getBoundingClientRect();
+              const sRect = scroller.getBoundingClientRect();
+              if (!(tRect.top >= sRect.top - 24 && tRect.bottom <= sRect.bottom + 24)) {
+                const top = tRect.top - sRect.top + scroller.scrollTop - 30;
+                scroller.scrollTo({ top: Math.max(0, top), behavior: "smooth" });
+              }
+            }
+            return;
+          }
+        }
+        const standardHeading = [...paper.querySelectorAll("h2, h3")]
+          .find((h) => h.innerText.trim() === SECTION_FOR_TAB[tab]);
+        if (standardHeading) standardHeading.scrollIntoView({ block: "nearest", behavior: "smooth" });      });
+      void previewT;
+    };
+    form.addEventListener("focusin", handleFocus);
+    return () => form.removeEventListener("focusin", handleFocus);
+  }, [tab]);
 
   const set = (k, v) => {
     setD((p) => ({ ...p, [k]: v }));
-    setTimeout(() => scrollPreviewTo(SECTION_FOR_TAB[tab]), 0);
   };
 
   const lookupCourseBySection = async (triggerCode, term, subject, courseNumber, section, signal) => {
@@ -1391,7 +1604,6 @@ export default function SyllabusBuilder() {
   // Update one property inside a repeated array item, such as an assignment or week.
   const setDeep = (k, i, key, v) => {
     setD((p) => { const a = [...p[k]]; a[i] = { ...a[i], [key]: v }; return { ...p, [k]: a }; });
-    setTimeout(() => scrollPreviewTo(SECTION_FOR_ITEM[k]), 0);
   };
   // Add or remove one item from a repeated syllabus section.
   const push = (k, obj) => setD((p) => ({ ...p, [k]: [...p[k], obj] }));
@@ -1403,8 +1615,31 @@ export default function SyllabusBuilder() {
   const addGradingItem = () => {
     push("items", { name: "", weight: "", points: "", due: "", desc: "", slos: [] });
     window.requestAnimationFrame(() => {
-      lastGradingItemRef.current?.querySelector("input")?.focus();
+      window.requestAnimationFrame(() => {
+      const container = formRef.current;
+      if (!container) return;
+      const boxes = [...container.querySelectorAll(`[data-box-key="${k}"]`)];
+      const last = boxes[boxes.length - 1];
+      if (!last) return;
+      const id = `${k}-${newItemIndex}`;
+      const scroller = formScroller();
+      const base = scroller ? scroller.getBoundingClientRect().top : 0;
+      const pixels = last.getBoundingClientRect().top - base + (scroller ? scroller.scrollTop : window.scrollY) - 60;
+      formBoxPositions.current[id] = Math.max(0, pixels);
+      // Keep the form from jumping: set its scroll to the new box's saved spot.
+      scrollFormToPixel(formBoxPositions.current[id], "auto");
+      // Also keep the preview aligned with the section's heading.
+      if (k !== "customDescriptions") scrollPreviewToBox(k, newItemIndex, "auto");
+      const field = last.querySelector("input, textarea, select");
+      if (field) {
+        skipNextFocusScrollRef.current = true;
+        field.focus({ preventScroll: true });
+      }
+      });
     });
+  };
+  const addGradingItem = () => {
+    push("items", { name: "", weight: "", points: "", due: "", desc: "", slos: [] });
   };
   const entryHasContent = (entry) => typeof entry === "string"
     ? entry.trim().length > 0
@@ -1481,6 +1716,7 @@ export default function SyllabusBuilder() {
         dates: dates[i] || w.dates,
       })),
     }));
+    setTimeout(() => scrollPreviewTo("COURSE SCHEDULE"), 0);
   };
 
   const buildSemesterSchedule = () => {
@@ -1496,6 +1732,7 @@ export default function SyllabusBuilder() {
         due: p.weeks[i]?.due || "",
       })),
     }));
+    setTimeout(() => scrollPreviewTo("COURSE SCHEDULE"), 0);
   };
 
   const weightTotal = useMemo(
@@ -1514,6 +1751,62 @@ export default function SyllabusBuilder() {
     );
 
   const realOutcomes = d.outcomes.filter((o) => o.trim());
+  // When a section goes from empty to having content, nudge the preview to
+  // that section's heading so the new content comes into view.
+  const prevRealOutcomesRef = useRef(realOutcomes.length);
+  useEffect(() => {
+    if (realOutcomes.length > prevRealOutcomesRef.current) {
+      const t = requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          scrollPreviewToBox("outcomes", Math.max(0, d.outcomes.length - 1), "smooth");
+        });
+      });
+      void t;
+    }
+    prevRealOutcomesRef.current = realOutcomes.length;
+  }, [realOutcomes.length]);
+
+  const countedItems = d.items.filter((x) => x.name).length;
+  const prevItemsRef = useRef(countedItems);
+  useEffect(() => {
+    if (countedItems > prevItemsRef.current) {
+      const t = requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          scrollPreviewToBox("items", Math.max(0, d.items.length - 1), "smooth");
+        });
+      });
+      void t;
+    }
+    prevItemsRef.current = countedItems;
+  }, [countedItems]);
+
+  const prevWelcomeRef = useRef(Boolean(d.welcome && d.welcome.trim()));
+  useEffect(() => {
+    const now = Boolean(d.welcome && d.welcome.trim());
+    if (now && !prevWelcomeRef.current) {
+      const t = requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          scrollPreviewTo("WELCOME TO THIS COURSE", 0, "auto");
+        });
+      });
+      void t;
+    }
+    prevWelcomeRef.current = now;
+  }, [d.welcome]);
+
+  const countedCustomDescriptions = d.customDescriptions.filter((item) => (item.title || "").trim() || (item.description || "").trim()).length;
+  const prevCustomDescriptionsRef = useRef(countedCustomDescriptions);
+  useEffect(() => {
+    if (countedCustomDescriptions > prevCustomDescriptionsRef.current) {
+      const t = requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          scrollPreviewToBox("customDescriptions", Math.max(0, d.customDescriptions.length - 1), "smooth");
+        });
+      });
+      void t;
+    }
+    prevCustomDescriptionsRef.current = countedCustomDescriptions;
+  }, [countedCustomDescriptions]);
   const mappedSlos = new Set(d.items.flatMap((x) => x.slos));
   const unmapped = realOutcomes.map((_, i) => i).filter((i) => !mappedSlos.has(i));
 
@@ -1536,6 +1829,34 @@ export default function SyllabusBuilder() {
     a[i] = { ...a[i], [key]: v };
     return { ...p, weeks: a };
   });
+
+  const countedMaterials = d.extraMaterials.filter((m) => (m.title || "").trim() || (m.description || "").trim()).length;
+  const prevMaterialsRef = useRef(countedMaterials);
+  useEffect(() => {
+    if (countedMaterials > prevMaterialsRef.current) {
+      const t = requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          scrollPreviewToBox("extraMaterials", Math.max(0, d.extraMaterials.length - 1), "smooth");
+        });
+      });
+      void t;
+    }
+    prevMaterialsRef.current = countedMaterials;
+  }, [countedMaterials]);
+
+  const countedWeeks = schedRows.filter((w) => (w.label || "").trim() || (w.topics || "").trim() || (w.dates || "").trim()).length;
+  const prevWeeksRef = useRef(countedWeeks);
+  useEffect(() => {
+    if (countedWeeks > prevWeeksRef.current) {
+      const t = requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          scrollPreviewToBox("weeks", Math.max(0, d.weeks.length - 1), "smooth");
+        });
+      });
+      void t;
+    }
+    prevWeeksRef.current = countedWeeks;
+  }, [countedWeeks]);
   const toggleDay = (n) => set("meetDays",
     d.meetDays.includes(n) ? d.meetDays.filter((x) => x !== n) : [...d.meetDays, n].sort());
 
@@ -1918,17 +2239,21 @@ export default function SyllabusBuilder() {
 
     if (d.welcome) { sec("Welcome to This Course"); h.push(para(d.welcome)); }
     if (d.description) { sec("Course Description"); h.push(para(d.description)); }
-    (d.customDescriptions || []).filter((item) => item.title.trim() || item.description.trim()).forEach((item) => {
-      sec(item.title.trim() || "Custom Course Description");
-      if (item.description.trim()) h.push(para(item.description));
-    });
+     d.customDescriptions.forEach((item, i) => {
+       if (item.title.trim() || item.description.trim()) {
+         h.push(`<h2 data-preview-key="customDescriptions" data-preview-index="${i}">${esc(item.title.trim() || "Custom Course Description")}</h2>`);
+         if (item.description.trim()) h.push(para(item.description));
+       }
+     });
 
     if (realOutcomes.length || d.showPrimer) {
       sec("Student Learning Outcomes");
       if (d.showPrimer) h.push(`<div class="primer"><div class="primer-h">For the instructor: what an SLO is and why it is here</div>${para(SLO_PRIMER)}</div>`);
       if (realOutcomes.length) {
-        h.push(`<p>By the end of this course, you should be able to:</p><ol>${realOutcomes.map((o) =>
-          `<li>${esc(o)}</li>`).join("")}</ol>`);
+        h.push(`<p>By the end of this course, you should be able to:</p><ol>${
+          d.outcomes.map((o, i) => o.trim()
+            ? `<li data-preview-key="outcomes" data-preview-index="${i}">${esc(o)}</li>`
+            : "").join("")}</ol>`);
       }
     }
 
@@ -2010,10 +2335,12 @@ export default function SyllabusBuilder() {
       sec("Course Policies");
       pol.forEach(([t, b]) => { h.push(`<h3>${esc(t)}</h3>`); h.push(para(b)); });
       if (d.profNote) h.push(`<div class="pnote"><strong>A note from your professor.</strong> ${esc(d.profNote)}</div>`);
-        customPolicies.forEach((policy) => {
-        if (policy.title.trim()) h.push(`<h3>${esc(policy.title)}</h3>`);
-        if (policy.text.trim()) h.push(para(policy.text));
-      });
+        d.customPolicies.forEach((policy, i) => {
+        if (policy.title.trim() || policy.text.trim()) {
+          if (policy.title.trim()) h.push(`<h3 data-preview-key="customPolicies" data-preview-index="${i}">${esc(policy.title)}</h3>`);
+          if (policy.text.trim()) h.push(para(policy.text));
+        }
+        });
     }
 
     const uni = Object.keys(LOCKED).filter((k) => d.inc[k]);
@@ -2576,7 +2903,7 @@ export default function SyllabusBuilder() {
             <Field label="Course description"><A rows={5} value={d.description} onChange={(v) => set("description", v)} placeholder="Paste the description from the UTM catalog." /></Field>
             <div className="mt-6 mb-2" style={{ color: UI.navy, fontWeight: "bold", fontSize: 14 }}>Custom course descriptions</div>
             {(d.customDescriptions || []).map((item, i) => (
-              <div key={i} className="mb-3 p-3 rounded" style={{ background: UI.paper, border: `1px solid ${UI.line}` }}>
+              <div key={i} data-box-key="customDescriptions" data-box-index={i} className="mb-3 p-3 rounded" style={{ background: UI.paper, border: `1px solid ${UI.line}` }}>
                 <div className="flex items-start gap-2">
                   <div style={{ flex: 1 }}>
                     <Field label="Custom title"><T value={item.title} onChange={(v) => setDeep("customDescriptions", i, "title", v)} placeholder="Course focus, context, or special emphasis" /></Field>
@@ -2599,7 +2926,7 @@ export default function SyllabusBuilder() {
               <span>Include the explainer box in the exported document. It tells a new faculty member what an SLO is, how to test one, and why the Gen Ed outcomes belong here. Uncheck it, or delete the box in Word, once your outcomes are written.</span>
             </label>
             {d.outcomes.map((o, i) => (
-              <div key={i} className="flex gap-2 mb-2 items-start">
+              <div key={i} data-box-key="outcomes" data-box-index={i} className="flex gap-2 mb-2 items-start">
                 <div style={{ width: 22, paddingTop: 8, color: C.orange, fontWeight: "bold", fontSize: 13 }}>{i + 1}</div>
                 <div style={{ flex: 1 }}><A rows={2} value={o} onChange={(v) => setD((p) => { const a = [...p.outcomes]; a[i] = v; return { ...p, outcomes: a }; })}
                   placeholder="Students will evaluate ..." /></div>
@@ -2649,7 +2976,7 @@ export default function SyllabusBuilder() {
               <A rows={2} value={d.materials.acquire} onChange={(v) => set("materials", { ...d.materials, acquire: v })} placeholder="Where to acquire them: the UTM Bookstore, a copy on reserve at Paul Meek Library, or the publisher link in Canvas." />
             </Field>
             {d.extraMaterials.map((material, i) => (
-              <div key={i} className="p-3 mb-3 rounded" style={{ background: UI.paper, border: `1px solid ${UI.line}` }}>
+              <div key={i} data-box-key="extraMaterials" data-box-index={i} className="p-3 mb-3 rounded" style={{ background: UI.paper, border: `1px solid ${UI.line}` }}>
                 <div className="flex gap-2 mb-2">
                   <div style={{ flex: 1 }}>
                     <T value={material.title} onChange={(v) => setDeep("extraMaterials", i, "title", v)} placeholder="Custom material heading" />
@@ -2763,7 +3090,7 @@ export default function SyllabusBuilder() {
               )}
             </div>
             {d.items.map((x, i) => (
-              <div key={i} ref={i === d.items.length - 1 ? lastGradingItemRef : null} className="p-3 mb-3 rounded" style={{ background: UI.paper, border: `1px solid ${UI.line}` }}>
+              <div key={i} data-box-key="items" data-box-index={i} ref={i === d.items.length - 1 ? lastGradingItemRef : null} className="p-3 mb-3 rounded" style={{ background: UI.paper, border: `1px solid ${UI.line}` }}>
                 <div className="flex gap-2 mb-2">
                   <div style={{ flex: 3 }}><T value={x.name} onChange={(v) => setDeep("items", i, "name", v)} placeholder="Assignment or category" /></div>
                   {d.gradingMethod === "percentage" ? (
@@ -2911,7 +3238,8 @@ export default function SyllabusBuilder() {
               <A rows={3} value={d.late} onChange={(v) => set("late", v)} placeholder="Describe your late work deadlines, penalties, extensions, and make-up arrangements." />
             </Field>
             {d.lateAdditional.map((policy, i) => (
-              <Field key={i} label="Additional late work policy" hint="choose a sample, then edit as needed">
+              <div key={i} data-box-key="lateAdditional" data-box-index={i}>
+              <Field label="Additional late work policy" hint="choose a sample, then edit as needed">
                 <select value={policy.sample} onChange={(e) => {
                   const sample = LATE_POLICIES.find((option) => option.label === e.target.value);
                   setDeep("lateAdditional", i, "sample", e.target.value);
@@ -2925,6 +3253,7 @@ export default function SyllabusBuilder() {
                   <Btn onClick={() => drop("lateAdditional", i)} icon={Trash2}>Remove policy</Btn>
                 </div>
               </Field>
+              </div>
             ))}
             <Btn onClick={() => push("lateAdditional", { sample: "", text: "" })} icon={Plus}>Add additional late work policy/paragraph</Btn>
 
@@ -3040,7 +3369,7 @@ export default function SyllabusBuilder() {
               <Note>The built-in add/drop and deadline table is currently available only for Fall 2026, so it will not be appended for this semester.</Note>
             )}
             {schedRows.map((w, i) => (
-              <div key={i} className="p-3 mb-3 rounded" style={{ background: UI.paper, border: `1px solid ${UI.line}` }}>
+              <div key={i} data-box-key="weeks" data-box-index={i} className="p-3 mb-3 rounded" style={{ background: UI.paper, border: `1px solid ${UI.line}` }}>
                 {auto ? (
                   <div className="mb-2">
                     <span style={{ color: UI.navy, fontWeight: "bold", fontSize: 14 }}>{w.label}</span>
