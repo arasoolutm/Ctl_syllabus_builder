@@ -2,8 +2,10 @@ import React, { useState, useMemo, useRef, useEffect } from "react";
 import {
   BookOpen, User, MessageSquare, Target, Library, Scale, Gavel,
   ShieldCheck, CalendarDays, FileDown, Check, AlertTriangle, Plus, Trash2,
-  Save, Upload, Printer, Lock, Info, ChevronRight, Maximize2, Minimize2, FlaskConical
+  Save, Upload, Printer, Lock, Info, ChevronRight, Maximize2, Minimize2, FlaskConical, ChevronDown, X, Loader2,
+  CircleX, ClipboardCheck
 } from "lucide-react";
+import { SUBJECTS } from "./subjectCodes.js";
 
 /* ============================================================
    UTM SYLLABUS BUILDER  ·  Center for Teaching and Learning
@@ -23,9 +25,27 @@ const UtmMark = ({ style, textColor = "#fff" }) => (
   </svg>
 );
 
+/** Ear with a behind-the-ear hearing aid, drawn to match the lucide icons (lucide has no hearing-aid icon).
+ *  Accepts the same size and style props, so it can be used in TABS like any other icon. */
+const EarHearingAid = ({ size = 24, style, ...rest }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24"
+    fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"
+    aria-hidden="true" style={style} {...rest}>
+    {/* the ear (lucide "ear" paths, shifted left to make room for the hearing aid) */}
+    <g transform="translate(-3 1)">
+      <path d="M6 8.5a6.5 6.5 0 1 1 13 0c0 6-6 6-6 10a3.5 3.5 0 1 1-7 0" />
+      <path d="M15 8.5a2.5 2.5 0 0 0-5 0v1a2 2 0 1 1 0 4" />
+    </g>
+    {/* the hearing aid body behind the ear, and its tube over the top */}
+    <rect x="18" y="5" width="4" height="9" rx="2" fill="currentColor" />
+    <path d="M20 5c0-2.2-1.8-3.6-4-3.4" />
+  </svg>
+);
+
 const C = {
   navy: "#0B2240",      // UT Martin PMS 289
   orange: "#FF8300",    // UT Martin PMS 151
+  orangeText: "#B35900", // darker orange for small text: 4.8:1 on white (UT Orange is 2.5:1, below WCAG's 4.5:1)
   ink: "#1a1a1a",
   slate: "#4A5568",
   line: "#D8DEE7",
@@ -33,6 +53,7 @@ const C = {
   wash: "#F4F6F9",
   good: "#1E7A46",
   warn: "#B45309",
+  bad: "#C0392B",
 };
 
 const UI = {
@@ -50,6 +71,13 @@ const UI = {
   warn: "var(--warn)",
   warnBg: "var(--warnBg)",
 };
+
+const THEMES = [
+    { id: "light", label: "Light Mode" },
+    { id: "dark", label: "Dark Mode" },
+    { id: "blue", label: "Blue Light Mode" },
+    { id: "blue+", label: "Blue Light+ Mode" },
+];
 
 /* ---------- Institutional content maintained by CTL ---------- */
 
@@ -214,118 +242,52 @@ const Spring_2027 = [
   ["May 1", "Commencement"]
 ];
 
-const COURSE_PREFIX_TO_DEPT = {
-  "AGEC": "Agriculture, Geosciences, and Natural Resources",
-  "AGED": "Agriculture, Geosciences, and Natural Resources",
-  "AGET": "Agriculture, Geosciences, and Natural Resources",
-  "AGRI": "Agriculture, Geosciences, and Natural Resources",
-  "GEOL": "Agriculture, Geosciences, and Natural Resources",
-  "GEOS": "Agriculture, Geosciences, and Natural Resources",
-  "GEOG": "Agriculture, Geosciences, and Natural Resources",
-  "METR": "Agriculture, Geosciences, and Natural Resources",
-  "SOIL": "Agriculture, Geosciences, and Natural Resources",
-  "NRM": "Agriculture, Geosciences, and Natural Resources",
-  "WBIO": "Agriculture, Geosciences, and Natural Resources",
-  "ANSC": "Agriculture, Geosciences, and Natural Resources",
-  "PLSC": "Agriculture, Geosciences, and Natural Resources",
-  "VET": "Agriculture, Geosciences, and Natural Resources",
+const SUMMER_SCHEDULES = {
+  "summer-full": { label: "Full summer schedule", start: "2026-06-02", end: "2026-08-06" },
+  "summer-first-half": { label: "First half summer schedule", start: "2026-06-02", end: "2026-07-01" },
+  "summer-second-half": { label: "Second half summer schedule", start: "2026-07-06", end: "2026-08-06" },
+};
 
-  "CFS": "Family and Consumer Sciences",
-  "CRMG": "Family and Consumer Sciences",
-  "FASH": "Family and Consumer Sciences",
-  "FCS": "Family and Consumer Sciences",
-  "FSCI": "Family and Consumer Sciences",
-  "FSVC": "Family and Consumer Sciences",
-  "FSMG": "Family and Consumer Sciences",
-  "HPMG": "Family and Consumer Sciences",
-  "NUTR": "Family and Consumer Sciences",
-  "GERO": "Family and Consumer Sciences",
+const formatWeekday = (date) => date.toLocaleDateString("en-US", { weekday: "long" });
+const formatMonthDay = (date) => date.toLocaleDateString("en-US", { month: "long", day: "numeric" });
 
-  "ACCT": "Accounting, Finance, Economics, and Political Science",
-  "POSC": "Accounting, Finance, Economics, and Political Science",
-  "ECON": "Accounting, Finance, Economics, and Political Science",
-  "FIN": "Accounting, Finance, Economics, and Political Science",
-  "GLST": "Accounting, Finance, Economics, and Political Science",
+const buildSummerScheduleRows = (key) => {
+  const { start, end } = SUMMER_SCHEDULES[key] || SUMMER_SCHEDULES["summer-full"];
+  const startDate = new Date(`${start}T12:00:00`);
+  const endDate = new Date(`${end}T12:00:00`);
+  const rows = [];
+  let cursor = new Date(startDate);
+  let week = 1;
 
-  "MGT": "Management, Marketing, and Information Systems",
-  "MKTG": "Management, Marketing, and Information Systems",
-  "INFS": "Management, Marketing, and Information Systems",
-  "BADM": "Management, Marketing, and Information Systems",
-  "BCOM": "Management, Marketing, and Information Systems",
-  "SPMG": "Management, Marketing, and Information Systems",
+  while (cursor <= endDate) {
+    while (cursor <= endDate && (cursor.getDay() === 0 || cursor.getDay() === 6)) {
+      cursor.setDate(cursor.getDate() + 1);
+    }
+    if (cursor > endDate) break;
 
-  "CJ": "Behavioral Sciences",
-  "SOC": "Behavioral Sciences",
-  "SWRK": "Behavioral Sciences",
+    const dates = [];
+    let current = new Date(cursor);
+    while (current <= endDate && current.getDay() !== 0 && current.getDay() !== 6) {
+      dates.push(new Date(current));
+      current.setDate(current.getDate() + 1);
+    }
 
-  "TCED": "Educational Studies",
-  "SPED": "Educational Studies",
-  "READ": "Educational Studies",
-  "SEDU": "Educational Studies",
-  "ECED": "Educational Studies",
-  "BUED": "Educational Studies",
-  "ELED": "Educational Studies",
-  "EDST": "Educational Studies",
-  "FCSE": "Educational Studies",
+    if (dates.length) {
+      const first = dates[0];
+      const last = dates[dates.length - 1];
+      const rangeText = dates.length > 1
+        ? `${formatWeekday(first)}, ${formatMonthDay(first)} to ${formatWeekday(last)}, ${formatMonthDay(last)}`
+        : `${formatWeekday(first)}, ${formatMonthDay(first)}`;
 
-  "EXSC": "Health and Human Performance",
-  "HLTH": "Health and Human Performance",
-  "HPED": "Health and Human Performance",
-  "ATRN": "Health and Human Performance",
-  "PACT": "Health and Human Performance",
-  "HHP": "Health and Human Performance",
-  "HPER": "Health and Human Performance",
+      rows.push({ label: `Week ${week}`, dates: rangeText, topics: "", due: "" });
+      week += 1;
+      cursor = new Date(current);
+    } else {
+      cursor.setDate(cursor.getDate() + 1);
+    }
+  }
 
-  "NURS": "Nursing",
-
-  "PSYC": "Psychology",
-  "NEUR": "Psychology",
-
-  "BIOL": "Biological Sciences",
-  "BOT": "Biological Sciences",
-  "MBIO": "Biological Sciences",
-  "ZOOL": "Biological Sciences",
-
-  "CHEM": "Chemistry and Physics",
-  "PHYS": "Chemistry and Physics",
-  "ASTR": "Chemistry and Physics",
-  "BCHE": "Chemistry and Physics",
-
-  "CSCI": "Computer Science",
-  "CYBR": "Computer Science",
-
-  "AMAE": "Engineering",
-  "ENGR": "Engineering",
-  "CIEG": "Engineering",
-  "CMGT": "Engineering",
-
-  "MATH": "Mathematics and Statistics",
-  "STAT": "Mathematics and Statistics",
-
-  "MMSC": "Communications",
-
-  "ENGL": "English and Modern Foreign Languages",
-  "FREN": "English and Modern Foreign Languages",
-  "GERM": "English and Modern Foreign Languages",
-  "JAPN": "English and Modern Foreign Languages",
-  "PORT": "English and Modern Foreign Languages",
-  "SPAN": "English and Modern Foreign Languages",
-
-  "HIST": "History and Philosophy",
-  "PHIL": "History and Philosophy",
-  "RLST": "History and Philosophy",
-
-  "MUS": "Music",
-  "MUAP": "Music",
-  "MUED": "Music",
-  "MUEN": "Music",
-
-  "THEA": "Visual and Theatre Arts",
-  "ART": "Visual and Theatre Arts",
-  "ARTH": "Visual and Theatre Arts",
-  "FA": "Visual and Theatre Arts",
-  "GDES": "Visual and Theatre Arts",
-  "DANC": "Visual and Theatre Arts"
+  return rows;
 };
 
 /* Registrar's academic calendar, one entry per term. Dates are "YYYY-MM-DD".
@@ -468,12 +430,88 @@ const MEETING_PATTERNS = [
   { value: "custom", label: "Custom" },
 ];
 
+// Guesses the term people are planning for: once a term is a month in, it's the next one.
+// Only used until Banner says which term is open, or if Banner can't be reached.
+function defaultTerm(today = new Date()) {
+  const y = today.getFullYear();
+  const terms = [y - 1, y, y + 1].flatMap((yr) => [
+    { label: `Spring ${yr}`, start: new Date(yr, 0, 7) },
+    { label: `Summer ${yr}`, start: new Date(yr, 5, 1) },
+    { label: `Fall ${yr}`, start: new Date(yr, 7, 22) },
+  ]);
+  let last = 0;
+  terms.forEach((t, i) => {
+    const monthIn = new Date(t.start.getFullYear(), t.start.getMonth() + 1, t.start.getDate());
+    if (monthIn <= today) last = i;
+  });
+  return terms[last + 1].label;
+}
+
+// Departments and their subjects, checked against utm.edu.
+// Also the fallback when Banner's department info is wrong.
+const DEPARTMENT_DATA = [
+  { college: "College of Agriculture and Applied Sciences", departments: [
+    { name: "Agriculture, Geosciences, and Natural Resources", subjects: ["AGEC", "AGED", "AGET", "AGRI", "ANSC", "GEOL", "GEOS", "METR", "NRM", "PARK", "PLSC", "SOIL", "VET", "WBIO"] },
+    { name: "Family and Consumer Sciences", subjects: ["FCS", "CFS", "FCSE", "FASH", "GERO", "HPMG", "FSMG", "NUTR"] },
+    { name: "Military Science and Leadership", subjects: ["MSL"] },
+  ] },
+  { college: "College of Business and Global Affairs", departments: [
+    { name: "School of Business", subjects: ["ACCT", "ECON", "FIN", "MGT", "MKTG", "BCOM", "INFS", "SPMG", "BLAW"] },
+  ] },
+  { college: "College of Education, Health, and Behavioral Sciences", departments: [
+    { name: "Behavioral Sciences", subjects: ["CJ", "SWRK", "SOC"] },
+    { name: "Educational Studies", subjects: ["EDST", "ELED", "ECED", "SEDU", "SPED", "COUN", "TCED", "EDFN", "READ"] },
+    { name: "Health and Human Performance", subjects: ["HHP", "EXSC", "HPER", "ATRN", "HPED", "HLTH", "PACT"] },
+    { name: "Interdisciplinary Studies", subjects: ["IDST"] },
+    { name: "Nursing", subjects: ["NURS"] },
+    { name: "Psychology", subjects: ["PSYC"] },
+  ] },
+  { college: "College of Engineering and Natural Sciences", departments: [
+    { name: "Biological Sciences", subjects: ["BIOL", "ZOOL", "BOT", "MBIO", "BCHE"] },
+    { name: "Chemistry and Physics", subjects: ["CHEM", "PHYS", "ASTR"] },
+    { name: "Computer Science", subjects: ["CSCI", "CYBR"] },
+    { name: "Engineering", subjects: ["ENGR", "CIEG", "CMGT"] },
+    { name: "Mathematics and Statistics", subjects: ["MATH", "STAT"] },
+  ] },
+  { college: "College of Humanities and Fine Arts", departments: [
+    { name: "English and Modern Foreign Languages", subjects: ["ENGL", "FREN", "GERM", "JAPN", "SPAN"] },
+    { name: "History and Philosophy", subjects: ["AAST", "HIST", "PHIL", "RLST", "WMST"] },
+    { name: "Mass Media and Strategic Communication", subjects: ["MMSC"] },
+    { name: "Music", subjects: ["MUS", "MUAP", "MUED", "MUEN"] },
+    { name: "Political Science and Global Studies", subjects: ["POSC", "INST"] },
+    { name: "Visual and Theatre Arts", subjects: ["ART", "ARTE", "ARTH", "DANC", "DNED", "THEA", "GDES"] },
+  ] },
+];
+
+// grouped list for the Department dropdown
+const DEPARTMENTS = DEPARTMENT_DATA.map(({ college, departments }) => ({
+  college, names: departments.map((d) => d.name),
+}));
+
+// subject code -> "Department of X". Unclear ones like GENS and HNRS are left out.
+// Preloads the whole term's catalog so typing is instant. Off because it's a lot
+// of requests to Banner every visit and live search is fast enough.
+// Turn it on if typing feels slow.
+const WARM_CATALOG = false;
+
+// true when the live lookup can't be reached at all (no server, or Banner is down),
+// not when Banner just didn't find anything
+const liveLookupUnreachable = (res) =>
+  res.status >= 500 || !(res.headers.get("content-type") || "").includes("application/json");
+
+const SUBJECT_DEPARTMENTS = new Map();
+for (const { departments } of DEPARTMENT_DATA) {
+  for (const { name, subjects } of departments) {
+    for (const code of subjects) SUBJECT_DEPARTMENTS.set(code, `Department of ${name}`);
+  }
+}
+
 // Builds a fresh blank draft. Returning a new object each time keeps the
 // initial state and every reset independent of each other.
 const createBlank = () => ({
-  code: "", title: "", crn: "", section: "", term: "Spring 2027", modality: "In person",
+  code: "", title: "", crn: "", section: "", term: defaultTerm(), modality: "In person",
   credits: "3", meetingPattern: "", meeting: "", meetingTime: "",
-  location: "", exlocation: "", dept: "Select a department...", prereq: "",
+  location: "", exlocation: "", dept: "", prereq: "",
   instructor: "", email: "", phone: "", office: "", hours: "", address: "",
   subjectLine: "",
   description: "", welcome: "", customDescriptions: [],
@@ -481,6 +519,7 @@ const createBlank = () => ({
   texts: "", costNote: "", tech: "",
   materials: { provided: false, hardcopy: false, online: false, acquire: "" },
   extraMaterials: [],
+  gradingMethod: "percentage",
   items: [{ name: "", weight: "", points: "", due: "", desc: "", slos: [] }],
   scale: "A 90 to 100  ·  B 80 to 89  ·  C 70 to 79  ·  D 60 to 69  ·  F below 60",
   attendance: "", late: "", lateSample: "", lateAdditional: [], participation: "",
@@ -520,17 +559,6 @@ const sanitizePart = (s) => {
   return RESERVED.test(out) ? `${out}_` : out;
 };
 
-/**
- * Normalizes a course code string to match the course catalog JSON keys.
- * Example: "csci 325", "CSCI-325", or "  Csci325 " → "CSCI325"
- */
-const normalizeCourseKey = (str) => {
-  if (!str) return "";
-  return String(str)
-    .replace(/[^A-Za-z0-9]/g, "") // Strip spaces, hyphens, and punctuation
-    .toUpperCase();               // Force to uppercase to match JSON keys
-};
-
 
 /** Renders an uppercase field label and an optional hint. */
 const Lbl = ({ children, hint }) => (
@@ -546,16 +574,232 @@ const inputBase = {
   fontSize: 14, color: UI.ink, background: UI.paper, outline: "none",
 };
 
-/** Renders a controlled single-line text input using the builder's shared styling. */
+/* Rich-text fields are stored as a small HTML subset. Browsers wrap each new
+   line in a <div>, so those blocks are kept (without attributes) while the
+   editor is being typed in; blocksToBreaks() flattens them on blur so the value
+   survives a round trip through JSON and the document builder. */
+const allowedEditorTags = ["B", "STRONG", "I", "EM", "U"];
+
+const stripAttributes = (node) => {
+  Array.from(node.attributes).forEach((attr) => node.removeAttribute(attr.name));
+};
+
+const sanitizeEditorContent = (html = "") => {
+  if (!html) return "";
+
+  const temp = document.createElement("div");
+  temp.innerHTML = html;
+
+  Array.from(temp.querySelectorAll("*")).forEach((node) => {
+    if (!node.parentNode) return;
+    const tag = node.tagName.toUpperCase();
+    if (allowedEditorTags.includes(tag) || tag === "DIV" || tag === "P" || tag === "BR") {
+      stripAttributes(node);
+      return;
+    }
+    while (node.firstChild) node.parentNode.insertBefore(node.firstChild, node);
+    node.remove();
+  });
+
+  return temp.innerHTML;
+};
+
+const blocksToBreaks = (html = "") => {
+  if (!html) return "";
+  const temp = document.createElement("div");
+  temp.innerHTML = html;
+
+  Array.from(temp.querySelectorAll("div, p")).forEach((node) => {
+    if (!node.parentNode) return;
+    const br = document.createElement("br");
+    node.parentNode.insertBefore(br, node);
+    while (node.firstChild) node.parentNode.insertBefore(node.firstChild, node);
+    node.remove();
+  });
+
+  // A leading block (a first line that has content) leaves a leading break.
+  if (temp.firstChild && temp.firstChild.nodeName === "BR") temp.removeChild(temp.firstChild);
+
+  return temp.innerHTML;
+};
+
+const TextEditor = ({ value, onChange, placeholder, rows = 1, mono = false, singleLine = false, onBlur }) => {
+  const editorRef = useRef(null);
+
+  useEffect(() => {
+    if (editorRef.current && editorRef.current.innerHTML !== value) {
+      editorRef.current.innerHTML = value || "";
+    }
+  }, [value]);
+
+  const persistValue = () => {
+    const raw = editorRef.current?.innerHTML || "";
+    const safe = sanitizeEditorContent(raw);
+    editorRef.current.innerHTML = safe;
+    onChange(safe);
+  };
+
+  const handleKeyDown = (event) => {
+    const isModifier = event.ctrlKey || event.metaKey;
+    const key = event.key.toLowerCase();
+
+    if (!isModifier) return;
+
+    const map = {
+      b: "bold",
+      i: "italic",
+      u: "underline",
+    };
+
+    if (map[key]) {
+      event.preventDefault();
+      const editor = editorRef.current;
+      if (!editor) return;
+      editor.focus();
+      document.execCommand(map[key], false, null);
+      persistValue();
+    }
+  };
+
+  const isEmpty = !String(value || "").replace(/<[^>]*>/g, "").trim();
+
+  return (
+    <div
+      style={{
+        ...inputBase,
+        position: "relative",
+        minHeight: singleLine ? 34 : rows * 22,
+        height: singleLine ? 34 : undefined,
+        maxHeight: singleLine ? 34 : 220,
+        overflow: singleLine ? "hidden" : "auto",
+        padding: 0,
+        display: "flex",
+        alignItems: "stretch",
+      }}
+    >
+      {isEmpty && placeholder && (
+        <div
+          aria-hidden="true"
+          style={{
+            position: "absolute",
+            top: 7,
+            left: 10,
+            right: 10,
+            color: UI.muted,
+            pointerEvents: "none",
+            lineHeight: 1.5,
+            whiteSpace: singleLine ? "nowrap" : "pre-wrap",
+            fontFamily: mono ? "ui-monospace, monospace" : inputBase.fontFamily,
+          }}
+        >
+          {placeholder}
+        </div>
+      )}
+      <div
+        ref={editorRef}
+        contentEditable
+        suppressContentEditableWarning
+        role="textbox"
+        aria-label={placeholder || "Text editor"}
+        onInput={(e) => onChange(sanitizeEditorContent(e.currentTarget.innerHTML))}
+        onBlur={() => {
+          const safe = blocksToBreaks(sanitizeEditorContent(editorRef.current?.innerHTML || ""));
+          editorRef.current.innerHTML = safe;
+          onChange(safe);
+          onBlur?.();
+        }}
+        onKeyDown={handleKeyDown}
+        style={{
+          width: "100%",
+          minHeight: singleLine ? 34 : rows * 22,
+          height: singleLine ? 34 : undefined,
+          maxHeight: singleLine ? 34 : 220,
+          overflow: singleLine ? "hidden" : "auto",
+          resize: "vertical",
+          border: "none",
+          borderRadius: 0,
+          boxShadow: "none",
+          background: "transparent",
+          lineHeight: 1.5,
+          whiteSpace: singleLine ? "nowrap" : "pre-wrap",
+          fontFamily: mono ? "ui-monospace, monospace" : inputBase.fontFamily,
+          color: UI.ink, // theme variable, so typed text is readable in every theme
+          padding: "7px 10px",
+          outline: "none",
+        }}
+      />
+    </div>
+  );
+};
+
+/* Single-line fields are identifiers, dates, and phone numbers: keep the native
+   input so type="date"/"tel", maxLength, and onBlur keep working. Rich text is
+   for the multi-line fields below. */
 const T = ({ value, onChange, placeholder, mono, type = "text", onBlur, maxLength }) => (
   <input type={type} style={{ ...inputBase, fontFamily: mono ? "ui-monospace, monospace" : inputBase.fontFamily }}
     value={value} placeholder={placeholder} maxLength={maxLength} onChange={(e) => onChange(e.target.value)} onBlur={onBlur} />
 );
 
-/** Renders a controlled multi-line text input using the builder's shared styling. */
+const normalizeRichHtml = (value = "") => {
+  const normalized = String(value)
+    .replace(/<div>/gi, "\n")
+    .replace(/<\/div>/gi, "")
+    .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/&nbsp;/gi, " ");
+
+  const escapeText = (text = "") =>
+    text.replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;");
+
+  const walk = (node) => {
+    if (!node) return "";
+    if (node.nodeType === 3) return escapeText(node.textContent || "");
+    if (node.nodeType !== 1) return "";
+
+    const tag = node.nodeName.toUpperCase();
+    if (tag === "BR") return "<br/>";
+    if (["DIV", "P", "SPAN"].includes(tag)) {
+      return Array.from(node.childNodes).map(walk).join("");
+    }
+    if (["B", "STRONG"].includes(tag)) {
+      return `<strong>${Array.from(node.childNodes).map(walk).join("")}</strong>`;
+    }
+    if (["I", "EM"].includes(tag)) {
+      return `<em>${Array.from(node.childNodes).map(walk).join("")}</em>`;
+    }
+    if (tag === "U") {
+      return `<u>${Array.from(node.childNodes).map(walk).join("")}</u>`;
+    }
+    return Array.from(node.childNodes).map(walk).join("");
+  };
+
+  const template = document.createElement("template");
+  template.innerHTML = normalized;
+  return Array.from(template.content.childNodes).map(walk).join("");
+};
+
+const formatRichText = (value = "") => normalizeRichHtml(value);
+
+/* Turns a rich-text value back into the plain text the professor sees, for the
+   accessibility checks: <br> and <div>/<p> blocks become line breaks, tags such as
+   <b>/<i>/<u> are dropped, and entities (&amp;, &nbsp; …) are decoded. Line breaks
+   follow the same rules normalizeRichHtml uses for the document, so a blank line
+   here is a paragraph break there. A template is inert, so nothing in it runs or loads. */
+const richToPlain = (value = "") => {
+  const s = String(value ?? "");
+  if (!/[<&]/.test(s)) return s; // already plain text
+  const tpl = document.createElement("template");
+  tpl.innerHTML = s
+    .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/<\/(div|p)>\s*<(div|p)\b[^>]*>/gi, "\n")
+    .replace(/<(div|p)\b[^>]*>/gi, "\n")
+    .replace(/<\/(div|p)>/gi, "");
+  return tpl.content.textContent.replace(/ /g, " ").replace(/^\n/, "");
+};
+
 const A = ({ value, onChange, placeholder, rows = 4, onBlur }) => (
-  <textarea style={{ ...inputBase, resize: "vertical", lineHeight: 1.5 }} rows={rows}
-    value={value} placeholder={placeholder} onChange={(e) => onChange(e.target.value)} onBlur={onBlur} />
+  <TextEditor value={value} onChange={onChange} placeholder={placeholder} rows={rows} onBlur={onBlur} />
 );
 
 /** Groups a label, hint, and form control into one consistent field. */
@@ -566,7 +810,7 @@ const Field = ({ label, hint, children }) => (
 /** Displays instructional text without adding it to the exported syllabus. */
 const Note = ({ children }) => (
   <div className="flex gap-2 p-3 mb-4 rounded text-sm" style={{ background: UI.tint, color: UI.slate, lineHeight: 1.55 }}>
-    <Info size={15} style={{ color: C.navy, flexShrink: 0, marginTop: 2 }} />
+    <Info size={15} style={{ color: UI.navy, flexShrink: 0, marginTop: 2 }} />
     <div>{children}</div>
   </div>
 );
@@ -580,80 +824,6 @@ const Note = ({ children }) => (
  */
 export default function SyllabusBuilder() {
   const [d, setD] = useState(createBlank);
-
-  const [catalog, setCatalog] = useState({});
-  const [catalogLoading, setCatalogLoading] = useState(true);
-  const [catalogError, setCatalogError] = useState(null);
-
-  useEffect(() => {
-    fetch("/utm_course_catalog_26_27.json")
-      .then((response) => {
-        if (!response.ok) {
-          throw new Error(`Failed to load catalog asset: ${response.status}`);
-        }
-        return response.json();
-      })
-      .then((data) => {
-        setCatalog(data);
-        setCatalogLoading(false);
-      })
-      .catch((error) => {
-        console.error("Course catalog fetch error:", error);
-        setCatalogError(error.message);
-        setCatalogLoading(false);
-      });
-  }, []); 
-
-  // Tracks the last normalized catalog key that was automatically populated
-  const [lastAutofilledKey, setLastAutofilledKey] = useState("");
-
-  // Handles course code changes, lookups, and clean formatting safely
-  const handleCourseCodeChange = (inputValue) => {
-    const cleanedKey = normalizeCourseKey(inputValue);
-
-    if (catalog && catalog[cleanedKey]) {
-      const course = catalog[cleanedKey];
-
-      // 1. Format helper: Enforce standard "POSC 322" space layout rules
-      let formattedCode = inputValue;
-      const match = cleanedKey.match(/^([A-Z]{4})(\d{3,4}.*)$/);
-      if (match) {
-        formattedCode = `${match[1]} ${match[2]}`; // Constructs clean "POSC 322" layout
-      }
-
-      // 2. Extract Prefix for Department autofill lookup
-      const prefix = match ? match[1] : "";
-      const inferredDept = COURSE_PREFIX_TO_DEPT[prefix] || "";
-
-      setD((prev) => {
-        const isDefaultCredits = prev.credits === "3";
-
-        // Safety switch: Drops guards temporarily if changing courses entirely
-        const isSwitchingCourse = lastAutofilledKey && lastAutofilledKey !== cleanedKey;
-
-        return {
-          ...prev,
-          code: formattedCode,
-
-          // Overwrite if field is empty, matching baseline templates, or switching courses completely
-          title: (!prev.title.trim() || isSwitchingCourse) ? (course.courseTitle || "") : prev.title,
-          description: (!prev.description.trim() || isSwitchingCourse) ? (course.description || "") : prev.description,
-          prereq: (!prev.prereq.trim() || isSwitchingCourse) ? (course.prerequisites || "") : prev.prereq,
-          credits: (!prev.credits.trim() || isDefaultCredits || isSwitchingCourse) ? (course.creditHours || "3") : prev.credits,
-          dept: (inferredDept && (!prev.dept.trim() || prev.dept === "Select a department..." || isSwitchingCourse)) ? inferredDept : prev.dept
-        };
-      });
-
-      setLastAutofilledKey(cleanedKey);
-
-    } else {
-      // If no catalog entry is found yet, update the text box as they type normally
-      setD((prev) => ({ ...prev, code: inputValue }));
-    }
-
-    // Keep your existing auto-scroll preview window functional
-    setTimeout(() => scrollPreviewTo(SECTION_FOR_TAB[tab]), 0);
-  };
 
 
   // adds a warning before the user leaves the page changes will not be saved.
@@ -675,6 +845,7 @@ export default function SyllabusBuilder() {
   useEffect(() => {
     document.documentElement.setAttribute("data-theme", theme);
   }, [theme]);
+  const currentTheme = THEMES.find((t) => t.id === theme) || THEMES[0];
   const [showPrinted, setShowPrinted] = useState(false);
   // true when the preview is showing the real print colors
   const printColors = theme !== "dark" || showPrinted;
@@ -682,6 +853,382 @@ export default function SyllabusBuilder() {
   const [weekCount, setWeekCount] = useState("15");
   const [weekCountWarning, setWeekCountWarning] = useState(false);
   const [previewFullscreen, setPreviewFullscreen] = useState(false);
+  const [showTextKeybinds, setShowTextKeybinds] = useState(false);
+
+  const [lookupStatus, setLookupStatus] = useState(null);
+  const [deliveryOpen, setDeliveryOpen] = useState(false);
+  const deliveryRef = useRef(null);
+
+  useEffect(() => {
+    if (!deliveryOpen) return undefined;
+    const onDocClick = (e) => {
+      if (deliveryRef.current && !deliveryRef.current.contains(e.target)) setDeliveryOpen(false);
+    };
+    const onKey = (e) => { if (e.key === "Escape") setDeliveryOpen(false); };
+    document.addEventListener("mousedown", onDocClick);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDocClick);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [deliveryOpen]);
+
+  const [termOptions, setTermOptions] = useState([]);
+  const [termOpen, setTermOpen] = useState(false);
+  const termRef = useRef(null);
+
+  // If the live lookup can't be reached, use the offline JSON catalog instead.
+  // Tries live again after 2 minutes so one Banner hiccup doesn't stick.
+  const [liveDownUntil, setLiveDownUntil] = useState(0);
+  const markLiveDown = () => setLiveDownUntil(Date.now() + 2 * 60 * 1000);
+  const liveDown = liveDownUntil > Date.now();
+
+  // offline catalog, only loaded once it's actually needed
+  const offlineCatalogRef = useRef(null);
+  const loadOfflineCatalog = () => {
+    if (!offlineCatalogRef.current) {
+      offlineCatalogRef.current = fetch("/utm_course_catalog_26_27.json")
+        .then((r) => (r.ok ? r.json() : {}))
+        .catch(() => ({}));
+    }
+    return offlineCatalogRef.current;
+  };
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/banner?action=terms")
+      .then((r) => {
+        if (liveLookupUnreachable(r)) { markLiveDown(); return { terms: [] }; }
+        return r.ok ? r.json() : { terms: [] };
+      })
+      .then((payload) => {
+        if (cancelled) return;
+        setTermOptions(payload.terms || []);
+        // switch to the term Banner has open, unless the term was already changed
+        if (payload.current) setD((p) => (p.term === defaultTerm() ? { ...p, term: payload.current } : p));
+      })
+      .catch(() => { if (!cancelled) markLiveDown(); });
+    return () => { cancelled = true; };
+  }, []);
+
+  useEffect(() => {
+    if (!termOpen) return undefined;
+    const onDocClick = (e) => {
+      if (termRef.current && !termRef.current.contains(e.target)) setTermOpen(false);
+    };
+    const onKey = (e) => { if (e.key === "Escape") setTermOpen(false); };
+    document.addEventListener("mousedown", onDocClick);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDocClick);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [termOpen]);
+
+  const [deptOpen, setDeptOpen] = useState(false);
+  const deptRef = useRef(null);
+
+  useEffect(() => {
+    if (!deptOpen) return undefined;
+    const onDocClick = (e) => {
+      if (deptRef.current && !deptRef.current.contains(e.target)) setDeptOpen(false);
+    };
+    const onKey = (e) => { if (e.key === "Escape") setDeptOpen(false); };
+    document.addEventListener("mousedown", onDocClick);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDocClick);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [deptOpen]);
+
+  const [codeSuggestions, setCodeSuggestions] = useState([]);
+  const [codeSuggestOpen, setCodeSuggestOpen] = useState(false);
+  const [codeSuggestLoading, setCodeSuggestLoading] = useState(false);
+  const codeSuggestRef = useRef(null);
+  const codeJustSelectedRef = useRef(false);
+  // saves search results so retyping doesn't hit Banner again
+  const courseListCacheRef = useRef(new Map());
+
+  useEffect(() => {
+    if (!codeSuggestOpen) return undefined;
+    const onDocClick = (e) => {
+      if (codeSuggestRef.current && !codeSuggestRef.current.contains(e.target)) setCodeSuggestOpen(false);
+    };
+    const onKey = (e) => { if (e.key === "Escape") setCodeSuggestOpen(false); };
+    document.addEventListener("mousedown", onDocClick);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDocClick);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [codeSuggestOpen]);
+
+  const pickCodeSuggestion = (s) => {
+    if (s.type === "subject") {
+      // picked a subject, so show its courses
+      setD((p) => ({ ...p, code: `${s.code} ` }));
+    } else {
+      // picked a full course, no need to search again
+      codeJustSelectedRef.current = true;
+      setD((p) => ({ ...p, code: s.code, title: s.title || p.title }));
+    }
+    setCodeSuggestOpen(false);
+  };
+
+  // As you type: letters match subjects locally, subject + numbers searches Banner.
+  useEffect(() => {
+    if (codeJustSelectedRef.current) { codeJustSelectedRef.current = false; return undefined; }
+
+    const raw = String(d.code || "");
+    const match = raw.match(/^\s*([A-Za-z]*)\s*(\d*)/);
+    const subjectPart = (match?.[1] || "").toUpperCase();
+    const numberPart = match?.[2] || "";
+
+    if (!subjectPart) { setCodeSuggestLoading(false); setCodeSuggestions([]); setCodeSuggestOpen(false); return undefined; }
+
+    const knownSubject = SUBJECTS.some((s) => s.code === subjectPart);
+
+    if (!knownSubject) {
+      // still typing the subject, e.g. "CS"
+      const matches = SUBJECTS.filter((s) => s.code.startsWith(subjectPart)).slice(0, 8)
+        .map((s) => ({ type: "subject", code: s.code, description: s.description }));
+      setCodeSuggestLoading(false);
+      setCodeSuggestions(matches);
+      setCodeSuggestOpen(matches.length > 0);
+      return undefined;
+    }
+
+    // full subject like "CSCI", so show its courses right away
+
+    // live lookup is down, so search the offline catalog instead
+    if (liveDownUntil > Date.now()) {
+      let cancelled = false;
+      setCodeSuggestions([]);
+      setCodeSuggestLoading(true);
+      setCodeSuggestOpen(true);
+      loadOfflineCatalog().then((catalog) => {
+        if (cancelled) return;
+        const matches = Object.values(catalog)
+          .filter((c) => {
+            const [subj, num = ""] = String(c.courseCode || "").split(" ");
+            return subj === subjectPart && num.startsWith(numberPart);
+          })
+          .sort((a, b) => a.courseCode.localeCompare(b.courseCode, undefined, { numeric: true }))
+          .map((c) => ({ type: "course", code: c.courseCode, title: c.courseTitle }));
+        setCodeSuggestLoading(false);
+        setCodeSuggestions(matches);
+        setCodeSuggestOpen(true);
+      });
+      return () => { cancelled = true; };
+    }
+
+    // only use the warm-up cache once it's completely done loading
+    const warmedList = warmCompleteRef.current.has(d.term)
+      ? courseListCacheRef.current.get(`${d.term}|${subjectPart}|`)
+      : null;
+    if (warmedList) {
+      const filtered = numberPart
+        ? warmedList.filter((c) => c.code.slice(subjectPart.length).trim().startsWith(numberPart))
+        : warmedList;
+      setCodeSuggestLoading(false);
+      setCodeSuggestions(filtered);
+      setCodeSuggestOpen(filtered.length > 0);
+      return undefined;
+    }
+
+    // "q:" keeps live search results separate from the warm-up cache
+    const cacheKey = `q:${d.term}|${subjectPart}|${numberPart}`;
+    const cached = courseListCacheRef.current.get(cacheKey);
+    if (cached) {
+      setCodeSuggestLoading(false);
+      setCodeSuggestions(cached);
+      setCodeSuggestOpen(cached.length > 0);
+      return undefined;
+    }
+
+    // clear old suggestions while the new search runs
+    setCodeSuggestions([]);
+    setCodeSuggestLoading(true);
+    setCodeSuggestOpen(true);
+
+    const controller = new AbortController();
+    const timer = setTimeout(async () => {
+      try {
+        const url = `/api/banner?action=course-search&term=${encodeURIComponent(d.term)}&subject=${encodeURIComponent(subjectPart)}&q=${encodeURIComponent(numberPart)}`;
+        const res = await fetch(url, { signal: controller.signal });
+        if (liveLookupUnreachable(res)) { markLiveDown(); return; }
+        if (!res.ok) throw new Error("search failed");
+        const payload = await res.json();
+        const matches = (payload.courses || []).map((c) => ({ type: "course", code: c.code, title: c.title }));
+        courseListCacheRef.current.set(cacheKey, matches);
+        setCodeSuggestLoading(false);
+        setCodeSuggestions(matches);
+        setCodeSuggestOpen(matches.length > 0);
+      } catch (error) {
+        if (error.name === "AbortError") return;
+        if (error instanceof TypeError) { markLiveDown(); return; } // couldn't reach the server
+        setCodeSuggestLoading(false); setCodeSuggestions([]); setCodeSuggestOpen(false);
+      }
+    }, 250);
+
+    return () => { clearTimeout(timer); controller.abort(); };
+  }, [d.code, d.term, liveDownUntil]);
+
+  // When offline, fill course info from the offline catalog. Only fills empty
+  // fields, unless you switch to a different course.
+  const lastOfflineCodeRef = useRef("");
+  useEffect(() => {
+    if (liveDownUntil <= Date.now()) return undefined;
+    const parsed = String(d.code || "").trim().match(/^([A-Za-z]{2,5})\s*-?\s*(\d{3,4}[A-Za-z]?)$/);
+    if (!parsed) return undefined;
+    const subject = parsed[1].toUpperCase();
+    const key = subject + parsed[2].toUpperCase();
+    let cancelled = false;
+    loadOfflineCatalog().then((catalog) => {
+      const course = catalog[key];
+      if (cancelled || !course || lastOfflineCodeRef.current === key) return;
+      const switching = lastOfflineCodeRef.current !== "";
+      lastOfflineCodeRef.current = key;
+      setD((p) => ({
+        ...p,
+        title: (!p.title.trim() || switching) ? (course.courseTitle || "") : p.title,
+        description: (!p.description.trim() || switching) ? (course.description || "") : p.description,
+        prereq: (!p.prereq.trim() || switching) ? (course.prerequisites || "") : p.prereq,
+        credits: (!p.credits.trim() || p.credits === "3" || switching) ? (course.creditHours || "3") : p.credits,
+        dept: (!p.dept.trim() || switching) ? (SUBJECT_DEPARTMENTS.get(subject) || p.dept) : p.dept,
+      }));
+    });
+    return () => { cancelled = true; };
+  }, [d.code, liveDownUntil]);
+
+  const [sectionSuggestions, setSectionSuggestions] = useState([]);
+  const [sectionSuggestOpen, setSectionSuggestOpen] = useState(false);
+  const sectionSuggestRef = useRef(null);
+  // same idea as the course cache, but for sections
+  const sectionListCacheRef = useRef(new Map());
+
+  useEffect(() => {
+    if (!sectionSuggestOpen) return undefined;
+    const onDocClick = (e) => {
+      if (sectionSuggestRef.current && !sectionSuggestRef.current.contains(e.target)) setSectionSuggestOpen(false);
+    };
+    const onKey = (e) => { if (e.key === "Escape") setSectionSuggestOpen(false); };
+    document.addEventListener("mousedown", onDocClick);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDocClick);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [sectionSuggestOpen]);
+
+  const pickSectionSuggestion = (s) => {
+    setD((p) => ({ ...p, section: s.section }));
+    setSectionSuggestOpen(false);
+  };
+
+  // once the course code is complete, show its sections so you don't have to know one
+  useEffect(() => {
+    const code = String(d.code || "").trim();
+    const parsed = code.match(/^([A-Za-z]{2,5})\s*-?\s*(\d{3,4}[A-Za-z]?)$/);
+    if (!parsed || liveDownUntil > Date.now()) { setSectionSuggestions([]); setSectionSuggestOpen(false); return undefined; }
+
+    const subject = parsed[1].toUpperCase();
+    const courseNumber = parsed[2].toUpperCase();
+    const cacheKey = `${d.term}|${subject}|${courseNumber}`;
+    const cached = sectionListCacheRef.current.get(cacheKey);
+    if (cached) {
+      setSectionSuggestions(cached);
+      if (cached.length && !String(d.section || "").trim()) setSectionSuggestOpen(true);
+      return undefined;
+    }
+
+    // clear old sections while the new search runs
+    setSectionSuggestions([]);
+
+    const controller = new AbortController();
+    const timer = setTimeout(async () => {
+      try {
+        const url = `/api/banner?action=section-search&term=${encodeURIComponent(d.term)}&subject=${encodeURIComponent(subject)}&courseNumber=${encodeURIComponent(courseNumber)}`;
+        const res = await fetch(url, { signal: controller.signal });
+        if (liveLookupUnreachable(res)) { markLiveDown(); return; }
+        if (!res.ok) throw new Error("search failed");
+        const payload = await res.json();
+        const sections = payload.sections || [];
+        sectionListCacheRef.current.set(cacheKey, sections);
+        setSectionSuggestions(sections);
+        if (sections.length && !String(d.section || "").trim()) setSectionSuggestOpen(true);
+      } catch (error) {
+        if (error.name === "AbortError") return;
+        if (error instanceof TypeError) markLiveDown();
+        setSectionSuggestions([]);
+      }
+    }, 450);
+
+    return () => { clearTimeout(timer); controller.abort(); };
+  }, [d.code, d.term, liveDownUntil]);
+  // Warm-up: loads the whole term's catalog in the background (off, see WARM_CATALOG).
+  const warmedTermsRef = useRef(new Set());
+  // set once every page has loaded (warmedTermsRef is set at the start)
+  const warmCompleteRef = useRef(new Set());
+
+  useEffect(() => {
+    const term = String(d.term || "").trim();
+    if (!WARM_CATALOG || !term || warmedTermsRef.current.has(term)) return undefined;
+
+    const PAGE_SIZE = 500;
+    const controller = new AbortController();
+
+    const applyPage = (payload) => {
+      for (const course of payload.courses || []) {
+        const subject = course.code.split(" ")[0];
+        const key = `${term}|${subject}|`;
+        const list = courseListCacheRef.current.get(key) || [];
+        if (!list.some((c) => c.code === course.code)) list.push({ type: "course", code: course.code, title: course.title });
+        courseListCacheRef.current.set(key, list);
+      }
+      for (const [code, sections] of Object.entries(payload.sectionsByCode || {})) {
+        const [subject, courseNumber] = code.split(" ");
+        sectionListCacheRef.current.set(`${term}|${subject}|${courseNumber}`, sections);
+      }
+    };
+
+    const fetchPage = async (pageOffset) => {
+      const url = `/api/banner?action=catalog-page&term=${encodeURIComponent(term)}&offset=${pageOffset}&size=${PAGE_SIZE}`;
+      const res = await fetch(url, { signal: controller.signal });
+      if (!res.ok) throw new Error("warm-up page failed");
+      return res.json();
+    };
+
+    // wait a bit so typing a term doesn't start a warm-up every keystroke
+    const timer = setTimeout(() => {
+      warmedTermsRef.current.add(term);
+      (async () => {
+        try {
+          const first = await fetchPage(0);
+          applyPage(first);
+
+          const totalCount = first.totalCount || 0;
+          const remainingOffsets = [];
+          for (let o = PAGE_SIZE; o < totalCount; o += PAGE_SIZE) remainingOffsets.push(o);
+
+          // one page at a time, Banner's paging breaks if they overlap
+          for (const offset of remainingOffsets) {
+            const payload = await fetchPage(offset);
+            applyPage(payload);
+          }
+
+          warmCompleteRef.current.add(term);
+        } catch {
+          // failed or cancelled, so unmark the term and it'll try again later
+          warmedTermsRef.current.delete(term);
+        }
+      })();
+    }, 450);
+
+    return () => { clearTimeout(timer); controller.abort(); };
+  }, [d.term]);
+
   const frameRef = useRef(null);
   const previewRef = useRef(null);
   const formRef = useRef(null);
@@ -695,11 +1242,21 @@ export default function SyllabusBuilder() {
   }, [previewFullscreen]);
 
   // Which syllabus heading each editor tab and each repeated section maps to.
+  // One entry per tab in TABS, in the same order. null means that tab has no
+  // matching section in the preview, so the preview doesn't scroll.
   const SECTION_FOR_TAB = [
-    "COURSE INFORMATION", "COURSE INFORMATION", "WELCOME TO THIS COURSE",
-    "STUDENT LEARNING OUTCOMES", "REQUIRED MATERIALS", "ASSESSMENT AND GRADING",
-    "COURSE POLICIES", "UNIVERSITY POLICIES AND STUDENT SUPPORT", "COURSE SCHEDULE",
-    "LABORATORY COMPONENT",
+    "COURSE INFORMATION",                        // 0 Course
+    "COURSE INFORMATION",                        // 1 Instructor
+    "WELCOME TO THIS COURSE",                    // 2 Welcome
+    "STUDENT LEARNING OUTCOMES",                 // 3 Outcomes
+    "REQUIRED MATERIALS",                        // 4 Materials
+    null,                                        // 5 Review/Summary
+    "ASSESSMENT AND GRADING",                    // 6 Grading
+    "COURSE POLICIES",                           // 7 Policies
+    "UNIVERSITY POLICIES AND STUDENT SUPPORT",   // 8 University
+    "COURSE SCHEDULE",                           // 9 Schedule
+    "LABORATORY COMPONENT",                      // 10 Labs
+    null,                                        // 11 Export
   ];
   const SECTION_FOR_ITEM = {
     weeks: "COURSE SCHEDULE",
@@ -737,6 +1294,100 @@ export default function SyllabusBuilder() {
     setD((p) => ({ ...p, [k]: v }));
     setTimeout(() => scrollPreviewTo(SECTION_FOR_TAB[tab]), 0);
   };
+
+  const lookupCourseBySection = async (triggerCode, term, subject, courseNumber, section, signal) => {
+    try {
+      const res = await fetch("/api/banner?action=details", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ term, subject, courseNumber, section }),
+        signal,
+      });
+
+      if (liveLookupUnreachable(res)) { markLiveDown(); setLookupStatus(null); return; }
+      if (!res.ok) {
+        const errorText = await res.text();
+        throw new Error(errorText || "Lookup failed");
+      }
+
+      const payload = await res.json();
+      if (!payload.crn || !payload.title) throw new Error("The portal returned no course details");
+      setD((p) => {
+        // ignore the result if the course, section, or term changed while it was loading
+        const stillCurrent = p.code.trim() === triggerCode && p.section.trim() === section && p.term.trim() === term;
+        if (!stillCurrent) return p;
+        return {
+          ...p,
+          crn: payload.crn || p.crn,
+          code: payload.code || p.code,
+          title: payload.title || p.title,
+          section: payload.section || p.section,
+          term: payload.term || p.term,
+          credits: payload.credits || p.credits,
+          modality: payload.modality || p.modality,
+          // clear these instead of keeping old values from a different course
+          // Banner gives days and times as one string, so put it in Meeting time
+          // and clear the days dropdown so it doesn't show twice
+          meetingTime: payload.meeting || "",
+          ...(payload.meeting ? { meetingPattern: "", meeting: "" } : {}),
+          location: payload.location || "",
+          // use our department list first, Banner's names are shortened and don't match the dropdown
+          dept: SUBJECT_DEPARTMENTS.get(subject) || payload.dept || "",
+          prereq: payload.prereq || "",
+          instructor: payload.instructor || "",
+          email: payload.email || "",
+          description: payload.description || "",
+        };
+      });
+      setLookupStatus("ok");
+    } catch (error) {
+      if (error instanceof TypeError) { markLiveDown(); setLookupStatus(null); return; } // couldn't reach the server
+      if (error.name !== "AbortError") {
+        setLookupStatus("error");
+        // lookup failed, so clear the looked-up fields so old data doesn't stick around
+        // (department still uses the subject fallback)
+        setD((p) => {
+          const stillCurrent = p.code.trim() === triggerCode && p.section.trim() === section && p.term.trim() === term;
+          if (!stillCurrent) return p;
+          return {
+            ...p,
+            crn: "",
+            title: "",
+            meetingTime: "",
+            location: "",
+            dept: SUBJECT_DEPARTMENTS.get(subject) || "",
+            prereq: "",
+            instructor: "",
+            email: "",
+            description: "",
+          };
+        });
+      }
+    }
+  };
+
+  useEffect(() => {
+    const code = String(d.code || "").trim();
+    const section = String(d.section || "").trim();
+    const term = String(d.term || "").trim();
+    const parsed = code.match(/^([A-Za-z]{2,5})\s*-?\s*(\d{3,4}[A-Za-z]?)$/);
+    if (!parsed || !section || !term || liveDownUntil > Date.now()) { setLookupStatus(null); return undefined; }
+
+    const controller = new AbortController();
+    setLookupStatus("loading");
+    const timer = setTimeout(() => {
+      lookupCourseBySection(code, term, parsed[1].toUpperCase(), parsed[2].toUpperCase(), section, controller.signal);
+    }, 450);
+    return () => { clearTimeout(timer); controller.abort(); };
+  }, [d.code, d.section, d.term, liveDownUntil]);
+
+  // fills in the email subject line from the course code until you type in it yourself
+  const subjectLineAutoRef = useRef(true);
+  useEffect(() => {
+    const code = String(d.code || "").trim();
+    if (!subjectLineAutoRef.current || !/^[A-Za-z]{2,5}\s*-?\s*\d{3,4}[A-Za-z]?$/.test(code)) return;
+    setD((p) => ({ ...p, subjectLine: `${code} - [your question]` }));
+  }, [d.code]);
   // Update one property inside a repeated array item, such as an assignment or week.
   const setDeep = (k, i, key, v) => {
     setD((p) => { const a = [...p[k]]; a[i] = { ...a[i], [key]: v }; return { ...p, [k]: a }; });
@@ -744,6 +1395,11 @@ export default function SyllabusBuilder() {
   };
   // Add or remove one item from a repeated syllabus section.
   const push = (k, obj) => setD((p) => ({ ...p, [k]: [...p[k], obj] }));
+  const applySummerPreset = (key) => setD((p) => ({
+    ...p,
+    scheduleType: key,
+    weeks: buildSummerScheduleRows(key),
+  }));
   const addGradingItem = () => {
     push("items", { name: "", weight: "", points: "", due: "", desc: "", slos: [] });
     window.requestAnimationFrame(() => {
@@ -806,6 +1462,14 @@ export default function SyllabusBuilder() {
     return Math.round(total * 100) / 100;
   }
 
+  function calculatePointsTotal(items) {
+    const total = items
+      .filter((item) => item.name.trim())
+      .reduce((sum, item) => sum + parseWeight(item.points), 0);
+
+    return Math.round(total * 100) / 100;
+  }
+
   const autofillScheduleDates = () => {
     const dates = buildWeekDates(d.semesterStart, Math.max(15, d.weeks.length));
     if (!dates.length) return;
@@ -837,6 +1501,18 @@ export default function SyllabusBuilder() {
   const weightTotal = useMemo(
     () => calculateWeightTotal(d.items), [d.items]);
 
+  const pointsTotal = useMemo(
+    () => calculatePointsTotal(d.items), [d.items]);
+
+  const validPoints = d.items.some((item) => item.name.trim()) &&
+    d.items.every((item) =>
+      (!item.name.trim() && !item.points.trim()) ||
+      (item.name.trim() &&
+        item.points.trim() !== "" &&
+        Number.isFinite(Number(item.points)) &&
+        Number(item.points) > 0)
+    );
+
   const realOutcomes = d.outcomes.filter((o) => o.trim());
   const mappedSlos = new Set(d.items.flatMap((x) => x.slos));
   const unmapped = realOutcomes.map((_, i) => i).filter((i) => !mappedSlos.has(i));
@@ -850,7 +1526,7 @@ export default function SyllabusBuilder() {
   const cal = ACADEMIC_CALENDARS[d.term];
   const autoWeeks = useMemo(() => buildWeeks(cal, d.meetDays), [cal, d.meetDays]);
   // Modular schedules are hand-built, so the registrar calendar drives weekly ones only.
-  const auto = d.scheduleType !== "modular" && autoWeeks.length > 0;
+  const auto = d.scheduleType !== "modular" && !String(d.scheduleType).startsWith("summer") && autoWeeks.length > 0;
   const schedRows = auto
     ? autoWeeks.map((w, i) => ({ ...w, topics: d.weeks[i]?.topics || "", due: d.weeks[i]?.due || "" }))
     : d.weeks.map((w) => ({ ...w, off: [] }));
@@ -948,7 +1624,14 @@ export default function SyllabusBuilder() {
     ["At least three learning outcomes", realOutcomes.length >= 3],
     ["Every outcome tied to an assessment", realOutcomes.length > 0 && unmapped.length === 0],
     ["Required materials listed", hasText(d.texts) || d.materials.provided || d.materials.hardcopy || d.materials.online || hasText(d.materials.acquire)],
-    ["Assessment weights total 100 percent", Math.abs(weightTotal - 100) < 0.01],
+    [
+      d.gradingMethod === "percentage"
+        ? "Assessment weights total 100 percent"
+        : "All assignments have valid point values",
+      d.gradingMethod === "percentage"
+        ? Math.abs(weightTotal - 100) < 0.01
+        : validPoints
+    ],
     ["Grading scale", hasText(d.scale)],
     ["Attendance policy", hasText(d.attendance)],
     ["Late work and make-up policy", hasText(lateText)],
@@ -974,17 +1657,235 @@ export default function SyllabusBuilder() {
   ];
   const passed = checks.filter((c) => c[1]).length;
 
+  /* ---------- accessibility: Panorama-style checks on the professor's own writing ---------- */
+
+  // Every free-text box the professor writes in, tagged with the tab and label where it
+  // lives, so each problem can say exactly where to fix it. inList marks text that the
+  // document already puts inside a real numbered list (the learning outcomes).
+  const a11yFields = useMemo(() => {
+    const f = (tab, label, text, inList = false) =>
+      ({ tab, label, text: typeof text === "string" ? richToPlain(text) : "", inList });
+    const titled = (base, i, title) => `${base} ${i + 1}${title?.trim() ? ` (${title.trim()})` : ""}`;
+    return [
+      f("Instructor", "Office hours", d.hours),
+      f("Welcome", "Why this course matters", d.welcome),
+      f("Welcome", "Course description", d.description),
+      ...d.customDescriptions.map((x, i) => f("Welcome", titled("Custom description", i, x.title), x.description)),
+      ...d.outcomes.map((o, i) => f("Outcomes", `Outcome ${i + 1}`, o, true)),
+      f("Materials", "Required texts", d.texts),
+      f("Materials", "Cost note", d.costNote),
+      f("Materials", "Technology and platforms", d.tech),
+      f("Materials", "Access details", d.materials.acquire),
+      ...d.extraMaterials.map((x, i) => f("Materials", titled("Material section", i, x.title), x.description)),
+      ...d.items.map((x, i) => f("Grading", `${x.name?.trim() || `Assignment ${i + 1}`} description`, x.desc)),
+      f("Grading", "Grading scale", d.scale),
+      f("Policies", "Attendance", d.attendance),
+      f("Policies", "What engagement looks like here", d.participation),
+      f("Policies", "Late work and make-up", d.late),
+      ...d.lateAdditional.map((x, i) => f("Policies", `Additional late policy ${i + 1}`, x.text)),
+      ...(d.aiTier === "custom" ? [f("Policies", "Custom AI policy", d.aiCustom)] : []),
+      f("Policies", "A note from your professor", d.profNote),
+      ...d.customPolicies.map((x, i) => f("Policies", titled("Custom policy", i, x.title), x.text)),
+      ...d.weeks.flatMap((w, i) => [
+        f("Schedule", `Week ${i + 1} topics`, w.topics),
+        f("Schedule", `Week ${i + 1} due`, w.due),
+      ]),
+      ...(d.hasLab ? [
+        f("Labs", "What happens in lab", d.lab.description),
+        f("Labs", "How the lab counts toward the course grade", d.lab.gradeNote),
+        f("Labs", "Lab attendance", d.lab.attendance),
+        f("Labs", "Lab safety", d.lab.safety),
+        f("Labs", "Supplies and protective equipment", d.lab.supplies),
+        f("Labs", "Missed labs and make-up", d.lab.makeup),
+      ] : []),
+    ].filter((x) => x.text.trim());
+  }, [d]);
+
+  // Shortens a line of the professor's text for display in a result.
+  const excerpt = (s, n = 50) => {
+    const t = s.trim().replace(/\s+/g, " ");
+    return t.length > n ? `${t.slice(0, n)}…` : t;
+  };
+
+  // A line that starts like a typed bullet or number: "- ", "-Item", "* ", "• ", "1. ", "1.Item",
+  // "2) ", "a) " … A symbol or number counts with or without a space as long as a letter follows,
+  // so "-5 points" and "1.5 hours" are not mistaken for bullets.
+  const FAKE_BULLET = /^\s*(?:[-*•–—→▪◦·](?:\s+|(?=[a-z]))|\d{1,2}[.)](?:\s+|(?=[a-z]))|[a-z]\)\s+)/i;
+
+  // Wording that only makes sense for a clickable link. The export has no links, so in print
+  // and in a screen reader these phrases point at nothing.
+  const VAGUE_LINK = /\b(click here|click the link|click this link|tap here|follow this link|this link|the link below|link below)\b/i;
+  // Four or more of the same symbol in a row, used as a divider: ----, ****, ====, ____
+  const DECORATIVE_RUN = /([-*=_~#+])\1{3,}/;
+  // Web addresses: https://…, www.…, or a bare domain such as utm.edu/calendar
+  const URL_RE = /\b(?:https?:\/\/|www\.)\S+|\b[a-z0-9-]+\.(?:edu|com|org|gov|net|io)(?:\/\S*)?/gi;
+  // A tab, or three or more spaces, between two pieces of text: columns lined up by hand.
+  const FAKE_COLUMNS = /\S(?:\t+| {3,})\S/;
+
+  // Each check: id, title, level ("fail" or "warn"), why it matters, how to fix,
+  // and found = the places where the problem appears (empty means it passes).
+  // A found item has tab, label, and either a quote of the text or a note.
+  const a11yChecks = useMemo(() => {
+    const at = (x, extra) => ({ tab: x.tab, label: x.label, ...extra });
+    const lines = (x) => x.text.split("\n");
+    const paragraphs = (x) => x.text.split(/\n{2,}/).filter((p) => p.trim());
+
+    const fakeLists = a11yFields.flatMap((x) => {
+      const hits = lines(x).filter((l) => FAKE_BULLET.test(l));
+      // Two typed bullets make a list. Inside an outcome, even one is a doubled number.
+      return hits.length >= (x.inList ? 1 : 2) ? [at(x, { quote: excerpt(hits[0]) })] : [];
+    });
+
+    const vagueLinks = a11yFields.flatMap((x) => {
+      const line = lines(x).find((l) => VAGUE_LINK.test(l));
+      return line ? [at(x, { quote: excerpt(line) })] : [];
+    });
+
+    const decorative = a11yFields.flatMap((x) => {
+      const line = lines(x).find((l) => DECORATIVE_RUN.test(l));
+      return line ? [at(x, { quote: excerpt(line) })] : [];
+    });
+
+    // Custom items whose title and text don't match up. In the document a title becomes a
+    // heading; text without a title lands under whatever heading came before it.
+    const headingProblems = [];
+    const pairUp = (list, tab, base, textKey) => list.forEach((item, i) => {
+      const title = item.title.trim(); const text = richToPlain(item[textKey] || "").trim();
+      const label = `${base} ${i + 1}${title ? ` (${title})` : ""}`;
+      if (title && !text) headingProblems.push({ tab, label, note: "has a title but no text, so it prints as an empty heading" });
+      if (!title && text) headingProblems.push({ tab, label, note: "has text but no title, so it prints under the previous heading" });
+    });
+    d.customDescriptions.forEach((item, i) => {
+      if (item.title.trim() && !richToPlain(item.description).trim()) headingProblems.push({
+        tab: "Welcome", label: `Custom description ${i + 1} (${item.title.trim()})`,
+        note: "has a title but no text, so it prints as an empty heading",
+      });
+    });
+    pairUp(d.extraMaterials, "Materials", "Material section", "description");
+    pairUp(d.customPolicies, "Policies", "Custom policy", "text");
+    if (d.hasLab && ![d.lab.crn, d.lab.meeting, d.lab.location, d.lab.instructor, d.lab.description,
+      d.lab.gradeNote, d.lab.attendance, d.lab.safety, d.lab.supplies, d.lab.makeup].some((v) => richToPlain(v).trim())) {
+      headingProblems.push({ tab: "Labs", label: "Laboratory component",
+        note: "is turned on but empty, so it prints as a heading with nothing under it" });
+    }
+
+    const allCaps = a11yFields.flatMap((x) => {
+      const line = lines(x).find((l) => {
+        const letters = l.match(/[a-z]/gi) || [];
+        const upper = l.match(/[A-Z]/g) || [];
+        return l.trim().split(/\s+/).length >= 3 && letters.length >= 12 && upper.length / letters.length >= 0.8;
+      });
+      return line ? [at(x, { quote: excerpt(line) })] : [];
+    });
+
+    const longParagraphs = a11yFields.flatMap((x) => paragraphs(x).flatMap((p) => {
+      const words = p.trim().split(/\s+/).length;
+      return words > 150 ? [at(x, { quote: excerpt(p), note: `${words} words` })] : [];
+    }));
+
+    const bareUrls = a11yFields.flatMap((x) => lines(x).flatMap((l) => {
+      const withoutEmails = l.replace(/\S+@\S+/g, " ");
+      return [...withoutEmails.matchAll(URL_RE)].flatMap(([url]) => {
+        // An address is fine when it's short and the sentence around it names the page.
+        const wordsAround = withoutEmails.replace(url, " ").trim().split(/\s+/).filter(Boolean).length;
+        return url.length > 40 || wordsAround < 3 ? [at(x, { quote: excerpt(url, 60) })] : [];
+      });
+    }));
+
+    const fakeTables = a11yFields.flatMap((x) => {
+      const hits = lines(x).filter((l) => FAKE_COLUMNS.test(l));
+      return hits.length >= 2 ? [at(x, { quote: excerpt(hits[0]) })] : [];
+    });
+
+    return [
+      {
+        id: "fake-lists",
+        title: "Lists typed with dashes, bullets, or numbers",
+        level: "fail",
+        why: "The syllabus prints these lines as plain text, so a screen reader reads \"dash\" or \"one period\" instead of announcing a list.",
+        fix: "Write the items as a sentence or as short separate paragraphs (leave a blank line between them). In an outcome, delete the number; the syllabus numbers outcomes for you.",
+        found: fakeLists,
+      },
+      {
+        id: "vague-links",
+        title: "\"Click here\" or \"this link\" wording",
+        level: "fail",
+        why: "The syllabus has no clickable links, so \"click here\" points at nothing in print, and screen reader users can't tell where it leads.",
+        fix: "Say what the page is and give its short address, for example: \"See the UTM Academic Calendar at utm.edu/calendar.\"",
+        found: vagueLinks,
+      },
+      {
+        id: "decorative",
+        title: "Divider lines made of symbols",
+        level: "fail",
+        why: "A screen reader reads every character: \"dash dash dash dash…\".",
+        fix: "Delete the divider line. Use a blank line to separate paragraphs, or a custom section with its own title.",
+        found: decorative,
+      },
+      {
+        id: "headings",
+        title: "Empty headings or text without a heading",
+        level: "fail",
+        why: "Screen reader users jump between headings to find things. An empty heading leads nowhere, and text without a title gets announced as part of the wrong section.",
+        fix: "Give every custom section both a title and some text, or remove the one you don't need.",
+        found: headingProblems,
+      },
+      {
+        id: "all-caps",
+        title: "Text in ALL CAPITALS",
+        level: "warn",
+        why: "All caps is harder to read, comes across as shouting, and some screen readers spell it out letter by letter.",
+        fix: "Use normal sentence case. To stress something, say so in words (\"Important:\") instead.",
+        found: allCaps,
+      },
+      {
+        id: "long-paragraphs",
+        title: "Very long paragraphs",
+        level: "warn",
+        why: "Paragraphs over about 150 words are hard to follow, especially for students using screen readers, magnifiers, or reading in a second language.",
+        fix: "Break it into two or three shorter paragraphs by leaving a blank line between them.",
+        found: longParagraphs,
+      },
+      {
+        id: "bare-urls",
+        title: "Long or unexplained web addresses",
+        level: "warn",
+        why: "Screen readers read web addresses character by character, and a long address on its own doesn't tell students what the page is.",
+        fix: "Name the page in your sentence and use the shortest address that works, for example: \"the Writing Center (utm.edu/writing)\".",
+        found: bareUrls,
+      },
+      {
+        id: "fake-tables",
+        title: "Columns lined up with tabs or spaces",
+        level: "warn",
+        why: "The syllabus collapses the extra spacing, so the columns fall apart, and screen readers have no table structure to follow.",
+        fix: "Put dates and assignments in the Grading or Schedule tables, or write each row as its own sentence.",
+        found: fakeTables,
+      },
+    ];
+  }, [a11yFields, d]);
+
+  const a11yFailCount = a11yChecks.filter((c) => c.found.length && c.level === "fail").length;
+  const a11yWarnCount = a11yChecks.filter((c) => c.found.length && c.level === "warn").length;
+  // One line, shared by the Accessibility tab and the Export tab summary.
+  const a11ySummary = a11yFailCount + a11yWarnCount === 0
+    ? "No accessibility issues found."
+    : [
+        a11yFailCount && `${a11yFailCount} accessibility issue${a11yFailCount > 1 ? "s" : ""}`,
+        a11yWarnCount && `${a11yWarnCount} warning${a11yWarnCount > 1 ? "s" : ""}`,
+      ].filter(Boolean).join(" and ") + " found.";
+
   /* ---------- document builder: create the HTML shared by preview and exports ---------- */
 
-  const esc = (s = "") => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-  const para = (s = "") => esc(s).split(/\n{2,}/).map((p) =>
+  const esc = (s = "") => normalizeRichHtml(s);
+  const para = (s = "") => formatRichText(s).split(/\n{2,}/).map((p) =>
     `<p>${p.replace(/\n/g, "<br/>")}</p>`).join("");
 
   const docBody = useMemo(() => {
     const h = [];
     const sec = (t) => h.push(`<h2>${esc(t)}</h2>`);
 
-    h.push(`<table class="hdr"><tr>
+    h.push(`<table class="hdr" role="presentation"><tr>
       <td class="hdr-l"><img src="${LOGO}" alt="The University of Tennessee at Martin" width="230"/></td>
       <td class="hdr-r"><div class="ct">${esc(d.code || "COURSE 000")}</div>
       <h1 class="tt">${esc(d.title || "Course Title")}</h1>
@@ -1012,7 +1913,7 @@ export default function SyllabusBuilder() {
     if (facts.length) {
       sec("Course Information");
       h.push(`<table class="grid">${facts.map((r) =>
-        `<tr><th>${esc(r[0])}</th><td>${esc(r[1])}</td></tr>`).join("")}</table>`);
+        `<tr><th scope="row">${esc(r[0])}</th><td>${esc(r[1])}</td></tr>`).join("")}</table>`);
     }
 
     if (d.welcome) { sec("Welcome to This Course"); h.push(para(d.welcome)); }
@@ -1057,18 +1958,21 @@ export default function SyllabusBuilder() {
     }
 
     const live = d.items.filter((x) => x.name);
+    const isPoints = d.gradingMethod === "points";
     if (live.length) {
       const hasDueDates = live.some((x) => x.due?.trim());
       sec("Assessment and Grading");
-      h.push(`<table class="grid"><tr><th>Assignment or category</th><th class="w">Weight</th>${hasDueDates ? '<th class="assignment-due">Due date</th>' : ""}<th>What it is</th></tr>${
-        live.map((x) => `<tr><td><strong>${esc(x.name)}</strong>${
-          x.slos.length ? `<div class="tag">Outcome${x.slos.length > 1 ? "s" : ""} ${x.slos.map((i) => i + 1).join(", ")}</div>` : ""
-        }</td><td class="w">${fmtWeight(parseWeight(x.weight))}%</td>${hasDueDates ? `<td class="assignment-due">${esc(x.due || "")}</td>` : ""}<td>${esc(x.desc)}</td></tr>`).join("")
-      }<tr class="tot"><td>Total</td><td class="w">${fmtWeight(weightTotal)}%</td>${hasDueDates ? "<td></td>" : ""}<td></td></tr></table>`);
+      h.push(`<table class="grid"><tr><th scope="col">Assignment or category</th><th scope="col" class="w">${isPoints ? "Points" : "Weight"}</th>${hasDueDates ? '<th scope="col" class="assignment-due">Due date</th>' : ""}<th scope="col">What it is</th></tr>${live.map((x) => `<tr><td><strong>${esc(x.name)}</strong>${x.slos.length ? `<div class="tag">Outcome${x.slos.length > 1 ? "s" : ""} ${x.slos.map((i) => i + 1).join(", ")}</div>` : ""
+        }</td><td class="w">${isPoints
+          ? fmtWeight(parseWeight(x.points))
+          : `${fmtWeight(parseWeight(x.weight))}%`}</td>${hasDueDates ? `<td class="assignment-due">${esc(x.due || "")}</td>` : ""}<td>${esc(x.desc)}</td></tr>`).join("")
+        }<tr class="tot"><td>Total</td><td class="w">${isPoints
+          ? fmtWeight(pointsTotal)
+          : `${fmtWeight(weightTotal)}%`}</td>${hasDueDates ? "<td></td>" : ""}<td></td></tr></table>`);
       if (d.scale) { h.push(`<h3>Grading scale</h3>`); h.push(para(d.scale)); }
     }
 
-        if (d.hasLab) {
+    if (d.hasLab) {
       const L = d.lab;
       sec("Laboratory Component");
       const lf = [
@@ -1078,7 +1982,7 @@ export default function SyllabusBuilder() {
         ["Lab instructor", L.instructor],
       ].filter((r) => r[1] && String(r[1]).trim());
       if (lf.length) h.push(`<table class="grid">${lf.map((r) =>
-        `<tr><th>${esc(r[0])}</th><td>${esc(r[1])}</td></tr>`).join("")}</table>`);
+        `<tr><th scope="row">${esc(r[0])}</th><td>${esc(r[1])}</td></tr>`).join("")}</table>`);
       if (L.description) h.push(para(L.description));
       [
         ["How the Lab Counts Toward Your Grade", L.gradeNote],
@@ -1121,7 +2025,7 @@ export default function SyllabusBuilder() {
     const wk = schedRows.filter((w) => w.label || w.topics || w.dates);
     if (wk.length) {
       sec("Course Schedule");
-      h.push(`<table class="grid"><tr><th class="wk">${d.scheduleType === "modular" ? "Module" : "Week"}</th><th>Topics and Readings</th><th class="due">Due</th></tr>${
+      h.push(`<table class="grid"><tr><th scope="col" class="wk">${d.scheduleType === "modular" ? "Module" : "Week"}</th><th scope="col">Topics and Readings</th><th scope="col" class="due">Due</th></tr>${
         wk.map((w) => `<tr><td class="wk"><strong>${esc(w.label)}</strong>${w.dates ? `<br/><span class="soft">${esc(w.dates)}</span>` : ""}</td><td>${
           w.off.map((o) => `<div class="off">${esc(o)}</div>`).join("")}${esc(w.topics).replace(/\n/g, "<br/>")}</td><td class="due">${esc(w.due).replace(/\n/g, "<br/>")}</td></tr>`).join("")
       }</table>`);
@@ -1130,12 +2034,12 @@ export default function SyllabusBuilder() {
     if (d.calNote && d.term === "Spring 2027") {
       sec("Spring 2027 Dates You Should Know");
       h.push(`<table class="grid">${Spring_2027.map((r) =>
-        `<tr><th class="wk">${esc(r[0])}</th><td>${esc(r[1])}</td></tr>`).join("")}</table>
+        `<tr><th scope="row" class="wk">${esc(r[0])}</th><td>${esc(r[1])}</td></tr>`).join("")}</table>
         <p class="soft">Registrar's calendar, subject to change. Confirm at utm.edu/academics/academic-calendar/</p>`);
     }
 
     return h.join("");
-  }, [d, weightTotal, realOutcomes, aiText, meetingDisplay, labMeetingDisplay, schedRows]);
+  }, [d, weightTotal, pointsTotal, realOutcomes, aiText, meetingDisplay, labMeetingDisplay, schedRows]);
 
   const DOC_CSS = `
     body{font-family:Cambria,Georgia,serif;font-size:11pt;line-height:1.5;color:#1a1a1a;margin:0}
@@ -1150,13 +2054,13 @@ export default function SyllabusBuilder() {
     .hdr td{vertical-align:bottom;padding:0 0 10px}
     .hdr-l{width:245px}
     .hdr-r{text-align:right}
-    .ct{font-size:10pt;letter-spacing:2px;color:${C.orange};font-weight:bold}
+    .ct{font-size:10pt;letter-spacing:2px;color:${C.orangeText};font-weight:bold}
     .tt{font-size:19pt;color:${C.navy};line-height:1.15;font-weight:bold;margin:0}
     .st{font-size:10pt;color:#5A6A80;margin-top:3px}
     table.grid{width:100%;border-collapse:collapse;margin:6px 0 12px;font-size:10.5pt}
     .grid th,.grid td{border:1px solid ${C.line};padding:6px 9px;text-align:left;vertical-align:top}
     .grid th{background:#EEF2F7;color:${C.navy};font-weight:bold;width:auto}
-    .grid td .tag{font-size:8.5pt;color:${C.orange};font-weight:bold;margin-top:3px}
+    .grid td .tag{font-size:8.5pt;color:${C.orangeText};font-weight:bold;margin-top:3px}
     .grid .w{width:70px;text-align:right}
     .grid .wk{width:110px}
     .grid .due{width:150px}
@@ -1189,10 +2093,13 @@ export default function SyllabusBuilder() {
     [data-theme="dark"] .doc-preview.themed .pnote{background:var(--warnBg)}
     [data-theme="dark"] .doc-preview.themed .off{color:var(--warn)}
     [data-theme="dark"] .doc-preview.themed .hdr-l img{filter:invert(1) hue-rotate(180deg);mix-blend-mode:lighten}
+    /* the print's darker text orange is only 3.3:1 on the dark paper; the theme orange is 6.4:1 */
+    [data-theme="dark"] .doc-preview.themed .ct,
+    [data-theme="dark"] .doc-preview.themed .grid td .tag{color:var(--orange)}
   `;
 
   const fullHtml = () =>
-    `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word"><head>
+    `<html lang="en" xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word"><head>
     <meta charset="utf-8"/><title>${esc(pdfFilename())}</title>
      <style>@page{size:8.5in 11in;margin:0.8in}${DOC_CSS}</style></head>
      <body><div class="page">${docBody}</div></body></html>`;
@@ -1219,12 +2126,29 @@ export default function SyllabusBuilder() {
       formRef.current?.querySelector("input")?.focus({ preventScroll: true });
     });
   };
-  /** Opens the browser print dialog with the current syllabus formatted for PDF output. */  const exportPdf = () => {
+  /** Resolves once every image in the document has loaded or failed to load. */
+  const imagesReady = (doc) => Promise.all([...doc.images].map((img) =>
+    img.complete ? null : new Promise((done) => {
+      img.addEventListener("load", done, { once: true });
+      img.addEventListener("error", done, { once: true });
+    })));
+
+  /** Opens the browser print dialog with the current syllabus formatted for PDF output. */
+  const exportPdf = async () => {
     const f = frameRef.current; if (!f) return;
     const doc = f.contentWindow.document;
     doc.open(); doc.write(fullHtml()); doc.close();
     doc.title = pdfFilename();
-    setTimeout(() => { f.contentWindow.focus(); f.contentWindow.print(); }, 250);
+    // Wait for the logo, any other images, and fonts to finish loading instead
+    // of guessing a delay. The 5-second cap keeps one stuck resource from
+    // blocking the export forever.
+    const win = f.contentWindow;
+    const loaded = Promise.all([imagesReady(doc), doc.fonts ? doc.fonts.ready : null]);
+    const cap = new Promise((done) => setTimeout(done, 5000));
+    await Promise.race([loaded, cap]);
+    // Give the browser one more frame to finish laying out the page.
+    await new Promise((done) => window.requestAnimationFrame(() => done()));
+    win.focus(); win.print();
   };
 
  // Warn about missing topics only for weekly schedules.
@@ -1241,10 +2165,13 @@ export default function SyllabusBuilder() {
   /* ---------- sections ---------- */
   const TABS = [
     { n: "Course", i: BookOpen }, { n: "Instructor", i: User }, { n: "Welcome", i: MessageSquare },
-    { n: "Outcomes", i: Target }, { n: "Materials", i: Library }, { n: "Grading", i: Scale },
-    { n: "Policies", i: Gavel }, { n: "University", i: ShieldCheck }, { n: "Schedule", i: CalendarDays },
-    {n: "Labs", i: FlaskConical},{ n: "Export", i: FileDown },
+    { n: "Outcomes", i: Target }, { n: "Materials", i: Library }, {n: "Review/Summary", i: ClipboardCheck},
+    { n: "Grading", i: Scale }, { n: "Policies", i: Gavel }, { n: "University", i: ShieldCheck },
+    { n: "Schedule", i: CalendarDays }, {n: "Labs", i: FlaskConical}, { n: "Accessibility", i: EarHearingAid },
+    { n: "Export", i: FileDown },
   ];
+  // Look tabs up by name so adding a tab doesn't break hardcoded index numbers.
+  const tabIndex = (name) => TABS.findIndex((t) => t.n === name);
 
   /** Renders a consistently styled action button with an optional icon. */
   const Btn = ({ onClick, children, icon: I, primary }) => (
@@ -1263,14 +2190,31 @@ export default function SyllabusBuilder() {
         <div role="presentation" onMouseDown={() => setPendingDelete(null)} style={{ position: "fixed", inset: 0, zIndex: 10,
           display: "flex", alignItems: "center", justifyContent: "center", padding: 20, background: "rgba(11,34,64,.38)" }}>
           <div role="dialog" aria-modal="true" aria-labelledby="delete-dialog-title" onMouseDown={(e) => e.stopPropagation()}
-            style={{ width: "min(100%, 420px)", background: "#fff", borderRadius: 4, padding: 24, boxShadow: "0 12px 36px rgba(11,34,64,.24)" }}>
-            <div id="delete-dialog-title" style={{ color: C.navy, fontSize: 18, fontWeight: "bold", marginBottom: 8 }}>Delete this entry?</div>
-            <div style={{ color: C.slate, fontSize: 14, lineHeight: 1.5, marginBottom: 20 }}>
+            style={{ width: "min(100%, 420px)", background: UI.paper, borderRadius: 4, padding: 24, boxShadow: "0 12px 36px rgba(11,34,64,.24)" }}>
+            <div id="delete-dialog-title" style={{ color: UI.navy, fontSize: 18, fontWeight: "bold", marginBottom: 8 }}>Delete this entry?</div>
+            <div style={{ color: UI.slate, fontSize: 14, lineHeight: 1.5, marginBottom: 20 }}>
               This {({ outcomes: "learning outcome", items: "assignment or category", weeks: "schedule entry" }[pendingDelete.k] || "entry")} contains information. Are you sure you want to delete it?
             </div>
             <div className="flex justify-end gap-2">
               <Btn onClick={() => setPendingDelete(null)}>Cancel</Btn>
               <Btn onClick={confirmDrop} primary>Delete</Btn>
+            </div>
+          </div>
+        </div>
+      )}
+      {showTextKeybinds && (
+        <div role="presentation" onMouseDown={() => setShowTextKeybinds(false)} style={{ position: "fixed", inset: 0, zIndex: 1100,
+          display: "flex", alignItems: "center", justifyContent: "center", padding: 20, background: "rgba(11,34,64,.38)" }}>
+          <div role="dialog" aria-modal="true" aria-labelledby="text-keybinds-title" onMouseDown={(event) => event.stopPropagation()}
+            style={{ width: "min(100%, 340px)", background: UI.paper, border: `1px solid ${UI.line}`, borderRadius: 4, padding: 20, boxShadow: "0 12px 36px rgba(11,34,64,.24)" }}>
+            <div id="text-keybinds-title" style={{ color: UI.navy, fontSize: 18, fontWeight: "bold", marginBottom: 14 }}>Text keybinds</div>
+            <div style={{ display: "grid", gridTemplateColumns: "auto 1fr", gap: "10px 16px", alignItems: "center", color: UI.slate, fontSize: 14 }}>
+              <kbd>Ctrl+B</kbd><span>Bold</span>
+              <kbd>Ctrl+U</kbd><span>Underline</span>
+              <kbd>Ctrl+I</kbd><span>Italicize</span>
+            </div>
+            <div className="flex justify-end" style={{ marginTop: 20 }}>
+              <Btn onClick={() => setShowTextKeybinds(false)}>Close</Btn>
             </div>
           </div>
         </div>
@@ -1297,71 +2241,189 @@ export default function SyllabusBuilder() {
 
       <div className="flex flex-wrap editor-row" style={{ alignItems: "flex-start" }}>
         {/* left rail */}
-        <div className="editor-rail" style={{ width: 150, background: UI.paper, borderRight: `1px solid ${UI.line}`, minHeight: "calc(100vh - 62px)" }}>
+        <div className="editor-rail" style={{ width: 150, background: UI.paper, borderRight: `1px solid ${UI.line}`, minHeight: "calc(100vh - 62px)", position: "relative" }}>
+          <div style={{
+            position: "absolute", left: 0, top: 0, width: "100%", height: 40,
+            background: UI.tint, borderLeft: `3px solid ${C.orange}`,
+            transform: `translateY(${tab * 40}px)`,
+            transition: "transform 0.25s ease",
+            pointerEvents: "none",
+          }} />
           {TABS.map((t, i) => {
             const on = tab === i; const I = t.i;
             return (
               <button key={t.n} onClick={() => setTab(i)}
-                className="flex items-center gap-2 w-full px-3 py-2 text-sm text-left"
-                style={{ background: on ? UI.tint : "transparent", color: on ? UI.navy : UI.slate,
-                  borderLeft: `3px solid ${on ? C.orange : "transparent"}`, fontWeight: on ? "bold" : "normal", cursor: "pointer" }}>
+                className="relative flex items-center gap-2 w-full px-3 text-sm text-left"
+                style={{ height: 40, background: "transparent", color: on ? UI.navy : UI.slate,
+                  fontWeight: on ? "bold" : "normal", cursor: "pointer" }}>
                 <I size={15} />{t.n}
               </button>
             );
           })}
-          <button
-          onClick={() => setTheme(theme === "light" ? "dark" : "light")}
-          style={{margin: 12, padding: "6px 10px", borderRadius: 4, cursor: "pointer",
-            background: UI.paper, color: UI.ink, border: '1px solid ${UI.line}'}}>
-          {theme === "light" ? "Dark mode" : "Light mode"}
-            </button>
-        </div>
-
+          <label style={{ display: "block", margin: 12, color: UI.ink }}>
+            <span style={{ display: "block", fontSize: 10, letterSpacing: 1, color: UI.muted, marginBottom: 4 }}>THEME</span>
+            <select
+              value={theme}
+              onChange={(event) => setTheme(event.target.value)}
+              aria-label={`Theme: ${currentTheme.label}`}
+              style={{ width: "100%", padding: "6px 8px", borderRadius: 4, cursor: "pointer",
+                boxSizing: "border-box", fontSize: 11, background: UI.paper, color: UI.ink,
+                border: `1px solid ${UI.line}` }}>
+              {THEMES.map((option) => <option key={option.id} value={option.id}>{option.label}</option>)}
+            </select>
+          </label>
+</div>
         {/* form */}
         <div ref={formRef} className="p-5 editor-form" style={{ flex: "1 1 420px", minWidth: 340, maxWidth: 620 }}>
           {tab === 0 && (<>
             <H>Course</H>
-            <div className="flex gap-3 flex-wrap">
+            <div className="flex gap-3 flex-wrap items-end">
               <div style={{ flex: "1 1 150px" }}>
                 <Field label="Course code" hint="POSC 322">
-                  <T
-                    value={d.code}
-                    onChange={handleCourseCodeChange} // Connected to your safe lookup handler
-                    placeholder="POSC 322"
-                  />
-
-                  {/* Autofill Match Indicator Banner */}
-                  {d.code && catalog && catalog[normalizeCourseKey(d.code)] && (
-                    <div
-                      className="flex items-center gap-1.5 mt-1.5 px-2 py-1 rounded text-xs font-semibold"
+                  <div ref={codeSuggestRef} style={{ position: "relative" }}>
+                    <input
+                      style={inputBase}
+                      value={d.code}
+                      placeholder="POSC 322"
+                      autoComplete="off"
+                      onChange={(e) => set("code", e.target.value)}
+                      onFocus={() => { if (codeSuggestions.length) setCodeSuggestOpen(true); }}
+                    />
+                    <div role="listbox" className="transition-all duration-200"
                       style={{
-                        background: UI.goodBg || "#E8F5E9",
-                        color: UI.good || "#1E7A46",
-                        border: `1px solid ${UI.line || "#D8DEE7"}`
-                      }}
-                    >
-                      <Check size={12} />
-                      Matched catalog data loaded!
+                        position: "absolute", left: 0, right: 0, top: "calc(100% + 4px)", zIndex: 30,
+                        background: UI.paper, border: `1px solid ${UI.line}`, borderRadius: 4,
+                        boxShadow: "0 6px 16px rgba(0,0,0,.12)", overflow: "hidden", maxHeight: 220, overflowY: "auto",
+                        opacity: codeSuggestOpen ? 1 : 0,
+                        transform: codeSuggestOpen ? "translateY(0) scaleY(1)" : "translateY(-4px) scaleY(0.96)",
+                        transformOrigin: "top", pointerEvents: codeSuggestOpen ? "auto" : "none",
+                      }}>
+                      {liveDown && (
+                        <div className="flex items-center gap-2" style={{ padding: "8px 10px", fontSize: 12.5, color: UI.warn, borderBottom: `1px solid ${UI.line}` }}>
+                          <AlertTriangle size={13} />Live catalog unavailable. Using offline catalog.
+                        </div>
+                      )}
+                      {codeSuggestLoading && codeSuggestions.length === 0 && (
+                        <div className="flex items-center gap-2" style={{ padding: "8px 10px", fontSize: 12.5, color: UI.slate }}>
+                          <Loader2 size={13} className="animate-spin" />{liveDown ? "Loading offline catalog" : "Searching live course catalog"}&hellip;
+                        </div>
+                      )}
+                      {liveDown && !codeSuggestLoading && codeSuggestions.length === 0 && (
+                        <div style={{ padding: "8px 10px", fontSize: 12.5, color: UI.slate }}>No matching courses.</div>
+                      )}
+                      {codeSuggestions.map((s) => (
+                        <div key={s.type + s.code} role="option"
+                          onClick={() => pickCodeSuggestion(s)}
+                          onMouseEnter={(e) => { e.currentTarget.style.background = UI.tint; }}
+                          onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
+                          style={{ padding: "7px 10px", fontSize: 13, cursor: "pointer" }}>
+                          <div style={{ fontWeight: "bold", color: UI.navy }}>{s.code}</div>
+                          <div style={{ fontSize: 11.5, color: UI.slate }}>{s.type === "subject" ? s.description : s.title}</div>
+                        </div>
+                      ))}
                     </div>
-                  )}
+                  </div>
                 </Field>
               </div>
-              <div style={{ flex: "2 1 240px" }}>
-                <Field label="Course title">
-                  <T value={d.title} onChange={(v) => set("title", v)} placeholder="American Foreign Policy" />
+              <div style={{ flex: "1 1 130px" }}>
+                <Field label="Section" hint="e.g. 001">
+                  <div ref={sectionSuggestRef} style={{ position: "relative" }}>
+                    <input
+                      style={{ ...inputBase, paddingRight: 30 }}
+                      value={d.section}
+                      placeholder="001"
+                      autoComplete="off"
+                      onChange={(e) => set("section", e.target.value)}
+                      onFocus={() => { if (sectionSuggestions.length) setSectionSuggestOpen(true); }}
+                    />
+                    {lookupStatus === "loading" &&
+                      <div style={{ position: "absolute", right: 9, top: 0, bottom: 0, display: "flex", alignItems: "center" }}>
+                        <Loader2 size={15} className="animate-spin" style={{ color: UI.slate }} />
+                      </div>}
+                    {lookupStatus === "ok" &&
+                      <Check size={15} style={{ position: "absolute", right: 9, top: "50%", transform: "translateY(-50%)", color: UI.good }} />}
+                    {lookupStatus === "error" &&
+                      <X size={15} style={{ position: "absolute", right: 9, top: "50%", transform: "translateY(-50%)", color: UI.warn }} />}
+                    <div role="listbox" className="transition-all duration-200"
+                      style={{
+                        position: "absolute", left: 0, right: 0, top: "calc(100% + 4px)", zIndex: 30,
+                        background: UI.paper, border: `1px solid ${UI.line}`, borderRadius: 4,
+                        boxShadow: "0 6px 16px rgba(0,0,0,.12)", overflow: "hidden", maxHeight: 220, overflowY: "auto",
+                        opacity: sectionSuggestOpen ? 1 : 0,
+                        transform: sectionSuggestOpen ? "translateY(0) scaleY(1)" : "translateY(-4px) scaleY(0.96)",
+                        transformOrigin: "top", pointerEvents: sectionSuggestOpen ? "auto" : "none",
+                      }}>
+                      {sectionSuggestions.map((s) => (
+                        <div key={s.crn} role="option"
+                          onClick={() => pickSectionSuggestion(s)}
+                          onMouseEnter={(e) => { e.currentTarget.style.background = UI.tint; }}
+                          onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
+                          style={{ padding: "7px 10px", fontSize: 13, cursor: "pointer" }}>
+                          <div style={{ fontWeight: "bold", color: UI.navy }}>Section {s.section}</div>
+                          <div style={{ fontSize: 11.5, color: UI.slate }}>{s.meeting} &middot; {s.instructor}</div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
                 </Field>
               </div>
             </div>
             <div className="flex gap-3 flex-wrap">
-              <div style={{ flex: "1 1 130px" }}><Field label="CRN" hint="the 5-digit registration number"><T value={d.crn} onChange={(v) => set("crn", v)} placeholder="12345" maxLength={5} /></Field></div>
-              <div style={{ flex: "1 1 130px" }}><Field label="Section"><T value={d.section} onChange={(v) => set("section", v)} placeholder="001" /></Field></div>
+              <div style={{ flex: "2 1 240px" }}><Field label="Course title"><T value={d.title} onChange={(v) => set("title", v)} placeholder="American Foreign Policy" /></Field></div>
+              <div style={{ flex: "0 0 100px" }}>
+                <Field label="CRN"><T value={d.crn} onChange={(v) => set("crn", v.replace(/\D/g, "").slice(0, 5))} placeholder="12345" /></Field>
+              </div>
             </div>
             <div className="flex gap-3 flex-wrap">
-              <div style={{ flex: "1 1 130px" }}><Field label="Term">
-                <select style={inputBase} value={d.term} onChange={(e) => set("term", e.target.value)}>
-                  {[...new Set([...Object.keys(ACADEMIC_CALENDARS), d.term])].map((t) => <option key={t}>{t}</option>)}
-                </select>
-              </Field></div>
+              <div style={{ flex: "1 1 130px" }}>
+                <Field label="Term" hint="used for the lookup too">
+                  <div ref={termRef} style={{ position: "relative" }}>
+                    <input
+                      style={{ ...inputBase, paddingRight: 30 }}
+                      value={d.term}
+                      placeholder="Fall 2026"
+                      autoComplete="off"
+                      onChange={(e) => set("term", e.target.value)}
+                      onFocus={() => { if (termOptions.length) setTermOpen(true); }}
+                    />
+                    {termOptions.length > 0 && (
+                      <button type="button" onClick={() => setTermOpen((o) => !o)}
+                        aria-haspopup="listbox" aria-expanded={termOpen} aria-label="Choose a term"
+                        style={{
+                          position: "absolute", right: 0, top: 0, bottom: 0, width: 28,
+                          display: "flex", alignItems: "center", justifyContent: "center",
+                          background: "transparent", cursor: "pointer",
+                        }}>
+                        <ChevronDown size={14} className="transition-transform duration-200"
+                          style={{ color: UI.slate, transform: termOpen ? "rotate(180deg)" : "none" }} />
+                      </button>
+                    )}
+                    <div role="listbox" className="transition-all duration-200"
+                      style={{
+                        position: "absolute", left: 0, right: 0, top: "calc(100% + 4px)", zIndex: 30,
+                        background: UI.paper, border: `1px solid ${UI.line}`, borderRadius: 4,
+                        boxShadow: "0 6px 16px rgba(0,0,0,.12)", overflow: "hidden", maxHeight: 220, overflowY: "auto",
+                        opacity: termOpen ? 1 : 0,
+                        transform: termOpen ? "translateY(0) scaleY(1)" : "translateY(-4px) scaleY(0.96)",
+                        transformOrigin: "top", pointerEvents: termOpen ? "auto" : "none",
+                      }}>
+                      {termOptions.map((t) => (
+                        <div key={t} role="option" aria-selected={d.term === t}
+                          onClick={() => { set("term", t); setTermOpen(false); }}
+                          onMouseEnter={(e) => { e.currentTarget.style.background = UI.tint; }}
+                          onMouseLeave={(e) => { e.currentTarget.style.background = d.term === t ? UI.tint : "transparent"; }}
+                          style={{
+                            padding: "7px 10px", fontSize: 13.5, cursor: "pointer",
+                            color: d.term === t ? UI.navy : UI.ink, fontWeight: d.term === t ? "bold" : "normal",
+                            background: d.term === t ? UI.tint : "transparent",
+                          }}>
+                          {t}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </Field>
+              </div>
               <div style={{ flex: "1 1 130px" }}><Field label="Credit hours"><T value={d.credits} onChange={(v) => set("credits", v)} /></Field></div>
             </div>
             <Field label="Semester Length" hint="students read this before they register">
@@ -1370,9 +2432,38 @@ export default function SyllabusBuilder() {
               </select>
             </Field>
             <Field label="Delivery" hint="students read this before they register">
-              <select style={inputBase} value={d.modality} onChange={(e) => set("modality", e.target.value)}>
-                {["In person", "Hybrid", "Online synchronous", "Online asynchronous", "Dual Enrollment", "Internship"].map((m) => <option key={m}>{m}</option>)}
-              </select>
+              <div ref={deliveryRef} style={{ position: "relative" }}>
+                <button type="button" onClick={() => setDeliveryOpen((o) => !o)}
+                  aria-haspopup="listbox" aria-expanded={deliveryOpen}
+                  style={{ ...inputBase, display: "flex", alignItems: "center", justifyContent: "space-between", cursor: "pointer" }}>
+                  <span>{d.modality}</span>
+                  <ChevronDown size={14} className="transition-transform duration-200"
+                    style={{ color: UI.slate, flexShrink: 0, marginLeft: 8, transform: deliveryOpen ? "rotate(180deg)" : "none" }} />
+                </button>
+                <div role="listbox" className="transition-all duration-200"
+                  style={{
+                    position: "absolute", left: 0, right: 0, top: "calc(100% + 4px)", zIndex: 20,
+                    background: UI.paper, border: `1px solid ${UI.line}`, borderRadius: 4,
+                    boxShadow: "0 6px 16px rgba(0,0,0,.12)", overflow: "hidden",
+                    opacity: deliveryOpen ? 1 : 0,
+                    transform: deliveryOpen ? "translateY(0) scaleY(1)" : "translateY(-4px) scaleY(0.96)",
+                    transformOrigin: "top", pointerEvents: deliveryOpen ? "auto" : "none",
+                  }}>
+                  {["In person", "Hybrid", "Online synchronous", "Online asynchronous", "Dual Enrollment", "Internship"].map((m) => (
+                    <div key={m} role="option" aria-selected={d.modality === m}
+                      onClick={() => { set("modality", m); setDeliveryOpen(false); }}
+                      onMouseEnter={(e) => { e.currentTarget.style.background = UI.tint; }}
+                      onMouseLeave={(e) => { e.currentTarget.style.background = d.modality === m ? UI.tint : "transparent"; }}
+                      style={{
+                        padding: "8px 10px", fontSize: 14, cursor: "pointer",
+                        color: d.modality === m ? UI.navy : UI.ink, fontWeight: d.modality === m ? "bold" : "normal",
+                        background: d.modality === m ? UI.tint : "transparent",
+                      }}>
+                      {m}
+                    </div>
+                  ))}
+                </div>
+              </div>
             </Field>
                         <Field label="Meeting days" hint="leave blank if fully asynchronous">
               <select
@@ -1404,123 +2495,62 @@ export default function SyllabusBuilder() {
             </Field>
             <Field label="Room"><T value={d.location} onChange={(v) => set("location", v)} placeholder="Humanities 407" /></Field>
             <Field label="Other Meeting Room" hint="Only fill this if some classes take place in other room during the week"><T value={d.exlocation} onChange={(v) => set("exlocation", v)} placeholder="Humanities 409 on Fridays" /></Field>
-            <Field label="Department">
-              <select
-                style={inputBase}
-                value={
-                  [
-                    "Select a department...",
-                    "Agriculture, Geosciences, and Natural Resources", "Family and Consumer Sciences",
-                    "Accounting, Finance, Economics, and Political Science", "Management, Marketing, and Information Systems",
-                    "Behavioral Sciences", "Educational Studies", "Health and Human Performance", "Nursing", "Psychology",
-                    "Biological Sciences", "Chemistry and Physics", "Computer Science", "Engineering", "Mathematics and Statistics",
-                    "Communications", "English and Modern Foreign Languages", "History and Philosophy", "Music", "Visual and Theatre Arts"
-                  ].includes(d.dept)
-                    ? d.dept
-                    : "Custom Department"
-                }
-                onChange={(e) => {
-                  const val = e.target.value;
-                  set("dept", val === "Custom Department" ? "" : val);
-                }}
-              >
-                <option value="Select a department...">Select a department...</option>
-
-                <optgroup label="College of Agriculture and Applied Sciences">
-                  <option value="Agriculture, Geosciences, and Natural Resources">
-                    Agriculture, Geosciences, and Natural Resources
-                  </option>
-                  <option value="Family and Consumer Sciences">
-                    Family and Consumer Sciences
-                  </option>
-                </optgroup>
-
-                <optgroup label="College of Business and Global Affairs">
-                  <option value="Accounting, Finance, Economics, and Political Science">
-                    Accounting, Finance, Economics, and Political Science
-                  </option>
-                  <option value="Management, Marketing, and Information Systems">
-                    Management, Marketing, and Information Systems
-                  </option>
-                </optgroup>
-
-                <optgroup label="College of Education, Health, and Behavioral Sciences">
-                  <option value="Behavioral Sciences">
-                    Behavioral Sciences
-                  </option>
-                  <option value="Educational Studies">
-                    Educational Studies
-                  </option>
-                  <option value="Health and Human Performance">
-                    Health and Human Performance
-                  </option>
-                  <option value="Nursing">
-                    Nursing
-                  </option>
-                  <option value="Psychology">
-                    Psychology
-                  </option>
-                </optgroup>
-
-                <optgroup label="College of Engineering and Natural Sciences">
-                  <option value="Biological Sciences">
-                    Biological Sciences
-                  </option>
-                  <option value="Chemistry and Physics">
-                    Chemistry and Physics
-                  </option>
-                  <option value="Computer Science">
-                    Computer Science
-                  </option>
-                  <option value="Engineering">
-                    Engineering
-                  </option>
-                  <option value="Mathematics and Statistics">
-                    Mathematics and Statistics
-                  </option>
-                </optgroup>
-
-                <optgroup label="College of Humanities and Fine Arts">
-                  <option value="Communications">
-                    Communications
-                  </option>
-                  <option value="English and Modern Foreign Languages">
-                    English and Modern Foreign Languages
-                  </option>
-                  <option value="History and Philosophy">
-                    History and Philosophy
-                  </option>
-                  <option value="Music">
-                    Music
-                  </option>
-                  <option value="Visual and Theatre Arts">
-                    Visual and Theatre Arts
-                  </option>
-                </optgroup>
-
-                <option value="Custom Department">Custom Department</option>
-              </select>
-            </Field>
-
-            {/* Custom Input dynamically renders when d.dept has been edited away from standard predefined options */}
-            {![
-              "Select a department...",
-              "Agriculture, Geosciences, and Natural Resources", "Family and Consumer Sciences",
-              "Accounting, Finance, Economics, and Political Science", "Management, Marketing, and Information Systems",
-              "Behavioral Sciences", "Educational Studies", "Health and Human Performance", "Nursing", "Psychology",
-              "Biological Sciences", "Chemistry and Physics", "Computer Science", "Engineering", "Mathematics and Statistics",
-              "Communications", "English and Modern Foreign Languages", "History and Philosophy", "Music", "Visual and Theatre Arts"
-            ].includes(d.dept) && (
-              <div className="mt-[-8px] mb-4">
-                <Field label="Custom Department Name">
-                  <T 
-                    value={d.dept} 
-                    onChange={(v) => set("dept", v)} 
-                    placeholder="Enter custom department name" 
-                  />
-                </Field>
+            <Field label="Department" hint="type freely, or pick from the list">
+              <div ref={deptRef} style={{ position: "relative" }}>
+                <input
+                  style={{ ...inputBase, paddingRight: 30 }}
+                  value={d.dept}
+                  placeholder="Department of Computer Science"
+                  autoComplete="off"
+                  onChange={(e) => set("dept", e.target.value)}
+                  onFocus={() => setDeptOpen(true)}
+                />
+                <button type="button" onClick={() => setDeptOpen((o) => !o)}
+                  aria-haspopup="listbox" aria-expanded={deptOpen} aria-label="Choose a department"
+                  style={{
+                    position: "absolute", right: 0, top: 0, bottom: 0, width: 28,
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    background: "transparent", cursor: "pointer",
+                  }}>
+                  <ChevronDown size={14} className="transition-transform duration-200"
+                    style={{ color: UI.slate, transform: deptOpen ? "rotate(180deg)" : "none" }} />
+                </button>
+                <div role="listbox" className="transition-all duration-200"
+                  style={{
+                    position: "absolute", left: 0, right: 0, top: "calc(100% + 4px)", zIndex: 30,
+                    background: UI.paper, border: `1px solid ${UI.line}`, borderRadius: 4,
+                    boxShadow: "0 6px 16px rgba(0,0,0,.12)", overflow: "hidden", maxHeight: 260, overflowY: "auto",
+                    opacity: deptOpen ? 1 : 0,
+                    transform: deptOpen ? "translateY(0) scaleY(1)" : "translateY(-4px) scaleY(0.96)",
+                    transformOrigin: "top", pointerEvents: deptOpen ? "auto" : "none",
+                  }}>
+                  {DEPARTMENTS.map((g) => (
+                    <div key={g.college}>
+                      <div style={{ padding: "8px 10px 4px", fontSize: 12, fontWeight: "bold", textTransform: "uppercase", letterSpacing: .4, color: UI.slate }}>
+                        {g.college}
+                      </div>
+                      {g.names.map((name) => {
+                        const value = `Department of ${name}`;
+                        const on = d.dept === value;
+                        return (
+                          <div key={name} role="option" aria-selected={on}
+                            onClick={() => { set("dept", value); setDeptOpen(false); }}
+                            onMouseEnter={(e) => { e.currentTarget.style.background = UI.tint; }}
+                            onMouseLeave={(e) => { e.currentTarget.style.background = on ? UI.tint : "transparent"; }}
+                            style={{
+                              padding: "7px 10px 7px 20px", fontSize: 13.5, cursor: "pointer",
+                              color: on ? UI.navy : UI.ink, fontWeight: on ? "bold" : "normal",
+                              background: on ? UI.tint : "transparent",
+                            }}>
+                            {name}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ))}
+                </div>
               </div>
-            )}
+            </Field>
             <Field label="Prerequisites"><T value={d.prereq} onChange={(v) => set("prereq", v)} placeholder="None" /></Field>
           </>)}
 
@@ -1528,11 +2558,11 @@ export default function SyllabusBuilder() {
             <H>Instructor</H>
             <Note>Office hours are the single most under-used thing on a syllabus. Students who work shifts or commute from Dresden or Union City often cannot make a fixed midday block. Naming an alternative, even just "email me and we will find a time," changes who walks through the door.</Note>
             <Field label="Your name"><T value={d.instructor} onChange={(v) => set("instructor", v)} placeholder="Dr. Jane Doe" /></Field>
-            <Field label="Email"><T value={d.email} onChange={(v) => set("email", v)} onBlur={() => {const email = d.email.trim(); if (!email || email.includes("@")) return; set("email", `${email}@utm.edu`);}} placeholder="jdoe (autofills @utm.edu)" /></Field>
+            <Field label="Email"><T value={d.email} onChange={(v) => set("email", v)} onBlur={() => {const email = d.email.trim(); set("email", email ? (email.endsWith("@") ? `${email}utm.edu` : email.includes("@") ? email : `${email}@utm.edu`) : "");}} placeholder="jdoe (autofills @utm.edu)" /></Field>
             <Field label="Phone"><T type="tel" value={d.phone} onChange={(v) => set("phone", v)} placeholder="731-555-0123" /></Field>
             <Field label="Office"><T value={d.office} onChange={(v) => set("office", v)} placeholder="Humanities 212" /></Field>
             <Field label="Office hours"><A rows={2} value={d.hours} onChange={(v) => set("hours", v)} placeholder="Monday and Wednesday, 10 a.m. to noon, and by appointment. Email me and we will find a time that works." /></Field>
-            <Field label="Email subject line you want" hint="cuts your response time"><T value={d.subjectLine} onChange={(v) => set("subjectLine", v)} placeholder="POSC 322 - [your question]" /></Field>
+            <Field label="Email subject line you want" hint="cuts your response time"><T value={d.subjectLine} onChange={(v) => { subjectLineAutoRef.current = false; set("subjectLine", v); }} placeholder="POSC 322 - [your question]" /></Field>
             <Field label="How students should address you"><T value={d.address} onChange={(v) => set("address", v)} placeholder="Dr. Doe" /></Field>
           </>)}
 
@@ -1585,7 +2615,7 @@ export default function SyllabusBuilder() {
                   {g.items.map((it) => (
                     <div key={it} className="flex gap-2 items-start mb-2">
                          {d.outcomes.includes(it) ? (
-                           <span title="Already in your outcomes" style={{ color: C.good, marginTop: 2 }}><Check size={14} /></span>
+                           <span title="Already in your outcomes" style={{ color: UI.good, marginTop: 2 }}><Check size={14} /></span>
                          ) : (
                            <button onClick={() => setD((p) => ({ ...p, outcomes: [...p.outcomes.filter((x) => x.trim()), it] }))}
                              style={{ color: C.orange, marginTop: 2, cursor: "pointer" }}><Plus size={14} /></button>
@@ -1604,15 +2634,15 @@ export default function SyllabusBuilder() {
             <Field label="Cost note" hint="tell them the real number, and the free path if there is one"><A rows={2} value={d.costNote} onChange={(v) => set("costNote", v)} placeholder="The textbook runs about $60 used. A copy is on reserve at Paul Meek Library. Tell me before the second week if cost is a barrier." /></Field>
             <Field label="Technology and platforms"><A rows={3} value={d.tech} onChange={(v) => set("tech", v)} placeholder="Canvas for all materials and submissions. A phone or laptop microphone is enough for the audio assignments." /></Field>
             <Field label="Access details" hint="answer the questions students always ask: will I be given the book, what format, and where do I get it">
-              <label className="flex items-start gap-2 mb-2 text-sm" style={{ color: C.slate, cursor: "pointer" }}>
+              <label className="flex items-start gap-2 mb-2 text-sm" style={{ color: UI.slate, cursor: "pointer" }}>
                 <input type="checkbox" checked={d.materials.provided} onChange={(e) => set("materials", { ...d.materials, provided: e.target.checked })} style={{ marginTop: 3 }} />
                 <span>These materials will be provided to you at no additional cost.</span>
               </label>
-              <label className="flex items-start gap-2 mb-2 text-sm" style={{ color: C.slate, cursor: "pointer" }}>
+              <label className="flex items-start gap-2 mb-2 text-sm" style={{ color: UI.slate, cursor: "pointer" }}>
                 <input type="checkbox" checked={d.materials.hardcopy} onChange={(e) => set("materials", { ...d.materials, hardcopy: e.target.checked })} style={{ marginTop: 3 }} />
                 <span>Available in hardcopy (print).</span>
               </label>
-              <label className="flex items-start gap-2 mb-2 text-sm" style={{ color: C.slate, cursor: "pointer" }}>
+              <label className="flex items-start gap-2 mb-2 text-sm" style={{ color: UI.slate, cursor: "pointer" }}>
                 <input type="checkbox" checked={d.materials.online} onChange={(e) => set("materials", { ...d.materials, online: e.target.checked })} style={{ marginTop: 3 }} />
                 <span>Available online (digital / e-text).</span>
               </label>
@@ -1633,34 +2663,136 @@ export default function SyllabusBuilder() {
           </>)}
 
           {tab === 5 && (<>
+            <H>Review</H>
+            <Note>A read-only check of the course info and materials you have entered. Anything required that is still empty shows a Fix link that takes you to the right tab.</Note>
+            <ReviewPanel
+              onJump={setTab}
+              groups={[
+                {
+                  title: "Course information",
+                  rows: [
+                    { label: "Course", value: `${d.code} ${d.title}`.trim(), required: true, tab: 0 },
+                    { label: "Term", value: d.term, required: true, tab: 0 },
+                    { label: "Credit hours", value: d.credits, required: true, tab: 0 },
+                    { label: "Delivery", value: d.modality, required: true, tab: 0 },
+                    { label: "Meeting time", value: meetingDisplay, required: !d.modality.startsWith("Online"), tab: 0 },
+                    { label: "Room", value: d.location, tab: 0 },
+                    { label: "CRN / Section", value: [d.crn, d.section].filter(Boolean).join(" / "), tab: 0 },
+                    { label: "Instructor", value: d.instructor, required: true, tab: 1 },
+                    { label: "Email", value: d.email, required: true, tab: 1 },
+                    { label: "Office hours", value: d.hours, required: true, tab: 1 },
+                  ],
+              },
+              {
+                title: "Materials",
+                rows: [
+                  { label: "Required texts", value: d.texts, required: true, tab: 4 },
+                  { label: "Cost note", value: d.costNote, tab: 4 },
+                  { label: "Technology and platforms", value: d.tech, tab: 4 },
+                ],
+              },
+            ]}
+          />
+      </>)}
+
+
+          {tab === 6 && (<>
             <H>Assessment and Grading</H>
+            <div className="flex gap-2 mb-4">
+              <button
+                type="button"
+                onClick={() => set("gradingMethod", "percentage")}
+                aria-pressed={d.gradingMethod === "percentage"}
+                className="px-3 py-2 rounded text-sm font-semibold"
+                style={{
+                  background: d.gradingMethod === "percentage" ? C.navy : UI.paper,
+                  color: d.gradingMethod === "percentage" ? "#fff" : UI.navy,
+                  border: `1px solid ${C.navy}`,
+                  cursor: "pointer"
+                }}
+              >
+                Percentage (%)
+              </button>
+
+              <button
+                type="button"
+                onClick={() => set("gradingMethod", "points")}
+                aria-pressed={d.gradingMethod === "points"}
+                className="px-3 py-2 rounded text-sm font-semibold"
+                style={{
+                  background: d.gradingMethod === "points" ? C.navy : UI.paper,
+                  color: d.gradingMethod === "points" ? "#fff" : UI.navy,
+                  border: `1px solid ${C.navy}`,
+                  cursor: "pointer"
+                }}
+              >
+                Points (pts)
+              </button>
+            </div>
             <Note>Use one row for an individual assignment, such as a final paper, or a grading category, such as quizzes. For a category, enter its combined course weight.</Note>
             <div className="p-3 mb-4 rounded flex items-center gap-2" style={{
-              background: Math.abs(weightTotal - 100) < 0.01 ? UI.goodBg : UI.warnBg,
-              color: Math.abs(weightTotal - 100) < 0.01 ? UI.good : UI.warn, fontSize: 14, fontWeight: "bold" }}>
-              {Math.abs(weightTotal - 100) < 0.01 ? <Check size={16} /> : <AlertTriangle size={16} />}
-              Weights total {fmtWeight(weightTotal)}%{Math.abs(weightTotal - 100) < 0.01 ? "" : `, which is ${weightTotal > 100 ? "over" : "under"} by ${fmtWeight(Math.abs(100 - weightTotal))}`}
+              background: d.gradingMethod === "points"
+                ? (validPoints ? UI.goodBg : UI.warnBg)
+                : Math.abs(weightTotal - 100) < 0.01 ? UI.goodBg : UI.warnBg,
+              color: d.gradingMethod === "points"
+                ? (validPoints ? UI.good : UI.warn)
+                : Math.abs(weightTotal - 100) < 0.01 ? UI.good : UI.warn,
+              fontSize: 14,
+              fontWeight: "bold"
+            }}>
+              {d.gradingMethod === "points" ? (
+                <>
+                  {validPoints ? <Check size={16} /> : <AlertTriangle size={16} />}
+                  Total: {fmtWeight(pointsTotal)} points
+                  {!validPoints && (
+                    d.items.some((item) => !item.name.trim() && item.points.trim())
+                      ? " — Add a name to the incomplete assignment"
+                      : " — Enter valid points for each assignment"
+                  )}
+                </>
+              ) : (
+                <>
+                  {Math.abs(weightTotal - 100) < 0.01
+                    ? <Check size={16} />
+                    : <AlertTriangle size={16} />}
+                  Weights total {fmtWeight(weightTotal)}%
+                  {Math.abs(weightTotal - 100) < 0.01
+                    ? ""
+                    : `, which is ${weightTotal > 100 ? "over" : "under"} by ${fmtWeight(Math.abs(100 - weightTotal))}`}
+                </>
+              )}
             </div>
             {d.items.map((x, i) => (
               <div key={i} ref={i === d.items.length - 1 ? lastGradingItemRef : null} className="p-3 mb-3 rounded" style={{ background: UI.paper, border: `1px solid ${UI.line}` }}>
                 <div className="flex gap-2 mb-2">
                   <div style={{ flex: 3 }}><T value={x.name} onChange={(v) => setDeep("items", i, "name", v)} placeholder="Assignment or category" /></div>
-                  <div style={{ flex: 1 }}><T mono value={x.weight} onChange={(v) => setDeep("items", i, "weight", v)} placeholder="%" /></div>
-                  <div style={{ flex: 1 }}><T mono value={x.points} onChange={(v) => setDeep("items", i, "points", v)} placeholder="pts" /></div>
+                  {d.gradingMethod === "percentage" ? (
+                    <div style={{ flex: 1 }}>
+                      <T mono value={x.weight}
+                        onChange={(v) => setDeep("items", i, "weight", v)}
+                        placeholder="%" />
+                    </div>
+                  ) : (
+                    <div style={{ flex: 1 }}>
+                      <T mono value={x.points}
+                        onChange={(v) => setDeep("items", i, "points", v)}
+                        placeholder="pts" />
+                    </div>
+                  )}
                   <div style={{ flex: 1 }}><T value={x.due} onChange={(v) => setDeep("items", i, "due", v)} placeholder="Due date" /></div>
                   <button onClick={() => drop("items", i)} aria-label={`Remove assignment or category ${i + 1}`} style={{ color: UI.muted, cursor: "pointer" }}><Trash2 size={15} /></button>
                 </div>
                 <A rows={2} value={x.desc} onChange={(v) => setDeep("items", i, "desc", v)} placeholder="Describe the assignment or category." />
                 {realOutcomes.length > 0 && (
                   <div className="mt-2">
-                    <div style={{ fontSize: 11, color: C.slate, marginBottom: 4 }}>WHICH OUTCOMES DOES THIS PRODUCE EVIDENCE FOR?</div>
+                    <div style={{ fontSize: 11, color: UI.slate, marginBottom: 4 }}>WHICH OUTCOMES DOES THIS PRODUCE EVIDENCE FOR?</div>
                     <div className="flex flex-wrap gap-1">
                       {realOutcomes.map((_, oi) => {
                         const on = x.slos.includes(oi);
                         return (
                           <button key={oi} onClick={() => setDeep("items", i, "slos", on ? x.slos.filter((z) => z !== oi) : [...x.slos, oi])}
                             style={{ fontSize: 12, padding: "2px 9px", borderRadius: 11, cursor: "pointer",
-                              border: `1px solid ${on ? C.orange : C.line}`, background: on ? C.orange : "#fff", color: on ? "#fff" : C.slate }}>
+                              border: `1px solid ${on ? C.orange : UI.line}`, background: on ? C.orange : UI.paper, color: on ? "#fff" : UI.slate }}>
                             {oi + 1}
                           </button>
                         );
@@ -1672,7 +2804,7 @@ export default function SyllabusBuilder() {
             ))}
             <Btn onClick={addGradingItem} icon={Plus}>Add Assignment or Category</Btn>
             {unmapped.length > 0 && (
-              <div className="mt-4 p-3 rounded flex gap-2" style={{ background: "#FEF6E7", color: C.warn, fontSize: 13 }}>
+              <div className="mt-4 p-3 rounded flex gap-2" style={{ background: UI.warnBg, color: UI.warn, fontSize: 13 }}>
                 <AlertTriangle size={15} style={{ flexShrink: 0, marginTop: 2 }} />
                 <div>Outcome{unmapped.length > 1 ? "s" : ""} {unmapped.map((i) => i + 1).join(", ")} {unmapped.length > 1 ? "have" : "has"} nothing in the grade breakdown producing evidence for {unmapped.length > 1 ? "them" : "it"}. Either attach an assignment or category or rewrite the outcome.</div>
               </div>
@@ -1680,7 +2812,7 @@ export default function SyllabusBuilder() {
             <div className="mt-4"><Field label="Grading scale"><A rows={2} value={d.scale} onChange={(v) => set("scale", v)} /></Field></div>
           </>)}
 
-          {tab === 6 && (<>
+          {tab === 7 && (<>
             <H>Course Policies</H>
             <Field label="Attendance">
               <select
@@ -1721,7 +2853,52 @@ export default function SyllabusBuilder() {
                 placeholder="Say what counts as present, what happens after an absence, and who to tell."
               />
             </Field> 
-            <Field label="What engagement looks like here" hint="optional, but it removes a lot of guesswork"><A rows={3} value={d.participation} onChange={(v) => set("participation", v)} placeholder="Merely showing up and sitting through the class is not participation. Asking questions during Q and A, contributing to project discussions, and showing up to team meetings all count." /></Field>
+            <Field label="What engagement looks like here" hint="optional, but it removes a lot of guesswork">
+              <select
+                style={{ ...inputBase, marginBottom: 8 }}
+                value=""
+                onChange={(e) => {
+                  const text = e.target.value;
+                  if (!text) return;
+                  if (
+                    d.participation.trim() &&
+                    !window.confirm("Replace your current engagement policy?")
+                  ) {
+                    return;
+                  }
+                  set("participation", text);
+                }}
+              >
+                <option value="">Please select a sample engagement policy, then edit it to fit your course</option>
+                {[
+                  [
+                    "Discussion & Q&A",
+                    "Merely showing up and sitting through class is not participation. Active engagement means arriving having read the assigned material, asking and answering questions during class discussions, listening respectfully to classmates, and contributing thoughtfully to small-group activities."
+                  ],
+                  [
+                    "Project & Team-Based",
+                    "Engagement in this course is measured by how you show up for your team and the work. Contributing to project discussions, meeting agreed-upon team deadlines, participating in peer reviews, and communicating early when you hit a roadblock all count toward participation."
+                  ],
+                  [
+                    "Active Learning & Problem Solving",
+                    "This class is built around hands-on practice rather than passive note-taking. Engagement means working through in-class problems, sharing your approach (even when you are not sure it is right yet), collaborating with neighbors during exercises, and putting away distractions during class."
+                  ],
+                  [
+                    "Online & Asynchronous",
+                    "In an online course, engagement means staying visibly connected to the class community each week. Logging into Canvas regularly, posting substantive and timely responses on discussion boards, engaging with your peers' ideas, and reaching out during office hours or by email when questions come up all count."
+                  ],
+                ].map(([label, text]) => (
+                  <option key={label} value={text}>{label}</option>
+                ))}
+              </select>
+
+              <A
+                rows={4}
+                value={d.participation}
+                onChange={(v) => set("participation", v)}
+                placeholder="Merely showing up and sitting through the class is not participation. Asking questions during Q and A, contributing to project discussions, and showing up to team meetings all count."
+              />
+            </Field>
             <Field label="Late work and make-up" hint="choose a sample, then edit as needed">
               <select value={d.lateSample} onChange={(e) => {
                 const sample = LATE_POLICIES.find((policy) => policy.label === e.target.value);
@@ -1754,7 +2931,7 @@ export default function SyllabusBuilder() {
             <div className="mt-6 mb-2" style={{ color: UI.navy, fontWeight: "bold", fontSize: 14 }}>Artificial Intelligence Policy</div>
             <Note>UTM's AI policy, effective July 1, 2025, requires every syllabus to state your expectations for student AI use. This is not optional, so pick a tier below. The three tiers match the policy: unrestricted, mixed, and total prohibition.</Note>
             {Object.entries(AI_POLICIES).map(([k, v]) => (
-              <label key={k} className="flex items-start gap-2 mb-2 text-sm" style={{ color: C.slate, cursor: "pointer" }}>
+              <label key={k} className="flex items-start gap-2 mb-2 text-sm" style={{ color: UI.slate, cursor: "pointer" }}>
                 <input type="radio" name="ai" checked={d.aiTier === k} onChange={() => set("aiTier", k)} style={{ marginTop: 3 }} />
                 <span>{v.label}</span>
               </label>
@@ -1763,16 +2940,16 @@ export default function SyllabusBuilder() {
               placeholder="Your policy must still affirm academic honesty and state that unpermitted AI use is academic misconduct under the Student Code of Conduct." /></div>}
             <div className="mt-4"><Field label="A note from your professor" hint="optional warm box, sits under the policy">
               <A rows={3} value={d.profNote} onChange={(v) => set("profNote", v)} placeholder="If you are ever unsure whether what you are submitting crosses that line, reach out before you submit. That conversation is always easier before the fact than after." /></Field></div>
-            <div className="mt-6 mb-2" style={{ color: C.navy, fontWeight: "bold", fontSize: 14 }}>Additional Policies</div>
+            <div className="mt-6 mb-2" style={{ color: UI.navy, fontWeight: "bold", fontSize: 14 }}>Additional Policies</div>
             {d.customPolicies.map((policy, i) => (
-              <div key={i} className="mb-3 p-3 rounded" style={{ background: "#fff", border: `1px solid ${C.line}` }}>
+              <div key={i} className="mb-3 p-3 rounded" style={{ background: UI.paper, border: `1px solid ${UI.line}` }}>
                 <div className="flex items-start gap-2">
                   <div style={{ flex: 1 }}>
                     <Field label="Policy title"><T value={policy.title} onChange={(v) => setDeep("customPolicies", i, "title", v)} placeholder="Classroom conduct" /></Field>
                     <Field label="Policy details"><A rows={3} value={policy.text} onChange={(v) => setDeep("customPolicies", i, "text", v)} placeholder="Describe your expectations for students." /></Field>
                   </div>
                   <button type="button" onClick={() => drop("customPolicies", i)} aria-label={`Remove custom policy ${i + 1}`} title="Remove policy"
-                    className="p-2 rounded" style={{ color: C.slate, background: "transparent", border: 0, cursor: "pointer" }}>
+                    className="p-2 rounded" style={{ color: UI.slate, background: "transparent", border: 0, cursor: "pointer" }}>
                     <Trash2 size={16} />
                   </button>
                 </div>
@@ -1781,7 +2958,7 @@ export default function SyllabusBuilder() {
             <Btn onClick={() => push("customPolicies", { title: "", text: "" })} icon={Plus}>Add custom policy</Btn>
           </>)}
 
-          {tab === 7 && (<>
+          {tab === 8 && (<>
             <H>University Policies</H>
             <Note>CTL maintains this language and checks it each term. Leave it checked and it stays current. If you edit it in Word after export, you own the accuracy of the edit.</Note>
             {Object.entries(LOCKED).map(([k, v]) => (
@@ -1791,16 +2968,20 @@ export default function SyllabusBuilder() {
                   <Lock size={12} style={{ color: C.orange }} />
                   <span style={{ color: UI.navy, fontWeight: "bold", fontSize: 13.5 }}>{v.title}</span>
                 </label>
-                <div style={{ fontSize: 12, color: C.slate, marginTop: 6, lineHeight: 1.5, maxHeight: 86, overflow: "auto", whiteSpace: "pre-wrap" }}>{v.text}</div>
+                <div style={{ fontSize: 12, color: UI.slate, marginTop: 6, lineHeight: 1.5, maxHeight: 86, overflow: "auto", whiteSpace: "pre-wrap" }}>{v.text}</div>
               </div>
             ))}
           </>)}
 
-          {tab === 8 && (<>
+          {tab === 9 && (<>
             <H>Schedule</H>
             <Field label="Schedule format">
               <select style={inputBase} value={d.scheduleType || "weekly"} onChange={(e) => {
                 const next = e.target.value;
+                if (next === "summer-full" || next === "summer-first-half" || next === "summer-second-half") {
+                  applySummerPreset(next);
+                  return;
+                }
                 setD((p) => ({ ...p, scheduleType: next, weeks: p.weeks.map((w) => ({
                   ...w,
                   label: /^(Week|Module) \d+$/.test(w.label)
@@ -1809,8 +2990,16 @@ export default function SyllabusBuilder() {
               }}>
                 <option value="weekly">Weekly</option>
                 <option value="modular">Modular</option>
+                <option value="summer-full">Summer: Full</option>
+                <option value="summer-first-half">Summer: First half</option>
+                <option value="summer-second-half">Summer: Second half</option>
               </select>
             </Field>
+            <div className="flex gap-2 flex-wrap mb-4">
+              <Btn onClick={() => applySummerPreset("summer-full")} icon={Plus}>Add full summer schedule</Btn>
+              <Btn onClick={() => applySummerPreset("summer-first-half")} icon={Plus}>Add first half</Btn>
+              <Btn onClick={() => applySummerPreset("summer-second-half")} icon={Plus}>Add second half</Btn>
+            </div>
             <Field label="Class meets on" hint={cal ? `dates come from the ${d.term} registrar calendar` : "pick a term on the Course tab to use the registrar calendar"}>
               <div className="flex flex-wrap gap-1">
                 {CLASS_DAYS.map(([n, name]) => {
@@ -1818,7 +3007,7 @@ export default function SyllabusBuilder() {
                   return (
                     <button key={n} type="button" aria-pressed={on} aria-label={DAY_NAMES[n]} onClick={() => toggleDay(n)}
                       style={{ fontSize: 13, padding: "5px 12px", borderRadius: 14, cursor: "pointer", fontWeight: on ? "bold" : "normal",
-                        border: `1px solid ${on ? C.orange : C.line}`, background: on ? C.orange : "#fff", color: on ? "#fff" : C.slate }}>
+                        border: `1px solid ${on ? C.orange : UI.line}`, background: on ? C.orange : UI.paper, color: on ? "#fff" : UI.slate }}>
                       {name}
                     </button>
                   );
@@ -1843,7 +3032,7 @@ export default function SyllabusBuilder() {
               </>
             )}
             {d.term === "Fall 2026" ? (
-              <label className="flex items-start gap-2 mb-4 text-sm" style={{ color: C.slate, cursor: "pointer" }}>
+              <label className="flex items-start gap-2 mb-4 text-sm" style={{ color: UI.slate, cursor: "pointer" }}>
                 <input type="checkbox" checked={d.calNote} onChange={(e) => set("calNote", e.target.checked)} style={{ marginTop: 3 }} />
                 <span>Append the Fall 2026 registrar dates: add and drop deadlines, Fall Break, Thanksgiving, finals, and commencement.</span>
               </label>
@@ -1854,9 +3043,9 @@ export default function SyllabusBuilder() {
               <div key={i} className="p-3 mb-3 rounded" style={{ background: UI.paper, border: `1px solid ${UI.line}` }}>
                 {auto ? (
                   <div className="mb-2">
-                    <span style={{ color: C.navy, fontWeight: "bold", fontSize: 14 }}>{w.label}</span>
-                    <span style={{ color: C.slate, fontSize: 13, marginLeft: 8 }}>{w.dates}</span>
-                    {w.off.map((o) => <div key={o} style={{ color: C.warn, fontSize: 12.5, fontWeight: "bold", marginTop: 2 }}>{o}</div>)}
+                    <span style={{ color: UI.navy, fontWeight: "bold", fontSize: 14 }}>{w.label}</span>
+                    <span style={{ color: UI.slate, fontSize: 13, marginLeft: 8 }}>{w.dates}</span>
+                    {w.off.map((o) => <div key={o} style={{ color: UI.warn, fontSize: 12.5, fontWeight: "bold", marginTop: 2 }}>{o}</div>)}
                   </div>
                 ) : (
                   <div className="flex gap-2 mb-2">
@@ -1916,16 +3105,20 @@ export default function SyllabusBuilder() {
                     }));
                   }}>{d.scheduleType === "modular" ? "Build modules" : "Build weeks"}</Btn>
                 </div>
-                <div role="alert" className="mt-1 text-xs" style={{ color: C.warn, minHeight: 32 }}>
+                <div role="alert" className="mt-1 text-xs" style={{ color: UI.warn, minHeight: 32 }}>
                   {weekCountWarning ? "Enter a whole number between 1-15." : ""/* displays a warning if the week count is invalid */}
                 </div>
               </div>
+              <Btn onClick={() => {
+                if (d.weeks.length && !window.confirm("Delete all weeks? This cannot be undone.")) return;
+                setD((p) => ({ ...p, weeks: [] }));
+              }}>Delete All</Btn>
             </div>)}
           </>)}
 
-                    {tab === 9 && (<>
+            {tab === 10 && (<>
             <H>Laboratory Component</H>
-            <label className="flex items-start gap-2 mb-4 text-sm" style={{ color: C.slate, cursor: "pointer" }}>
+            <label className="flex items-start gap-2 mb-4 text-sm" style={{ color: UI.slate, cursor: "pointer" }}>
               <input type="checkbox" checked={d.hasLab} onChange={(e) => set("hasLab", e.target.checked)} style={{ marginTop: 3 }} />
               <span>This course has a lab component. Checking this adds a Laboratory Component section to the syllabus.</span>
             </label>
@@ -1942,7 +3135,7 @@ export default function SyllabusBuilder() {
                     return (
                       <button key={n} type="button" aria-pressed={on} aria-label={DAY_NAMES[n]} onClick={() => toggleLabDay(n)}
                         style={{ fontSize: 13, padding: "5px 12px", borderRadius: 14, cursor: "pointer", fontWeight: on ? "bold" : "normal",
-                          border: `1px solid ${on ? C.orange : C.line}`, background: on ? C.orange : "#fff", color: on ? "#fff" : C.slate }}>
+                          border: `1px solid ${on ? C.orange : UI.line}`, background: on ? C.orange : UI.paper, color: on ? "#fff" : UI.slate }}>
                         {name}
                       </button>
                     );
@@ -1963,16 +3156,81 @@ export default function SyllabusBuilder() {
           </>)}
 
 
-          {tab === 10 && (<>
+          {tab === tabIndex("Accessibility") && (<>
+            <H>Accessibility Check</H>
+            <p style={{ fontSize: 13.5, color: UI.slate, lineHeight: 1.55, marginBottom: 14 }}>
+              These checks look for common problems that make a syllabus hard to use with a screen reader
+              or hard to read, similar to what YuJa Panorama flags in Canvas. Everything runs here in your
+              browser; nothing is sent anywhere. Fixing these is recommended but does not block export.
+            </p>
+            <div className="mb-3" style={{ fontSize: 14, fontWeight: "bold", color: UI.ink }} role="status">
+              {a11ySummary}
+            </div>
+            <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
+              {a11yChecks.map((c) => {
+                const status = c.found.length ? c.level : "pass";
+                const StatusIcon = status === "pass" ? Check : status === "fail" ? CircleX : AlertTriangle;
+                const statusText = status === "pass" ? "Pass" : status === "fail" ? "Fail" : "Warning";
+                const statusColor = status === "pass" ? UI.good : UI.warn;
+                const tabsToVisit = [...new Set(c.found.map((p) => p.tab))];
+                return (
+                  <li key={c.id} className="mb-3 p-3 rounded"
+                    style={{ background: UI.paper, border: `1px solid ${UI.line}`, fontSize: 13.5, color: UI.ink }}>
+                    <div className="flex items-start gap-2">
+                      <StatusIcon size={16} aria-hidden="true" style={{ color: statusColor, flexShrink: 0, marginTop: 2 }} />
+                      <div style={{ flex: 1, fontWeight: "bold" }}>{c.title}</div>
+                      <span style={{ fontSize: 12, fontWeight: "bold", color: statusColor }}>{statusText}</span>
+                    </div>
+                    {status !== "pass" && (
+                      <div style={{ marginLeft: 24, marginTop: 6, lineHeight: 1.5 }}>
+                        <ul style={{ listStyle: "disc", paddingLeft: 18, margin: "0 0 8px" }}>
+                          {c.found.map((p, i) => (
+                            <li key={i}>
+                              <span style={{ color: UI.slate }}>{p.tab} › {p.label}</span>
+                              {p.quote && <>: “{p.quote}”</>}
+                              {p.note && <>{p.quote ? " · " : " "}{p.note}</>}
+                            </li>
+                          ))}
+                        </ul>
+                        <p style={{ margin: "0 0 4px", color: UI.slate }}><strong>Why it matters:</strong> {c.why}</p>
+                        <p style={{ margin: "0 0 8px", color: UI.slate }}><strong>How to fix:</strong> {c.fix}</p>
+                        <div className="flex flex-wrap gap-2">
+                          {tabsToVisit.map((t) => (
+                            <Btn key={t} onClick={() => setTab(tabIndex(t))} icon={ChevronRight}>Go to {t}</Btn>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+          </>)}
+
+          {tab === tabIndex("Export") && (<>
             <H>Review and Export</H>
             <div className="mb-5">
               {checks.map(([label, ok]) => (
-                <div key={label} className="flex items-start gap-2 py-1" style={{ fontSize: 13.5, color: ok ? C.ink : C.warn }}>
-                  {ok ? <Check size={15} style={{ color: C.good, flexShrink: 0, marginTop: 2 }} />
-                      : <AlertTriangle size={15} style={{ color: C.warn, flexShrink: 0, marginTop: 2 }} />}
+                <div key={label} className="flex items-start gap-2 py-1" style={{ fontSize: 13.5, color: ok ? UI.ink : UI.warn }}>
+                  {ok ? <Check size={15} style={{ color: UI.good, flexShrink: 0, marginTop: 2 }} />
+                      : <AlertTriangle size={15} style={{ color: UI.warn, flexShrink: 0, marginTop: 2 }} />}
                   <span>{label}</span>
                 </div>
               ))}
+            </div>
+            {/* Accessibility summary: warns only, never blocks export */}
+            <div className="flex flex-wrap items-center gap-2 mb-4 p-3 rounded" role="status"
+              style={{ background: UI.paper, border: `1px solid ${UI.line}`, color: UI.ink, fontSize: 13.5 }}>
+              {a11yFailCount + a11yWarnCount === 0
+                ? <Check size={16} aria-hidden="true" style={{ color: UI.good, flexShrink: 0 }} />
+                : <AlertTriangle size={16} aria-hidden="true" style={{ color: UI.warn, flexShrink: 0 }} />}
+              <span style={{ flex: "1 1 200px" }}>
+                {a11ySummary}
+                {a11yFailCount + a11yWarnCount > 0 && " Fixing them is recommended, but you can still export."}
+              </span>
+              {a11yFailCount + a11yWarnCount > 0 && (
+                <Btn onClick={() => setTab(tabIndex("Accessibility"))} icon={ChevronRight}>Review accessibility</Btn>
+              )}
             </div>
             <Note>Nothing here is stored anywhere. Closing this tab clears it. Export your syllabus to Word or PDF before closing.</Note>
             <div className="flex flex-wrap gap-2 mb-4">
@@ -1980,7 +3238,7 @@ export default function SyllabusBuilder() {
               <Btn onClick={() => confirmThenExport(exportPdf)} icon={Printer} primary>Export to PDF</Btn>
               <Btn onClick={clearForm} icon={Trash2}>Clear form</Btn>
             </div>
-            <div style={{ fontSize: 12, color: C.slate, marginTop: 14, lineHeight: 1.55 }}>
+            <div style={{ fontSize: 12, color: UI.slate, marginTop: 14, lineHeight: 1.55 }}>
               Word opens the export as a normal document you can keep editing. PDF opens your browser's print dialog, where you choose Save as PDF. Both come out in Cambria with the UT Martin banner and real Word heading styles, so a screen reader can navigate it.
             </div>
           </>)}
@@ -2011,6 +3269,15 @@ export default function SyllabusBuilder() {
                   Show as printed
                 </button>
               )}
+              <button
+                type="button"
+                onClick={() => setShowTextKeybinds(true)}
+                title="Show the text formatting keybinds"
+                className="px-3 py-2 rounded text-sm font-semibold"
+                style={{ background: UI.paper, color: UI.navy, border: `1px solid ${UI.line}`, cursor: "pointer", letterSpacing: 0 }}
+              >
+                Text keybinds
+              </button>
               <button
                 type="button"
                 onClick={() => setPreviewFullscreen((fullscreen) => !fullscreen)}
@@ -2049,4 +3316,53 @@ export default function SyllabusBuilder() {
 function H({ children }) {
   return <div style={{ color: UI.navy, fontWeight: "bold", fontSize: 17, marginBottom: 12,
     borderBottom: `2px solid ${C.orange}`, paddingBottom: 6, display: "inline-block" }}>{children}</div>;
+}
+
+function ReviewPanel({ groups, onJump }) {
+  const has = (v) => v && String(v).trim();
+  // Rich-text fields arrive as HTML; show their text, keeping line breaks.
+  const plain = (v) => {
+    if (!v) return "";
+    const temp = document.createElement("div");
+    temp.innerHTML = normalizeRichHtml(v);
+    return temp.textContent || "";
+  };
+  const missing = groups.flatMap((g) => g.rows).filter((r) => r.required && !has(r.value)).length;
+
+  return (
+    <div className="mt-6 rounded" style={{ background: UI.paper, border: `1px solid ${UI.line}` }}>
+      <div className="flex items-center gap-2 px-4 py-3" style={{
+        borderBottom: `1px solid ${UI.line}`,
+        background: missing ? UI.warnBg : UI.goodBg,
+        color: missing ? UI.warn : UI.good, fontWeight: "bold", fontSize: 14 }}>
+        {missing ? <AlertTriangle size={15} /> : <Check size={15} />}
+        {missing
+          ? `Review: ${missing} required item${missing > 1 ? "s" : ""} still missing`
+          : "Review: course info and materials look complete"}
+      </div>
+      <div className="px-4 py-2">
+        {groups.map((g) => (
+          <div key={g.title} className="mb-3">
+            <div style={{ color: UI.navy, fontWeight: "bold", fontSize: 12, letterSpacing: 1,
+              textTransform: "uppercase", margin: "10px 0 4px" }}>{g.title}</div>
+            {g.rows.map((r) => {
+              const filled = has(r.value);
+              return (
+                <div key={r.label} className="flex gap-3 py-1" style={{ fontSize: 13, borderTop: `1px solid ${UI.wash}` }}>
+                  <div style={{ width: 130, flexShrink: 0, color: UI.slate }}>{r.label}</div>
+                  <div style={{ flex: 1, whiteSpace: "pre-wrap", color: filled ? UI.ink : r.required ? UI.warn : UI.muted }}>
+                    {filled ? plain(r.value) : r.required ? "Not entered" : "Not entered (optional)"}
+                  </div>
+                  {!filled && r.required && r.tab !== undefined && (
+                    <button onClick={() => onJump(r.tab)}
+                      style={{ color: UI.orange, fontSize: 12, fontWeight: "bold", cursor: "pointer" }}>Fix</button>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
 }
