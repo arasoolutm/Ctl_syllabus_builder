@@ -208,7 +208,8 @@ For students with formally approved disability accommodations, please send your 
   },
   support: {
     title: "Student Resources and Support",
-    text: `Learning Commons (Writing Center, tutoring, and Supplemental Instruction) — Paul Meek Library
+    text: `Learning Commons (Writing Center, tutoring, and Supplemental Instruction) — Paul Meek Library 
+    https://liveutk.sharepoint.com/sites/LibraryLearningCommons
 
 Accessibility Resource Center — Student Success Center, 206-209 Clement Hall, 731-881-7195, ARC@utm.edu
 
