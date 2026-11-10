@@ -3,7 +3,7 @@ import {
   BookOpen, User, MessageSquare, Target, Library, Scale, Gavel,
   ShieldCheck, CalendarDays, FileDown, Check, AlertTriangle, Plus, Trash2,
   Save, Upload, Printer, Lock, Info, ChevronRight, Maximize2, Minimize2, FlaskConical, ChevronDown, X, Loader2,
-  ClipboardCheck
+  CircleX, ClipboardCheck
 } from "lucide-react";
 import { SUBJECTS } from "./subjectCodes.js";
 
@@ -25,9 +25,27 @@ const UtmMark = ({ style, textColor = "#fff" }) => (
   </svg>
 );
 
+/** Ear with a behind-the-ear hearing aid, drawn to match the lucide icons (lucide has no hearing-aid icon).
+ *  Accepts the same size and style props, so it can be used in TABS like any other icon. */
+const EarHearingAid = ({ size = 24, style, ...rest }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24"
+    fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"
+    aria-hidden="true" style={style} {...rest}>
+    {/* the ear (lucide "ear" paths, shifted left to make room for the hearing aid) */}
+    <g transform="translate(-3 1)">
+      <path d="M6 8.5a6.5 6.5 0 1 1 13 0c0 6-6 6-6 10a3.5 3.5 0 1 1-7 0" />
+      <path d="M15 8.5a2.5 2.5 0 0 0-5 0v1a2 2 0 1 1 0 4" />
+    </g>
+    {/* the hearing aid body behind the ear, and its tube over the top */}
+    <rect x="18" y="5" width="4" height="9" rx="2" fill="currentColor" />
+    <path d="M20 5c0-2.2-1.8-3.6-4-3.4" />
+  </svg>
+);
+
 const C = {
   navy: "#0B2240",      // UT Martin PMS 289
   orange: "#FF8300",    // UT Martin PMS 151
+  orangeText: "#B35900", // darker orange for small text: 4.8:1 on white (UT Orange is 2.5:1, below WCAG's 4.5:1)
   ink: "#1a1a1a",
   slate: "#4A5568",
   line: "#D8DEE7",
@@ -643,10 +661,13 @@ const TextEditor = ({ value, onChange, placeholder, rows = 1, mono = false, sing
     }
   };
 
+  const isEmpty = !String(value || "").replace(/<[^>]*>/g, "").trim();
+
   return (
     <div
       style={{
         ...inputBase,
+        position: "relative",
         minHeight: singleLine ? 34 : rows * 22,
         height: singleLine ? 34 : undefined,
         maxHeight: singleLine ? 34 : 220,
@@ -656,6 +677,24 @@ const TextEditor = ({ value, onChange, placeholder, rows = 1, mono = false, sing
         alignItems: "stretch",
       }}
     >
+      {isEmpty && placeholder && (
+        <div
+          aria-hidden="true"
+          style={{
+            position: "absolute",
+            top: 7,
+            left: 10,
+            right: 10,
+            color: UI.muted,
+            pointerEvents: "none",
+            lineHeight: 1.5,
+            whiteSpace: singleLine ? "nowrap" : "pre-wrap",
+            fontFamily: mono ? "ui-monospace, monospace" : inputBase.fontFamily,
+          }}
+        >
+          {placeholder}
+        </div>
+      )}
       <div
         ref={editorRef}
         contentEditable
@@ -684,7 +723,7 @@ const TextEditor = ({ value, onChange, placeholder, rows = 1, mono = false, sing
           lineHeight: 1.5,
           whiteSpace: singleLine ? "nowrap" : "pre-wrap",
           fontFamily: mono ? "ui-monospace, monospace" : inputBase.fontFamily,
-          color: C.ink,
+          color: UI.ink, // theme variable, so typed text is readable in every theme
           padding: "7px 10px",
           outline: "none",
         }}
@@ -742,6 +781,23 @@ const normalizeRichHtml = (value = "") => {
 
 const formatRichText = (value = "") => normalizeRichHtml(value);
 
+/* Turns a rich-text value back into the plain text the professor sees, for the
+   accessibility checks: <br> and <div>/<p> blocks become line breaks, tags such as
+   <b>/<i>/<u> are dropped, and entities (&amp;, &nbsp; …) are decoded. Line breaks
+   follow the same rules normalizeRichHtml uses for the document, so a blank line
+   here is a paragraph break there. A template is inert, so nothing in it runs or loads. */
+const richToPlain = (value = "") => {
+  const s = String(value ?? "");
+  if (!/[<&]/.test(s)) return s; // already plain text
+  const tpl = document.createElement("template");
+  tpl.innerHTML = s
+    .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/<\/(div|p)>\s*<(div|p)\b[^>]*>/gi, "\n")
+    .replace(/<(div|p)\b[^>]*>/gi, "\n")
+    .replace(/<\/(div|p)>/gi, "");
+  return tpl.content.textContent.replace(/ /g, " ").replace(/^\n/, "");
+};
+
 const A = ({ value, onChange, placeholder, rows = 4, onBlur }) => (
   <TextEditor value={value} onChange={onChange} placeholder={placeholder} rows={rows} onBlur={onBlur} />
 );
@@ -754,7 +810,7 @@ const Field = ({ label, hint, children }) => (
 /** Displays instructional text without adding it to the exported syllabus. */
 const Note = ({ children }) => (
   <div className="flex gap-2 p-3 mb-4 rounded text-sm" style={{ background: UI.tint, color: UI.slate, lineHeight: 1.55 }}>
-    <Info size={15} style={{ color: C.navy, flexShrink: 0, marginTop: 2 }} />
+    <Info size={15} style={{ color: UI.navy, flexShrink: 0, marginTop: 2 }} />
     <div>{children}</div>
   </div>
 );
@@ -789,7 +845,6 @@ export default function SyllabusBuilder() {
   useEffect(() => {
     document.documentElement.setAttribute("data-theme", theme);
   }, [theme]);
-  const nextTheme = THEMES[(THEMES.findIndex((t) => t.id === theme) + 1) % THEMES.length];
   const currentTheme = THEMES.find((t) => t.id === theme) || THEMES[0];
   const [showPrinted, setShowPrinted] = useState(false);
   // true when the preview is showing the real print colors
@@ -1187,11 +1242,21 @@ export default function SyllabusBuilder() {
   }, [previewFullscreen]);
 
   // Which syllabus heading each editor tab and each repeated section maps to.
+  // One entry per tab in TABS, in the same order. null means that tab has no
+  // matching section in the preview, so the preview doesn't scroll.
   const SECTION_FOR_TAB = [
-    "COURSE INFORMATION", "COURSE INFORMATION", "WELCOME TO THIS COURSE",
-    "STUDENT LEARNING OUTCOMES", "REQUIRED MATERIALS", "ASSESSMENT AND GRADING",
-    "COURSE POLICIES", "UNIVERSITY POLICIES AND STUDENT SUPPORT", "COURSE SCHEDULE",
-    "LABORATORY COMPONENT",
+    "COURSE INFORMATION",                        // 0 Course
+    "COURSE INFORMATION",                        // 1 Instructor
+    "WELCOME TO THIS COURSE",                    // 2 Welcome
+    "STUDENT LEARNING OUTCOMES",                 // 3 Outcomes
+    "REQUIRED MATERIALS",                        // 4 Materials
+    null,                                        // 5 Review/Summary
+    "ASSESSMENT AND GRADING",                    // 6 Grading
+    "COURSE POLICIES",                           // 7 Policies
+    "UNIVERSITY POLICIES AND STUDENT SUPPORT",   // 8 University
+    "COURSE SCHEDULE",                           // 9 Schedule
+    "LABORATORY COMPONENT",                      // 10 Labs
+    null,                                        // 11 Export
   ];
   const SECTION_FOR_ITEM = {
     weeks: "COURSE SCHEDULE",
@@ -1547,6 +1612,224 @@ export default function SyllabusBuilder() {
   ];
   const passed = checks.filter((c) => c[1]).length;
 
+  /* ---------- accessibility: Panorama-style checks on the professor's own writing ---------- */
+
+  // Every free-text box the professor writes in, tagged with the tab and label where it
+  // lives, so each problem can say exactly where to fix it. inList marks text that the
+  // document already puts inside a real numbered list (the learning outcomes).
+  const a11yFields = useMemo(() => {
+    const f = (tab, label, text, inList = false) =>
+      ({ tab, label, text: typeof text === "string" ? richToPlain(text) : "", inList });
+    const titled = (base, i, title) => `${base} ${i + 1}${title?.trim() ? ` (${title.trim()})` : ""}`;
+    return [
+      f("Instructor", "Office hours", d.hours),
+      f("Welcome", "Why this course matters", d.welcome),
+      f("Welcome", "Course description", d.description),
+      ...d.customDescriptions.map((x, i) => f("Welcome", titled("Custom description", i, x.title), x.description)),
+      ...d.outcomes.map((o, i) => f("Outcomes", `Outcome ${i + 1}`, o, true)),
+      f("Materials", "Required texts", d.texts),
+      f("Materials", "Cost note", d.costNote),
+      f("Materials", "Technology and platforms", d.tech),
+      f("Materials", "Access details", d.materials.acquire),
+      ...d.extraMaterials.map((x, i) => f("Materials", titled("Material section", i, x.title), x.description)),
+      ...d.items.map((x, i) => f("Grading", `${x.name?.trim() || `Assignment ${i + 1}`} description`, x.desc)),
+      f("Grading", "Grading scale", d.scale),
+      f("Policies", "Attendance", d.attendance),
+      f("Policies", "What engagement looks like here", d.participation),
+      f("Policies", "Late work and make-up", d.late),
+      ...d.lateAdditional.map((x, i) => f("Policies", `Additional late policy ${i + 1}`, x.text)),
+      ...(d.aiTier === "custom" ? [f("Policies", "Custom AI policy", d.aiCustom)] : []),
+      f("Policies", "A note from your professor", d.profNote),
+      ...d.customPolicies.map((x, i) => f("Policies", titled("Custom policy", i, x.title), x.text)),
+      ...d.weeks.flatMap((w, i) => [
+        f("Schedule", `Week ${i + 1} topics`, w.topics),
+        f("Schedule", `Week ${i + 1} due`, w.due),
+      ]),
+      ...(d.hasLab ? [
+        f("Labs", "What happens in lab", d.lab.description),
+        f("Labs", "How the lab counts toward the course grade", d.lab.gradeNote),
+        f("Labs", "Lab attendance", d.lab.attendance),
+        f("Labs", "Lab safety", d.lab.safety),
+        f("Labs", "Supplies and protective equipment", d.lab.supplies),
+        f("Labs", "Missed labs and make-up", d.lab.makeup),
+      ] : []),
+    ].filter((x) => x.text.trim());
+  }, [d]);
+
+  // Shortens a line of the professor's text for display in a result.
+  const excerpt = (s, n = 50) => {
+    const t = s.trim().replace(/\s+/g, " ");
+    return t.length > n ? `${t.slice(0, n)}…` : t;
+  };
+
+  // A line that starts like a typed bullet or number: "- ", "-Item", "* ", "• ", "1. ", "1.Item",
+  // "2) ", "a) " … A symbol or number counts with or without a space as long as a letter follows,
+  // so "-5 points" and "1.5 hours" are not mistaken for bullets.
+  const FAKE_BULLET = /^\s*(?:[-*•–—→▪◦·](?:\s+|(?=[a-z]))|\d{1,2}[.)](?:\s+|(?=[a-z]))|[a-z]\)\s+)/i;
+
+  // Wording that only makes sense for a clickable link. The export has no links, so in print
+  // and in a screen reader these phrases point at nothing.
+  const VAGUE_LINK = /\b(click here|click the link|click this link|tap here|follow this link|this link|the link below|link below)\b/i;
+  // Four or more of the same symbol in a row, used as a divider: ----, ****, ====, ____
+  const DECORATIVE_RUN = /([-*=_~#+])\1{3,}/;
+  // Web addresses: https://…, www.…, or a bare domain such as utm.edu/calendar
+  const URL_RE = /\b(?:https?:\/\/|www\.)\S+|\b[a-z0-9-]+\.(?:edu|com|org|gov|net|io)(?:\/\S*)?/gi;
+  // A tab, or three or more spaces, between two pieces of text: columns lined up by hand.
+  const FAKE_COLUMNS = /\S(?:\t+| {3,})\S/;
+
+  // Each check: id, title, level ("fail" or "warn"), why it matters, how to fix,
+  // and found = the places where the problem appears (empty means it passes).
+  // A found item has tab, label, and either a quote of the text or a note.
+  const a11yChecks = useMemo(() => {
+    const at = (x, extra) => ({ tab: x.tab, label: x.label, ...extra });
+    const lines = (x) => x.text.split("\n");
+    const paragraphs = (x) => x.text.split(/\n{2,}/).filter((p) => p.trim());
+
+    const fakeLists = a11yFields.flatMap((x) => {
+      const hits = lines(x).filter((l) => FAKE_BULLET.test(l));
+      // Two typed bullets make a list. Inside an outcome, even one is a doubled number.
+      return hits.length >= (x.inList ? 1 : 2) ? [at(x, { quote: excerpt(hits[0]) })] : [];
+    });
+
+    const vagueLinks = a11yFields.flatMap((x) => {
+      const line = lines(x).find((l) => VAGUE_LINK.test(l));
+      return line ? [at(x, { quote: excerpt(line) })] : [];
+    });
+
+    const decorative = a11yFields.flatMap((x) => {
+      const line = lines(x).find((l) => DECORATIVE_RUN.test(l));
+      return line ? [at(x, { quote: excerpt(line) })] : [];
+    });
+
+    // Custom items whose title and text don't match up. In the document a title becomes a
+    // heading; text without a title lands under whatever heading came before it.
+    const headingProblems = [];
+    const pairUp = (list, tab, base, textKey) => list.forEach((item, i) => {
+      const title = item.title.trim(); const text = richToPlain(item[textKey] || "").trim();
+      const label = `${base} ${i + 1}${title ? ` (${title})` : ""}`;
+      if (title && !text) headingProblems.push({ tab, label, note: "has a title but no text, so it prints as an empty heading" });
+      if (!title && text) headingProblems.push({ tab, label, note: "has text but no title, so it prints under the previous heading" });
+    });
+    d.customDescriptions.forEach((item, i) => {
+      if (item.title.trim() && !richToPlain(item.description).trim()) headingProblems.push({
+        tab: "Welcome", label: `Custom description ${i + 1} (${item.title.trim()})`,
+        note: "has a title but no text, so it prints as an empty heading",
+      });
+    });
+    pairUp(d.extraMaterials, "Materials", "Material section", "description");
+    pairUp(d.customPolicies, "Policies", "Custom policy", "text");
+    if (d.hasLab && ![d.lab.crn, d.lab.meeting, d.lab.location, d.lab.instructor, d.lab.description,
+      d.lab.gradeNote, d.lab.attendance, d.lab.safety, d.lab.supplies, d.lab.makeup].some((v) => richToPlain(v).trim())) {
+      headingProblems.push({ tab: "Labs", label: "Laboratory component",
+        note: "is turned on but empty, so it prints as a heading with nothing under it" });
+    }
+
+    const allCaps = a11yFields.flatMap((x) => {
+      const line = lines(x).find((l) => {
+        const letters = l.match(/[a-z]/gi) || [];
+        const upper = l.match(/[A-Z]/g) || [];
+        return l.trim().split(/\s+/).length >= 3 && letters.length >= 12 && upper.length / letters.length >= 0.8;
+      });
+      return line ? [at(x, { quote: excerpt(line) })] : [];
+    });
+
+    const longParagraphs = a11yFields.flatMap((x) => paragraphs(x).flatMap((p) => {
+      const words = p.trim().split(/\s+/).length;
+      return words > 150 ? [at(x, { quote: excerpt(p), note: `${words} words` })] : [];
+    }));
+
+    const bareUrls = a11yFields.flatMap((x) => lines(x).flatMap((l) => {
+      const withoutEmails = l.replace(/\S+@\S+/g, " ");
+      return [...withoutEmails.matchAll(URL_RE)].flatMap(([url]) => {
+        // An address is fine when it's short and the sentence around it names the page.
+        const wordsAround = withoutEmails.replace(url, " ").trim().split(/\s+/).filter(Boolean).length;
+        return url.length > 40 || wordsAround < 3 ? [at(x, { quote: excerpt(url, 60) })] : [];
+      });
+    }));
+
+    const fakeTables = a11yFields.flatMap((x) => {
+      const hits = lines(x).filter((l) => FAKE_COLUMNS.test(l));
+      return hits.length >= 2 ? [at(x, { quote: excerpt(hits[0]) })] : [];
+    });
+
+    return [
+      {
+        id: "fake-lists",
+        title: "Lists typed with dashes, bullets, or numbers",
+        level: "fail",
+        why: "The syllabus prints these lines as plain text, so a screen reader reads \"dash\" or \"one period\" instead of announcing a list.",
+        fix: "Write the items as a sentence or as short separate paragraphs (leave a blank line between them). In an outcome, delete the number; the syllabus numbers outcomes for you.",
+        found: fakeLists,
+      },
+      {
+        id: "vague-links",
+        title: "\"Click here\" or \"this link\" wording",
+        level: "fail",
+        why: "The syllabus has no clickable links, so \"click here\" points at nothing in print, and screen reader users can't tell where it leads.",
+        fix: "Say what the page is and give its short address, for example: \"See the UTM Academic Calendar at utm.edu/calendar.\"",
+        found: vagueLinks,
+      },
+      {
+        id: "decorative",
+        title: "Divider lines made of symbols",
+        level: "fail",
+        why: "A screen reader reads every character: \"dash dash dash dash…\".",
+        fix: "Delete the divider line. Use a blank line to separate paragraphs, or a custom section with its own title.",
+        found: decorative,
+      },
+      {
+        id: "headings",
+        title: "Empty headings or text without a heading",
+        level: "fail",
+        why: "Screen reader users jump between headings to find things. An empty heading leads nowhere, and text without a title gets announced as part of the wrong section.",
+        fix: "Give every custom section both a title and some text, or remove the one you don't need.",
+        found: headingProblems,
+      },
+      {
+        id: "all-caps",
+        title: "Text in ALL CAPITALS",
+        level: "warn",
+        why: "All caps is harder to read, comes across as shouting, and some screen readers spell it out letter by letter.",
+        fix: "Use normal sentence case. To stress something, say so in words (\"Important:\") instead.",
+        found: allCaps,
+      },
+      {
+        id: "long-paragraphs",
+        title: "Very long paragraphs",
+        level: "warn",
+        why: "Paragraphs over about 150 words are hard to follow, especially for students using screen readers, magnifiers, or reading in a second language.",
+        fix: "Break it into two or three shorter paragraphs by leaving a blank line between them.",
+        found: longParagraphs,
+      },
+      {
+        id: "bare-urls",
+        title: "Long or unexplained web addresses",
+        level: "warn",
+        why: "Screen readers read web addresses character by character, and a long address on its own doesn't tell students what the page is.",
+        fix: "Name the page in your sentence and use the shortest address that works, for example: \"the Writing Center (utm.edu/writing)\".",
+        found: bareUrls,
+      },
+      {
+        id: "fake-tables",
+        title: "Columns lined up with tabs or spaces",
+        level: "warn",
+        why: "The syllabus collapses the extra spacing, so the columns fall apart, and screen readers have no table structure to follow.",
+        fix: "Put dates and assignments in the Grading or Schedule tables, or write each row as its own sentence.",
+        found: fakeTables,
+      },
+    ];
+  }, [a11yFields, d]);
+
+  const a11yFailCount = a11yChecks.filter((c) => c.found.length && c.level === "fail").length;
+  const a11yWarnCount = a11yChecks.filter((c) => c.found.length && c.level === "warn").length;
+  // One line, shared by the Accessibility tab and the Export tab summary.
+  const a11ySummary = a11yFailCount + a11yWarnCount === 0
+    ? "No accessibility issues found."
+    : [
+        a11yFailCount && `${a11yFailCount} accessibility issue${a11yFailCount > 1 ? "s" : ""}`,
+        a11yWarnCount && `${a11yWarnCount} warning${a11yWarnCount > 1 ? "s" : ""}`,
+      ].filter(Boolean).join(" and ") + " found.";
+
   /* ---------- document builder: create the HTML shared by preview and exports ---------- */
 
   const esc = (s = "") => normalizeRichHtml(s);
@@ -1557,7 +1840,7 @@ export default function SyllabusBuilder() {
     const h = [];
     const sec = (t) => h.push(`<h2>${esc(t)}</h2>`);
 
-    h.push(`<table class="hdr"><tr>
+    h.push(`<table class="hdr" role="presentation"><tr>
       <td class="hdr-l"><img src="${LOGO}" alt="The University of Tennessee at Martin" width="230"/></td>
       <td class="hdr-r"><div class="ct">${esc(d.code || "COURSE 000")}</div>
       <h1 class="tt">${esc(d.title || "Course Title")}</h1>
@@ -1585,7 +1868,7 @@ export default function SyllabusBuilder() {
     if (facts.length) {
       sec("Course Information");
       h.push(`<table class="grid">${facts.map((r) =>
-        `<tr><th>${esc(r[0])}</th><td>${esc(r[1])}</td></tr>`).join("")}</table>`);
+        `<tr><th scope="row">${esc(r[0])}</th><td>${esc(r[1])}</td></tr>`).join("")}</table>`);
     }
 
     if (d.welcome) { sec("Welcome to This Course"); h.push(para(d.welcome)); }
@@ -1634,7 +1917,7 @@ export default function SyllabusBuilder() {
     if (live.length) {
       const hasDueDates = live.some((x) => x.due?.trim());
       sec("Assessment and Grading");
-      h.push(`<table class="grid"><tr><th>Assignment or category</th><th class="w">${isPoints ? "Points" : "Weight"}</th>${hasDueDates ? '<th class="assignment-due">Due date</th>' : ""}<th>What it is</th></tr>${live.map((x) => `<tr><td><strong>${esc(x.name)}</strong>${x.slos.length ? `<div class="tag">Outcome${x.slos.length > 1 ? "s" : ""} ${x.slos.map((i) => i + 1).join(", ")}</div>` : ""
+      h.push(`<table class="grid"><tr><th scope="col">Assignment or category</th><th scope="col" class="w">${isPoints ? "Points" : "Weight"}</th>${hasDueDates ? '<th scope="col" class="assignment-due">Due date</th>' : ""}<th scope="col">What it is</th></tr>${live.map((x) => `<tr><td><strong>${esc(x.name)}</strong>${x.slos.length ? `<div class="tag">Outcome${x.slos.length > 1 ? "s" : ""} ${x.slos.map((i) => i + 1).join(", ")}</div>` : ""
         }</td><td class="w">${isPoints
           ? fmtWeight(parseWeight(x.points))
           : `${fmtWeight(parseWeight(x.weight))}%`}</td>${hasDueDates ? `<td class="assignment-due">${esc(x.due || "")}</td>` : ""}<td>${esc(x.desc)}</td></tr>`).join("")
@@ -1654,7 +1937,7 @@ export default function SyllabusBuilder() {
         ["Lab instructor", L.instructor],
       ].filter((r) => r[1] && String(r[1]).trim());
       if (lf.length) h.push(`<table class="grid">${lf.map((r) =>
-        `<tr><th>${esc(r[0])}</th><td>${esc(r[1])}</td></tr>`).join("")}</table>`);
+        `<tr><th scope="row">${esc(r[0])}</th><td>${esc(r[1])}</td></tr>`).join("")}</table>`);
       if (L.description) h.push(para(L.description));
       [
         ["How the Lab Counts Toward Your Grade", L.gradeNote],
@@ -1697,7 +1980,7 @@ export default function SyllabusBuilder() {
     const wk = schedRows.filter((w) => w.label || w.topics || w.dates);
     if (wk.length) {
       sec("Course Schedule");
-      h.push(`<table class="grid"><tr><th class="wk">${d.scheduleType === "modular" ? "Module" : "Week"}</th><th>Topics and Readings</th><th class="due">Due</th></tr>${
+      h.push(`<table class="grid"><tr><th scope="col" class="wk">${d.scheduleType === "modular" ? "Module" : "Week"}</th><th scope="col">Topics and Readings</th><th scope="col" class="due">Due</th></tr>${
         wk.map((w) => `<tr><td class="wk"><strong>${esc(w.label)}</strong>${w.dates ? `<br/><span class="soft">${esc(w.dates)}</span>` : ""}</td><td>${
           w.off.map((o) => `<div class="off">${esc(o)}</div>`).join("")}${esc(w.topics).replace(/\n/g, "<br/>")}</td><td class="due">${esc(w.due).replace(/\n/g, "<br/>")}</td></tr>`).join("")
       }</table>`);
@@ -1706,7 +1989,7 @@ export default function SyllabusBuilder() {
     if (d.calNote && d.term === "Spring 2027") {
       sec("Spring 2027 Dates You Should Know");
       h.push(`<table class="grid">${Spring_2027.map((r) =>
-        `<tr><th class="wk">${esc(r[0])}</th><td>${esc(r[1])}</td></tr>`).join("")}</table>
+        `<tr><th scope="row" class="wk">${esc(r[0])}</th><td>${esc(r[1])}</td></tr>`).join("")}</table>
         <p class="soft">Registrar's calendar, subject to change. Confirm at utm.edu/academics/academic-calendar/</p>`);
     }
 
@@ -1726,13 +2009,13 @@ export default function SyllabusBuilder() {
     .hdr td{vertical-align:bottom;padding:0 0 10px}
     .hdr-l{width:245px}
     .hdr-r{text-align:right}
-    .ct{font-size:10pt;letter-spacing:2px;color:${C.orange};font-weight:bold}
+    .ct{font-size:10pt;letter-spacing:2px;color:${C.orangeText};font-weight:bold}
     .tt{font-size:19pt;color:${C.navy};line-height:1.15;font-weight:bold;margin:0}
     .st{font-size:10pt;color:#5A6A80;margin-top:3px}
     table.grid{width:100%;border-collapse:collapse;margin:6px 0 12px;font-size:10.5pt}
     .grid th,.grid td{border:1px solid ${C.line};padding:6px 9px;text-align:left;vertical-align:top}
     .grid th{background:#EEF2F7;color:${C.navy};font-weight:bold;width:auto}
-    .grid td .tag{font-size:8.5pt;color:${C.orange};font-weight:bold;margin-top:3px}
+    .grid td .tag{font-size:8.5pt;color:${C.orangeText};font-weight:bold;margin-top:3px}
     .grid .w{width:70px;text-align:right}
     .grid .wk{width:110px}
     .grid .due{width:150px}
@@ -1765,10 +2048,13 @@ export default function SyllabusBuilder() {
     [data-theme="dark"] .doc-preview.themed .pnote{background:var(--warnBg)}
     [data-theme="dark"] .doc-preview.themed .off{color:var(--warn)}
     [data-theme="dark"] .doc-preview.themed .hdr-l img{filter:invert(1) hue-rotate(180deg);mix-blend-mode:lighten}
+    /* the print's darker text orange is only 3.3:1 on the dark paper; the theme orange is 6.4:1 */
+    [data-theme="dark"] .doc-preview.themed .ct,
+    [data-theme="dark"] .doc-preview.themed .grid td .tag{color:var(--orange)}
   `;
 
   const fullHtml = () =>
-    `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word"><head>
+    `<html lang="en" xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word"><head>
     <meta charset="utf-8"/><title>${esc(pdfFilename())}</title>
      <style>@page{size:8.5in 11in;margin:0.8in}${DOC_CSS}</style></head>
      <body><div class="page">${docBody}</div></body></html>`;
@@ -1795,12 +2081,29 @@ export default function SyllabusBuilder() {
       formRef.current?.querySelector("input")?.focus({ preventScroll: true });
     });
   };
-  /** Opens the browser print dialog with the current syllabus formatted for PDF output. */  const exportPdf = () => {
+  /** Resolves once every image in the document has loaded or failed to load. */
+  const imagesReady = (doc) => Promise.all([...doc.images].map((img) =>
+    img.complete ? null : new Promise((done) => {
+      img.addEventListener("load", done, { once: true });
+      img.addEventListener("error", done, { once: true });
+    })));
+
+  /** Opens the browser print dialog with the current syllabus formatted for PDF output. */
+  const exportPdf = async () => {
     const f = frameRef.current; if (!f) return;
     const doc = f.contentWindow.document;
     doc.open(); doc.write(fullHtml()); doc.close();
     doc.title = pdfFilename();
-    setTimeout(() => { f.contentWindow.focus(); f.contentWindow.print(); }, 250);
+    // Wait for the logo, any other images, and fonts to finish loading instead
+    // of guessing a delay. The 5-second cap keeps one stuck resource from
+    // blocking the export forever.
+    const win = f.contentWindow;
+    const loaded = Promise.all([imagesReady(doc), doc.fonts ? doc.fonts.ready : null]);
+    const cap = new Promise((done) => setTimeout(done, 5000));
+    await Promise.race([loaded, cap]);
+    // Give the browser one more frame to finish laying out the page.
+    await new Promise((done) => window.requestAnimationFrame(() => done()));
+    win.focus(); win.print();
   };
 
   // Warn about weeks with no topics before exporting; run the export only if
@@ -1820,8 +2123,11 @@ export default function SyllabusBuilder() {
     { n: "Course", i: BookOpen }, { n: "Instructor", i: User }, { n: "Welcome", i: MessageSquare },
     { n: "Outcomes", i: Target }, { n: "Materials", i: Library }, {n: "Review/Summary", i: ClipboardCheck},
     { n: "Grading", i: Scale }, { n: "Policies", i: Gavel }, { n: "University", i: ShieldCheck },
-    { n: "Schedule", i: CalendarDays }, {n: "Labs", i: FlaskConical},{ n: "Export", i: FileDown },
+    { n: "Schedule", i: CalendarDays }, {n: "Labs", i: FlaskConical}, { n: "Accessibility", i: EarHearingAid },
+    { n: "Export", i: FileDown },
   ];
+  // Look tabs up by name so adding a tab doesn't break hardcoded index numbers.
+  const tabIndex = (name) => TABS.findIndex((t) => t.n === name);
 
   /** Renders a consistently styled action button with an optional icon. */
   const Btn = ({ onClick, children, icon: I, primary }) => (
@@ -1840,9 +2146,9 @@ export default function SyllabusBuilder() {
         <div role="presentation" onMouseDown={() => setPendingDelete(null)} style={{ position: "fixed", inset: 0, zIndex: 10,
           display: "flex", alignItems: "center", justifyContent: "center", padding: 20, background: "rgba(11,34,64,.38)" }}>
           <div role="dialog" aria-modal="true" aria-labelledby="delete-dialog-title" onMouseDown={(e) => e.stopPropagation()}
-            style={{ width: "min(100%, 420px)", background: "#fff", borderRadius: 4, padding: 24, boxShadow: "0 12px 36px rgba(11,34,64,.24)" }}>
-            <div id="delete-dialog-title" style={{ color: C.navy, fontSize: 18, fontWeight: "bold", marginBottom: 8 }}>Delete this entry?</div>
-            <div style={{ color: C.slate, fontSize: 14, lineHeight: 1.5, marginBottom: 20 }}>
+            style={{ width: "min(100%, 420px)", background: UI.paper, borderRadius: 4, padding: 24, boxShadow: "0 12px 36px rgba(11,34,64,.24)" }}>
+            <div id="delete-dialog-title" style={{ color: UI.navy, fontSize: 18, fontWeight: "bold", marginBottom: 8 }}>Delete this entry?</div>
+            <div style={{ color: UI.slate, fontSize: 14, lineHeight: 1.5, marginBottom: 20 }}>
               This {({ outcomes: "learning outcome", items: "assignment or category", weeks: "schedule entry" }[pendingDelete.k] || "entry")} contains information. Are you sure you want to delete it?
             </div>
             <div className="flex justify-end gap-2">
@@ -1910,16 +2216,18 @@ export default function SyllabusBuilder() {
               </button>
             );
           })}
-          <button
-            onClick={() => setTheme(nextTheme.id)}
-            title={`Switch to ${nextTheme.label}`}
-            aria-label={`Current theme: ${currentTheme.label}. Switch to ${nextTheme.label}.`}
-            style={{ margin: 12, padding: "6px 10px", borderRadius: 4, cursor: "pointer",
-              textAlign: "left", background: UI.paper, color: UI.ink,
-              border: `1px solid ${UI.line}` }}>
-            <div style={{ fontSize: 10, letterSpacing: 1, color: UI.muted }}>THEME</div>
-            <div style={{ fontSize: 13 }}>{currentTheme.label}</div>
-          </button>
+          <label style={{ display: "block", margin: 12, color: UI.ink }}>
+            <span style={{ display: "block", fontSize: 10, letterSpacing: 1, color: UI.muted, marginBottom: 4 }}>THEME</span>
+            <select
+              value={theme}
+              onChange={(event) => setTheme(event.target.value)}
+              aria-label={`Theme: ${currentTheme.label}`}
+              style={{ width: "100%", padding: "6px 8px", borderRadius: 4, cursor: "pointer",
+                boxSizing: "border-box", fontSize: 11, background: UI.paper, color: UI.ink,
+                border: `1px solid ${UI.line}` }}>
+              {THEMES.map((option) => <option key={option.id} value={option.id}>{option.label}</option>)}
+            </select>
+          </label>
 </div>
         {/* form */}
         <div ref={formRef} className="p-5 editor-form" style={{ flex: "1 1 420px", minWidth: 340, maxWidth: 620 }}>
@@ -2263,7 +2571,7 @@ export default function SyllabusBuilder() {
                   {g.items.map((it) => (
                     <div key={it} className="flex gap-2 items-start mb-2">
                          {d.outcomes.includes(it) ? (
-                           <span title="Already in your outcomes" style={{ color: C.good, marginTop: 2 }}><Check size={14} /></span>
+                           <span title="Already in your outcomes" style={{ color: UI.good, marginTop: 2 }}><Check size={14} /></span>
                          ) : (
                            <button onClick={() => setD((p) => ({ ...p, outcomes: [...p.outcomes.filter((x) => x.trim()), it] }))}
                              style={{ color: C.orange, marginTop: 2, cursor: "pointer" }}><Plus size={14} /></button>
@@ -2282,15 +2590,15 @@ export default function SyllabusBuilder() {
             <Field label="Cost note" hint="tell them the real number, and the free path if there is one"><A rows={2} value={d.costNote} onChange={(v) => set("costNote", v)} placeholder="The textbook runs about $60 used. A copy is on reserve at Paul Meek Library. Tell me before the second week if cost is a barrier." /></Field>
             <Field label="Technology and platforms"><A rows={3} value={d.tech} onChange={(v) => set("tech", v)} placeholder="Canvas for all materials and submissions. A phone or laptop microphone is enough for the audio assignments." /></Field>
             <Field label="Access details" hint="answer the questions students always ask: will I be given the book, what format, and where do I get it">
-              <label className="flex items-start gap-2 mb-2 text-sm" style={{ color: C.slate, cursor: "pointer" }}>
+              <label className="flex items-start gap-2 mb-2 text-sm" style={{ color: UI.slate, cursor: "pointer" }}>
                 <input type="checkbox" checked={d.materials.provided} onChange={(e) => set("materials", { ...d.materials, provided: e.target.checked })} style={{ marginTop: 3 }} />
                 <span>These materials will be provided to you at no additional cost.</span>
               </label>
-              <label className="flex items-start gap-2 mb-2 text-sm" style={{ color: C.slate, cursor: "pointer" }}>
+              <label className="flex items-start gap-2 mb-2 text-sm" style={{ color: UI.slate, cursor: "pointer" }}>
                 <input type="checkbox" checked={d.materials.hardcopy} onChange={(e) => set("materials", { ...d.materials, hardcopy: e.target.checked })} style={{ marginTop: 3 }} />
                 <span>Available in hardcopy (print).</span>
               </label>
-              <label className="flex items-start gap-2 mb-2 text-sm" style={{ color: C.slate, cursor: "pointer" }}>
+              <label className="flex items-start gap-2 mb-2 text-sm" style={{ color: UI.slate, cursor: "pointer" }}>
                 <input type="checkbox" checked={d.materials.online} onChange={(e) => set("materials", { ...d.materials, online: e.target.checked })} style={{ marginTop: 3 }} />
                 <span>Available online (digital / e-text).</span>
               </label>
@@ -2433,14 +2741,14 @@ export default function SyllabusBuilder() {
                 <A rows={2} value={x.desc} onChange={(v) => setDeep("items", i, "desc", v)} placeholder="Describe the assignment or category." />
                 {realOutcomes.length > 0 && (
                   <div className="mt-2">
-                    <div style={{ fontSize: 11, color: C.slate, marginBottom: 4 }}>WHICH OUTCOMES DOES THIS PRODUCE EVIDENCE FOR?</div>
+                    <div style={{ fontSize: 11, color: UI.slate, marginBottom: 4 }}>WHICH OUTCOMES DOES THIS PRODUCE EVIDENCE FOR?</div>
                     <div className="flex flex-wrap gap-1">
                       {realOutcomes.map((_, oi) => {
                         const on = x.slos.includes(oi);
                         return (
                           <button key={oi} onClick={() => setDeep("items", i, "slos", on ? x.slos.filter((z) => z !== oi) : [...x.slos, oi])}
                             style={{ fontSize: 12, padding: "2px 9px", borderRadius: 11, cursor: "pointer",
-                              border: `1px solid ${on ? C.orange : C.line}`, background: on ? C.orange : "#fff", color: on ? "#fff" : C.slate }}>
+                              border: `1px solid ${on ? C.orange : UI.line}`, background: on ? C.orange : UI.paper, color: on ? "#fff" : UI.slate }}>
                             {oi + 1}
                           </button>
                         );
@@ -2452,7 +2760,7 @@ export default function SyllabusBuilder() {
             ))}
             <Btn onClick={addGradingItem} icon={Plus}>Add Assignment or Category</Btn>
             {unmapped.length > 0 && (
-              <div className="mt-4 p-3 rounded flex gap-2" style={{ background: "#FEF6E7", color: C.warn, fontSize: 13 }}>
+              <div className="mt-4 p-3 rounded flex gap-2" style={{ background: UI.warnBg, color: UI.warn, fontSize: 13 }}>
                 <AlertTriangle size={15} style={{ flexShrink: 0, marginTop: 2 }} />
                 <div>Outcome{unmapped.length > 1 ? "s" : ""} {unmapped.map((i) => i + 1).join(", ")} {unmapped.length > 1 ? "have" : "has"} nothing in the grade breakdown producing evidence for {unmapped.length > 1 ? "them" : "it"}. Either attach an assignment or category or rewrite the outcome.</div>
               </div>
@@ -2501,7 +2809,52 @@ export default function SyllabusBuilder() {
                 placeholder="Say what counts as present, what happens after an absence, and who to tell."
               />
             </Field> 
-            <Field label="What engagement looks like here" hint="optional, but it removes a lot of guesswork"><A rows={3} value={d.participation} onChange={(v) => set("participation", v)} placeholder="Merely showing up and sitting through the class is not participation. Asking questions during Q and A, contributing to project discussions, and showing up to team meetings all count." /></Field>
+            <Field label="What engagement looks like here" hint="optional, but it removes a lot of guesswork">
+              <select
+                style={{ ...inputBase, marginBottom: 8 }}
+                value=""
+                onChange={(e) => {
+                  const text = e.target.value;
+                  if (!text) return;
+                  if (
+                    d.participation.trim() &&
+                    !window.confirm("Replace your current engagement policy?")
+                  ) {
+                    return;
+                  }
+                  set("participation", text);
+                }}
+              >
+                <option value="">Please select a sample engagement policy, then edit it to fit your course</option>
+                {[
+                  [
+                    "Discussion & Q&A",
+                    "Merely showing up and sitting through class is not participation. Active engagement means arriving having read the assigned material, asking and answering questions during class discussions, listening respectfully to classmates, and contributing thoughtfully to small-group activities."
+                  ],
+                  [
+                    "Project & Team-Based",
+                    "Engagement in this course is measured by how you show up for your team and the work. Contributing to project discussions, meeting agreed-upon team deadlines, participating in peer reviews, and communicating early when you hit a roadblock all count toward participation."
+                  ],
+                  [
+                    "Active Learning & Problem Solving",
+                    "This class is built around hands-on practice rather than passive note-taking. Engagement means working through in-class problems, sharing your approach (even when you are not sure it is right yet), collaborating with neighbors during exercises, and putting away distractions during class."
+                  ],
+                  [
+                    "Online & Asynchronous",
+                    "In an online course, engagement means staying visibly connected to the class community each week. Logging into Canvas regularly, posting substantive and timely responses on discussion boards, engaging with your peers' ideas, and reaching out during office hours or by email when questions come up all count."
+                  ],
+                ].map(([label, text]) => (
+                  <option key={label} value={text}>{label}</option>
+                ))}
+              </select>
+
+              <A
+                rows={4}
+                value={d.participation}
+                onChange={(v) => set("participation", v)}
+                placeholder="Merely showing up and sitting through the class is not participation. Asking questions during Q and A, contributing to project discussions, and showing up to team meetings all count."
+              />
+            </Field>
             <Field label="Late work and make-up" hint="choose a sample, then edit as needed">
               <select value={d.lateSample} onChange={(e) => {
                 const sample = LATE_POLICIES.find((policy) => policy.label === e.target.value);
@@ -2534,7 +2887,7 @@ export default function SyllabusBuilder() {
             <div className="mt-6 mb-2" style={{ color: UI.navy, fontWeight: "bold", fontSize: 14 }}>Artificial Intelligence Policy</div>
             <Note>UTM's AI policy, effective July 1, 2025, requires every syllabus to state your expectations for student AI use. This is not optional, so pick a tier below. The three tiers match the policy: unrestricted, mixed, and total prohibition.</Note>
             {Object.entries(AI_POLICIES).map(([k, v]) => (
-              <label key={k} className="flex items-start gap-2 mb-2 text-sm" style={{ color: C.slate, cursor: "pointer" }}>
+              <label key={k} className="flex items-start gap-2 mb-2 text-sm" style={{ color: UI.slate, cursor: "pointer" }}>
                 <input type="radio" name="ai" checked={d.aiTier === k} onChange={() => set("aiTier", k)} style={{ marginTop: 3 }} />
                 <span>{v.label}</span>
               </label>
@@ -2543,16 +2896,16 @@ export default function SyllabusBuilder() {
               placeholder="Your policy must still affirm academic honesty and state that unpermitted AI use is academic misconduct under the Student Code of Conduct." /></div>}
             <div className="mt-4"><Field label="A note from your professor" hint="optional warm box, sits under the policy">
               <A rows={3} value={d.profNote} onChange={(v) => set("profNote", v)} placeholder="If you are ever unsure whether what you are submitting crosses that line, reach out before you submit. That conversation is always easier before the fact than after." /></Field></div>
-            <div className="mt-6 mb-2" style={{ color: C.navy, fontWeight: "bold", fontSize: 14 }}>Additional Policies</div>
+            <div className="mt-6 mb-2" style={{ color: UI.navy, fontWeight: "bold", fontSize: 14 }}>Additional Policies</div>
             {d.customPolicies.map((policy, i) => (
-              <div key={i} className="mb-3 p-3 rounded" style={{ background: "#fff", border: `1px solid ${C.line}` }}>
+              <div key={i} className="mb-3 p-3 rounded" style={{ background: UI.paper, border: `1px solid ${UI.line}` }}>
                 <div className="flex items-start gap-2">
                   <div style={{ flex: 1 }}>
                     <Field label="Policy title"><T value={policy.title} onChange={(v) => setDeep("customPolicies", i, "title", v)} placeholder="Classroom conduct" /></Field>
                     <Field label="Policy details"><A rows={3} value={policy.text} onChange={(v) => setDeep("customPolicies", i, "text", v)} placeholder="Describe your expectations for students." /></Field>
                   </div>
                   <button type="button" onClick={() => drop("customPolicies", i)} aria-label={`Remove custom policy ${i + 1}`} title="Remove policy"
-                    className="p-2 rounded" style={{ color: C.slate, background: "transparent", border: 0, cursor: "pointer" }}>
+                    className="p-2 rounded" style={{ color: UI.slate, background: "transparent", border: 0, cursor: "pointer" }}>
                     <Trash2 size={16} />
                   </button>
                 </div>
@@ -2571,7 +2924,7 @@ export default function SyllabusBuilder() {
                   <Lock size={12} style={{ color: C.orange }} />
                   <span style={{ color: UI.navy, fontWeight: "bold", fontSize: 13.5 }}>{v.title}</span>
                 </label>
-                <div style={{ fontSize: 12, color: C.slate, marginTop: 6, lineHeight: 1.5, maxHeight: 86, overflow: "auto", whiteSpace: "pre-wrap" }}>{v.text}</div>
+                <div style={{ fontSize: 12, color: UI.slate, marginTop: 6, lineHeight: 1.5, maxHeight: 86, overflow: "auto", whiteSpace: "pre-wrap" }}>{v.text}</div>
               </div>
             ))}
           </>)}
@@ -2610,7 +2963,7 @@ export default function SyllabusBuilder() {
                   return (
                     <button key={n} type="button" aria-pressed={on} aria-label={DAY_NAMES[n]} onClick={() => toggleDay(n)}
                       style={{ fontSize: 13, padding: "5px 12px", borderRadius: 14, cursor: "pointer", fontWeight: on ? "bold" : "normal",
-                        border: `1px solid ${on ? C.orange : C.line}`, background: on ? C.orange : "#fff", color: on ? "#fff" : C.slate }}>
+                        border: `1px solid ${on ? C.orange : UI.line}`, background: on ? C.orange : UI.paper, color: on ? "#fff" : UI.slate }}>
                       {name}
                     </button>
                   );
@@ -2635,7 +2988,7 @@ export default function SyllabusBuilder() {
               </>
             )}
             {d.term === "Fall 2026" ? (
-              <label className="flex items-start gap-2 mb-4 text-sm" style={{ color: C.slate, cursor: "pointer" }}>
+              <label className="flex items-start gap-2 mb-4 text-sm" style={{ color: UI.slate, cursor: "pointer" }}>
                 <input type="checkbox" checked={d.calNote} onChange={(e) => set("calNote", e.target.checked)} style={{ marginTop: 3 }} />
                 <span>Append the Fall 2026 registrar dates: add and drop deadlines, Fall Break, Thanksgiving, finals, and commencement.</span>
               </label>
@@ -2646,9 +2999,9 @@ export default function SyllabusBuilder() {
               <div key={i} className="p-3 mb-3 rounded" style={{ background: UI.paper, border: `1px solid ${UI.line}` }}>
                 {auto ? (
                   <div className="mb-2">
-                    <span style={{ color: C.navy, fontWeight: "bold", fontSize: 14 }}>{w.label}</span>
-                    <span style={{ color: C.slate, fontSize: 13, marginLeft: 8 }}>{w.dates}</span>
-                    {w.off.map((o) => <div key={o} style={{ color: C.warn, fontSize: 12.5, fontWeight: "bold", marginTop: 2 }}>{o}</div>)}
+                    <span style={{ color: UI.navy, fontWeight: "bold", fontSize: 14 }}>{w.label}</span>
+                    <span style={{ color: UI.slate, fontSize: 13, marginLeft: 8 }}>{w.dates}</span>
+                    {w.off.map((o) => <div key={o} style={{ color: UI.warn, fontSize: 12.5, fontWeight: "bold", marginTop: 2 }}>{o}</div>)}
                   </div>
                 ) : (
                   <div className="flex gap-2 mb-2">
@@ -2708,7 +3061,7 @@ export default function SyllabusBuilder() {
                     }));
                   }}>{d.scheduleType === "modular" ? "Build modules" : "Build weeks"}</Btn>
                 </div>
-                <div role="alert" className="mt-1 text-xs" style={{ color: C.warn, minHeight: 32 }}>
+                <div role="alert" className="mt-1 text-xs" style={{ color: UI.warn, minHeight: 32 }}>
                   {weekCountWarning ? "Enter a whole number between 1-15." : ""/* displays a warning if the week count is invalid */}
                 </div>
               </div>
@@ -2721,7 +3074,7 @@ export default function SyllabusBuilder() {
 
             {tab === 10 && (<>
             <H>Laboratory Component</H>
-            <label className="flex items-start gap-2 mb-4 text-sm" style={{ color: C.slate, cursor: "pointer" }}>
+            <label className="flex items-start gap-2 mb-4 text-sm" style={{ color: UI.slate, cursor: "pointer" }}>
               <input type="checkbox" checked={d.hasLab} onChange={(e) => set("hasLab", e.target.checked)} style={{ marginTop: 3 }} />
               <span>This course has a lab component. Checking this adds a Laboratory Component section to the syllabus.</span>
             </label>
@@ -2738,7 +3091,7 @@ export default function SyllabusBuilder() {
                     return (
                       <button key={n} type="button" aria-pressed={on} aria-label={DAY_NAMES[n]} onClick={() => toggleLabDay(n)}
                         style={{ fontSize: 13, padding: "5px 12px", borderRadius: 14, cursor: "pointer", fontWeight: on ? "bold" : "normal",
-                          border: `1px solid ${on ? C.orange : C.line}`, background: on ? C.orange : "#fff", color: on ? "#fff" : C.slate }}>
+                          border: `1px solid ${on ? C.orange : UI.line}`, background: on ? C.orange : UI.paper, color: on ? "#fff" : UI.slate }}>
                         {name}
                       </button>
                     );
@@ -2759,16 +3112,81 @@ export default function SyllabusBuilder() {
           </>)}
 
 
-          {tab === 11 && (<>
+          {tab === tabIndex("Accessibility") && (<>
+            <H>Accessibility Check</H>
+            <p style={{ fontSize: 13.5, color: UI.slate, lineHeight: 1.55, marginBottom: 14 }}>
+              These checks look for common problems that make a syllabus hard to use with a screen reader
+              or hard to read, similar to what YuJa Panorama flags in Canvas. Everything runs here in your
+              browser; nothing is sent anywhere. Fixing these is recommended but does not block export.
+            </p>
+            <div className="mb-3" style={{ fontSize: 14, fontWeight: "bold", color: UI.ink }} role="status">
+              {a11ySummary}
+            </div>
+            <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
+              {a11yChecks.map((c) => {
+                const status = c.found.length ? c.level : "pass";
+                const StatusIcon = status === "pass" ? Check : status === "fail" ? CircleX : AlertTriangle;
+                const statusText = status === "pass" ? "Pass" : status === "fail" ? "Fail" : "Warning";
+                const statusColor = status === "pass" ? UI.good : UI.warn;
+                const tabsToVisit = [...new Set(c.found.map((p) => p.tab))];
+                return (
+                  <li key={c.id} className="mb-3 p-3 rounded"
+                    style={{ background: UI.paper, border: `1px solid ${UI.line}`, fontSize: 13.5, color: UI.ink }}>
+                    <div className="flex items-start gap-2">
+                      <StatusIcon size={16} aria-hidden="true" style={{ color: statusColor, flexShrink: 0, marginTop: 2 }} />
+                      <div style={{ flex: 1, fontWeight: "bold" }}>{c.title}</div>
+                      <span style={{ fontSize: 12, fontWeight: "bold", color: statusColor }}>{statusText}</span>
+                    </div>
+                    {status !== "pass" && (
+                      <div style={{ marginLeft: 24, marginTop: 6, lineHeight: 1.5 }}>
+                        <ul style={{ listStyle: "disc", paddingLeft: 18, margin: "0 0 8px" }}>
+                          {c.found.map((p, i) => (
+                            <li key={i}>
+                              <span style={{ color: UI.slate }}>{p.tab} › {p.label}</span>
+                              {p.quote && <>: “{p.quote}”</>}
+                              {p.note && <>{p.quote ? " · " : " "}{p.note}</>}
+                            </li>
+                          ))}
+                        </ul>
+                        <p style={{ margin: "0 0 4px", color: UI.slate }}><strong>Why it matters:</strong> {c.why}</p>
+                        <p style={{ margin: "0 0 8px", color: UI.slate }}><strong>How to fix:</strong> {c.fix}</p>
+                        <div className="flex flex-wrap gap-2">
+                          {tabsToVisit.map((t) => (
+                            <Btn key={t} onClick={() => setTab(tabIndex(t))} icon={ChevronRight}>Go to {t}</Btn>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+          </>)}
+
+          {tab === tabIndex("Export") && (<>
             <H>Review and Export</H>
             <div className="mb-5">
               {checks.map(([label, ok]) => (
-                <div key={label} className="flex items-start gap-2 py-1" style={{ fontSize: 13.5, color: ok ? C.ink : C.warn }}>
-                  {ok ? <Check size={15} style={{ color: C.good, flexShrink: 0, marginTop: 2 }} />
-                      : <AlertTriangle size={15} style={{ color: C.warn, flexShrink: 0, marginTop: 2 }} />}
+                <div key={label} className="flex items-start gap-2 py-1" style={{ fontSize: 13.5, color: ok ? UI.ink : UI.warn }}>
+                  {ok ? <Check size={15} style={{ color: UI.good, flexShrink: 0, marginTop: 2 }} />
+                      : <AlertTriangle size={15} style={{ color: UI.warn, flexShrink: 0, marginTop: 2 }} />}
                   <span>{label}</span>
                 </div>
               ))}
+            </div>
+            {/* Accessibility summary: warns only, never blocks export */}
+            <div className="flex flex-wrap items-center gap-2 mb-4 p-3 rounded" role="status"
+              style={{ background: UI.paper, border: `1px solid ${UI.line}`, color: UI.ink, fontSize: 13.5 }}>
+              {a11yFailCount + a11yWarnCount === 0
+                ? <Check size={16} aria-hidden="true" style={{ color: UI.good, flexShrink: 0 }} />
+                : <AlertTriangle size={16} aria-hidden="true" style={{ color: UI.warn, flexShrink: 0 }} />}
+              <span style={{ flex: "1 1 200px" }}>
+                {a11ySummary}
+                {a11yFailCount + a11yWarnCount > 0 && " Fixing them is recommended, but you can still export."}
+              </span>
+              {a11yFailCount + a11yWarnCount > 0 && (
+                <Btn onClick={() => setTab(tabIndex("Accessibility"))} icon={ChevronRight}>Review accessibility</Btn>
+              )}
             </div>
             <Note>Nothing here is stored anywhere. Closing this tab clears it. Export your syllabus to Word or PDF before closing.</Note>
             <div className="flex flex-wrap gap-2 mb-4">
@@ -2776,7 +3194,7 @@ export default function SyllabusBuilder() {
               <Btn onClick={() => confirmThenExport(exportPdf)} icon={Printer} primary>Export to PDF</Btn>
               <Btn onClick={clearForm} icon={Trash2}>Clear form</Btn>
             </div>
-            <div style={{ fontSize: 12, color: C.slate, marginTop: 14, lineHeight: 1.55 }}>
+            <div style={{ fontSize: 12, color: UI.slate, marginTop: 14, lineHeight: 1.55 }}>
               Word opens the export as a normal document you can keep editing. PDF opens your browser's print dialog, where you choose Save as PDF. Both come out in Cambria with the UT Martin banner and real Word heading styles, so a screen reader can navigate it.
             </div>
           </>)}
