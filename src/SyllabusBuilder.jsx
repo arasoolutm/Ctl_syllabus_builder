@@ -1605,15 +1605,15 @@ export default function SyllabusBuilder() {
   const setDeep = (k, i, key, v) => {
     setD((p) => { const a = [...p[k]]; a[i] = { ...a[i], [key]: v }; return { ...p, [k]: a }; });
   };
-  // Add or remove one item from a repeated syllabus section.
-  const push = (k, obj) => setD((p) => ({ ...p, [k]: [...p[k], obj] }));
-  const applySummerPreset = (key) => setD((p) => ({
-    ...p,
-    scheduleType: key,
-    weeks: buildSummerScheduleRows(key),
-  }));
-  const addGradingItem = () => {
-    push("items", { name: "", weight: "", points: "", due: "", desc: "", slos: [] });
+  // Add one item to a repeated syllabus section. The newly added box is saved with
+  // its own pixel offset, then after the DOM commits the preview scrolls to that
+  // offset and the form scrolls the new box into view. Focusing is done with
+  // preventScroll so the browser does not jump before our controlled scroll.
+  const push = (k, obj) => {
+    const newItemIndex = Array.isArray(d[k]) ? d[k].length : 0;
+    setD((p) => ({ ...p, [k]: [...(p[k] || []), obj] }));
+    // Save (and reserve) a pixel position for this text box before it renders.
+    savedBoxOffsets.current[`${k}-${newItemIndex}`] = newItemIndex * boxStepFor(k);
     window.requestAnimationFrame(() => {
       window.requestAnimationFrame(() => {
       const container = formRef.current;
@@ -1638,6 +1638,11 @@ export default function SyllabusBuilder() {
       });
     });
   };
+  const applySummerPreset = (key) => setD((p) => ({
+    ...p,
+    scheduleType: key,
+    weeks: buildSummerScheduleRows(key),
+  }));
   const addGradingItem = () => {
     push("items", { name: "", weight: "", points: "", due: "", desc: "", slos: [] });
   };
