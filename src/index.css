@@ -271,6 +271,12 @@ body { background: var(--wash); }
 [data-theme="blue"] { --glass-panel: rgba(251, 244, 230, 0.3); }
 [data-theme="blue+"] { --glass-panel: rgba(247, 232, 204, 0.32); }
 
+/* solid top bar (Glass off) = what the see-through Glass bar looks like over each theme */
+[data-theme="light"] { --masthead-bg: #283D58; }
+[data-theme="blue"] { --masthead-bg: #2A3B4F; }
+[data-theme="blue+"] { --masthead-bg: #29394B; }
+[data-theme="dark"] { --masthead-bg: #0A0F17; }
+
 /* light themes with Glass get a soft gradient, or there's nothing to see through the panels */
 [data-glass][data-theme="light"] body { background: linear-gradient(175deg, #E8EDF4 0%, #DAE2EE 50%, #E4EAF2 100%) fixed; }
 [data-glass][data-theme="blue"] body { background: linear-gradient(175deg, #F2E3C6 0%, #E8D3AE 50%, #F0DEBD 100%) fixed; }
