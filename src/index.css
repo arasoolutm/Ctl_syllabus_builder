@@ -70,7 +70,7 @@ html, body, #root {
   --navy: #93C5FD;
   --orange: #FF8300;
   --orange-text: #FF8300;
-  --field-line: #4B5A70;
+  --field-line: #64748B;
   --good: #4ADE80;
   --goodBg: #12301F;
   --warn: #FBBF24;
@@ -264,6 +264,7 @@ body { background: var(--wash); }
   --glass-blur: blur(12px);
 }
 [data-theme="dark"] {
+  --field-bg: #243049; /* boxes a step lighter than the panel, or they blend in */
   --glass-panel: rgba(26, 35, 51, 0.55);
   --glass-masthead: rgba(0, 0, 0, 0.35);
   --glass-blur: blur(12px);
@@ -342,7 +343,8 @@ body { background: var(--wash); }
 .masthead-mark-toggle:focus-visible { outline: 2px solid var(--orange); outline-offset: -2px; border-radius: 10px; }
 
 .editor-rail, .editor-form, .editor-preview {
-  clip-path: inset(0 0 0 0);
+  /* -40px leaves room for the shadow; inset(0) cut it into square corners */
+  clip-path: inset(-40px);
   transition: clip-path 0.45s var(--ease-panel) 0.35s, visibility 0s linear 0s;
 }
 
@@ -352,7 +354,7 @@ body { background: var(--wash); }
 .panels-hidden .masthead-right { transform: translateX(-40px); opacity: 0; max-width: 0; padding-left: 0; pointer-events: none; overflow: hidden; transition-delay: 0.35s; }
 /* visibility flips after the wipe, so hidden panels can't be tabbed into */
 .panels-hidden .editor-rail, .panels-hidden .editor-form, .panels-hidden .editor-preview {
-  clip-path: inset(0 0 100% 0);
+  clip-path: inset(-40px -40px 100% -40px);
   visibility: hidden;
   pointer-events: none;
   transition: clip-path 0.45s var(--ease-panel) 0s, visibility 0s linear 0.45s;
@@ -440,7 +442,9 @@ body { background: var(--wash); }
   position: fixed; right: 18px; bottom: 18px; z-index: 50; max-width: 360px;
   display: flex; align-items: center; gap: 10px; padding: 10px 12px;
   background: var(--paper); color: var(--ink); font-size: 13px;
+  animation: notice-in 0.35s cubic-bezier(0.2, 0.8, 0.2, 1);
 }
+@keyframes notice-in { from { transform: translateX(calc(100% + 24px)); opacity: 0; } }
 .slow-notice button { flex-shrink: 0; background: none; border: 0; padding: 4px; cursor: pointer; color: var(--orange-text); font: inherit; font-weight: 700; }
 .slow-notice button:last-child { color: var(--muted); display: flex; }
 

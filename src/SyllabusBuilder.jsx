@@ -883,7 +883,7 @@ export default function SyllabusBuilder() {
     document.documentElement.setAttribute("data-theme", id);
     setTheme(id);
   });
-  const toggleGlass = () => { glassPicked.current = true; setSlowNotice(false); changeLook(() => {
+  const toggleGlass = () => { glassPicked.current = true; hideNotice(); changeLook(() => {
     document.documentElement.toggleAttribute("data-glass", !glass);
     setGlass(!glass);
   }); };
@@ -892,6 +892,15 @@ export default function SyllabusBuilder() {
   // Once someone turns Glass on or off themselves, leave it alone for this visit.
   const glassPicked = useRef(false);
   const [slowNotice, setSlowNotice] = useState(false);
+  const noticeRef = useRef(null);
+  // slides the notice back out to the right before removing it
+  const hideNotice = () => {
+    const el = noticeRef.current;
+    const reduce = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    if (!el || reduce || !el.animate) { setSlowNotice(false); return; }
+    el.animate([{ transform: "none", opacity: 1 }, { transform: "translateX(calc(100% + 24px))", opacity: 0 }],
+      { duration: 250, easing: "ease-in", fill: "forwards" }).finished.then(() => setSlowNotice(false));
+  };
   const glassTooSlow = () => {
     if (glassPicked.current) return;
     setGlass(false);
@@ -899,7 +908,7 @@ export default function SyllabusBuilder() {
   };
   useEffect(() => {
     if (!slowNotice) return undefined;
-    const t = setTimeout(() => setSlowNotice(false), 10000);
+    const t = setTimeout(hideNotice, 10000);
     return () => clearTimeout(t);
   }, [slowNotice]);
 
@@ -2544,8 +2553,8 @@ export default function SyllabusBuilder() {
   /** Renders a consistently styled action button with an optional icon. */
   const Btn = ({ onClick, children, icon: I, primary }) => (
     <button onClick={onClick} className="flex items-center gap-2 px-3 py-2 rounded text-sm font-semibold"
-      style={{ background: primary ? C.navy : UI.paper, color: primary ? "#fff" : UI.navy,
-        border: `1px solid ${primary ? C.navy : C.line}`, cursor: "pointer" }}>
+      style={{ background: primary ? UI.orange : UI.paper, color: primary ? "var(--on-orange)" : UI.navy,
+        border: `1px solid ${primary ? UI.orange : UI.fieldLine}`, cursor: "pointer" }}>
       {I && <I size={15} />}{children}
     </button>
   );
@@ -2555,10 +2564,10 @@ export default function SyllabusBuilder() {
     <div className={wavesOnly ? "app-shell panels-hidden" : "app-shell"} style={{ fontFamily: "Inter, ui-sans-serif, system-ui, sans-serif", minHeight: "100vh" }}>
       {glass && <WaveBackground light={theme !== "navy" && theme !== "dark"} onSoftwareGraphics={glassTooSlow} />}
       {slowNotice && (
-        <div className="slow-notice app-panel" role="status">
+        <div ref={noticeRef} className="slow-notice app-panel" role="status">
           <span>Turned off Glass because things were running slow.</span>
           <button type="button" onClick={toggleGlass}>Undo</button>
-          <button type="button" aria-label="Dismiss" onClick={() => setSlowNotice(false)}><X size={14} /></button>
+          <button type="button" aria-label="Dismiss" onClick={hideNotice}><X size={14} /></button>
         </div>
       )}
       <iframe ref={frameRef} title="print" style={{ position: "fixed", width: 0, height: 0, border: 0, left: -9999 }} />
@@ -2566,7 +2575,7 @@ export default function SyllabusBuilder() {
         <div role="presentation" onMouseDown={() => setPendingDelete(null)} style={{ position: "fixed", inset: 0, zIndex: 10,
           display: "flex", alignItems: "center", justifyContent: "center", padding: 20, background: "rgba(11,34,64,.38)" }}>
           <div role="dialog" aria-modal="true" aria-labelledby="delete-dialog-title" onMouseDown={(e) => e.stopPropagation()}
-            style={{ width: "min(100%, 420px)", background: UI.paper, borderRadius: 4, padding: 24, boxShadow: "0 12px 36px rgba(11,34,64,.24)" }}>
+            style={{ width: "min(100%, 420px)", background: UI.paper, border: `1px solid ${UI.line}`, borderRadius: 14, padding: 24, boxShadow: "0 12px 36px rgba(11,34,64,.24)" }}>
             <div id="delete-dialog-title" style={{ color: UI.navy, fontSize: 18, fontWeight: "bold", marginBottom: 8 }}>Delete this entry?</div>
             <div style={{ color: UI.slate, fontSize: 14, lineHeight: 1.5, marginBottom: 20 }}>
               This {({ outcomes: "learning outcome", items: "assignment or category", weeks: "schedule entry" }[pendingDelete.k] || "entry")} contains information. Are you sure you want to delete it?
@@ -2582,7 +2591,7 @@ export default function SyllabusBuilder() {
         <div role="presentation" onMouseDown={() => setShowTextKeybinds(false)} style={{ position: "fixed", inset: 0, zIndex: 1100,
           display: "flex", alignItems: "center", justifyContent: "center", padding: 20, background: "rgba(11,34,64,.38)" }}>
           <div role="dialog" aria-modal="true" aria-labelledby="text-keybinds-title" onMouseDown={(event) => event.stopPropagation()}
-            style={{ width: "min(100%, 340px)", background: UI.paper, border: `1px solid ${UI.line}`, borderRadius: 4, padding: 20, boxShadow: "0 12px 36px rgba(11,34,64,.24)" }}>
+            style={{ width: "min(100%, 340px)", background: UI.paper, border: `1px solid ${UI.line}`, borderRadius: 14, padding: 20, boxShadow: "0 12px 36px rgba(11,34,64,.24)" }}>
             <div id="text-keybinds-title" style={{ color: UI.navy, fontSize: 18, fontWeight: "bold", marginBottom: 14 }}>Text keybinds</div>
             <div style={{ display: "grid", gridTemplateColumns: "auto 1fr", gap: "10px 16px", alignItems: "center", color: UI.slate, fontSize: 14 }}>
               <kbd>Ctrl+B</kbd><span>Bold</span>
