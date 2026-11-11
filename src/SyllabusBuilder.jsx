@@ -62,9 +62,9 @@ const C = {
 
 // colors are the slices of each theme's circle. Update them if the theme changes in index.css.
 const THEMES = [
-  { id: "navy", label: "Navy", colors: ["#12294A", "#B9AB92", "#F3EFE6", "#0A1F3D"] },
   { id: "light", label: "Light", colors: ["#FFFFFF", "#4A5568", "#1A1A1A", "#E8ECF2"] },
   { id: "dark", label: "Dark", colors: ["#1A2333", "#CBD5E1", "#E5E7EB", "#0F1724"] },
+  { id: "navy", label: "Navy", colors: ["#12294A", "#B9AB92", "#F3EFE6", "#0A1F3D"] },
   { id: "blue", label: "Blue Light", colors: ["#FBF4E6", "#5A4F3C", "#2A2318", "#EEDDBE"] },
   { id: "blue+", label: "Blue Light+", colors: ["#F7E8CC", "#5C4A2E", "#2E2415", "#E6CC9C"] },
 ];
@@ -851,7 +851,7 @@ export default function SyllabusBuilder() {
   // remembered so the hover highlight slides from where it was last, not from the top
   const lastHoverTab = useRef(0);
   if (hoverTab !== null) lastHoverTab.current = hoverTab;
-  const [theme,setTheme] = useState('navy');
+  const [theme,setTheme] = useState('light');
   const [glass, setGlass] = useState(true);
   const [hoverTheme, setHoverTheme] = useState(null);
   const [pickerOpen, setPickerOpen] = useState(false);

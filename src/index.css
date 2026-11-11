@@ -213,7 +213,7 @@ body { background: var(--wash); }
 .cta:focus-visible { outline: 2px solid var(--bar-ink); outline-offset: 2px; }
 @media (prefers-reduced-motion: reduce) { .cta:hover { transform: none; } }
 
-/* Navy theme: the default colors (navy and sand) */
+/* Navy theme: navy and sand */
 [data-theme="navy"] {
   color-scheme: dark;
   --wash: #0A1F3D;
