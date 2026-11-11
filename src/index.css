@@ -290,22 +290,6 @@ body { background: var(--wash); }
   --masthead-bg: var(--glass-masthead);
 }
 
-/* a soft sand glow that slowly drifts behind the panels */
-[data-glass] body::before {
-  content: "";
-  position: fixed;
-  inset: -10%;
-  pointer-events: none;
-  z-index: 0;
-  background: radial-gradient(520px 420px at 78% 82%, rgba(233, 221, 200, 0.05), transparent 60%);
-  animation: glass-drift 24s ease-in-out infinite alternate;
-}
-
-@keyframes glass-drift {
-  from { transform: translate(-2%, -1%) scale(1); }
-  to { transform: translate(3%, 2%) scale(1.08); }
-}
-
 /* Thin, rounded scrollbars that match the theme */
 ::-webkit-scrollbar { width: 10px; height: 10px; }
 ::-webkit-scrollbar-track,
