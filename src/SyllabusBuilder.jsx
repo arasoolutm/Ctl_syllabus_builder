@@ -851,7 +851,10 @@ export default function SyllabusBuilder() {
   // remembered so the hover highlight slides from where it was last, not from the top
   const lastHoverTab = useRef(0);
   if (hoverTab !== null) lastHoverTab.current = hoverTab;
-  const [theme,setTheme] = useState('light');
+  // starts as Light or Dark to match the computer's setting
+  const systemDark = () => window.matchMedia?.("(prefers-color-scheme: dark)").matches;
+  const [theme,setTheme] = useState(() => (systemDark() ? "dark" : "light"));
+  const themePicked = useRef(false); // once someone picks a theme, stop following the computer
   const [glass, setGlass] = useState(true);
   const [hoverTheme, setHoverTheme] = useState(null);
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -879,10 +882,19 @@ export default function SyllabusBuilder() {
     // the new theme has to be on the page before the fade starts
     document.startViewTransition(() => flushSync(apply));
   };
-  const pickTheme = (id) => changeLook(() => {
+  const applyTheme = (id) => changeLook(() => {
     document.documentElement.setAttribute("data-theme", id);
     setTheme(id);
   });
+  const pickTheme = (id) => { themePicked.current = true; applyTheme(id); };
+  // follow the computer switching between light and dark mode while the app is open
+  useEffect(() => {
+    const mq = window.matchMedia?.("(prefers-color-scheme: dark)");
+    if (!mq) return undefined;
+    const onChange = (e) => { if (!themePicked.current) applyTheme(e.matches ? "dark" : "light"); };
+    mq.addEventListener("change", onChange);
+    return () => mq.removeEventListener("change", onChange);
+  }, []);
   const toggleGlass = () => { glassPicked.current = true; hideNotice(); changeLook(() => {
     document.documentElement.toggleAttribute("data-glass", !glass);
     setGlass(!glass);
