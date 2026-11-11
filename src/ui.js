@@ -21,5 +21,5 @@ export const UI = {
 export const inputBase = {
   width: "100%", border: `1px solid ${UI.fieldLine}`, borderRadius: 4,
   padding: "7px 10px", fontFamily: "inherit",
-  fontSize: 14, color: UI.ink, background: UI.paper, outline: "none",
+  fontSize: 14, color: UI.ink, background: "var(--field-bg)", outline: "none",
 };

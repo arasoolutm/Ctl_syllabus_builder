@@ -62,7 +62,8 @@ void main(){
 const SAND = [233 / 255, 221 / 255, 200 / 255];
 const NAVY = [11 / 255, 34 / 255, 64 / 255];
 
-export default function WaveBackground({ light = false }) {
+// onSoftwareGraphics: called if the computer has no real graphics card, so 3D will be slow
+export default function WaveBackground({ light = false, onSoftwareGraphics }) {
   const canvasRef = useRef(null);
   const materialRef = useRef(null);
   const redrawRef = useRef(() => {});
@@ -94,6 +95,10 @@ export default function WaveBackground({ light = false }) {
           return; // no WebGL, so just keep the plain gradient
         }
         renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+        const gl = renderer.getContext();
+        const info = gl.getExtension("WEBGL_debug_renderer_info");
+        const gpu = String(gl.getParameter(info ? info.UNMASKED_RENDERER_WEBGL : gl.RENDERER) || "");
+        if (/swiftshader|llvmpipe|software|basic render/i.test(gpu)) onSoftwareGraphics?.();
 
         const scene = new THREE.Scene();
         const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 1000);

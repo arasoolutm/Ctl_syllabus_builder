@@ -128,6 +128,7 @@ html, body, #root {
 :root {
   --panel-bg: var(--paper);
   --panel-blur: none;
+  --field-bg: var(--paper); /* text boxes and dropdown buttons */
   --masthead-bg: #0B2240;
   /* the top bar is dark in every theme, so its text colors don't change */
   --bar-ink: #FAF6EE;
@@ -221,7 +222,7 @@ body { background: var(--wash); }
   --line: rgba(233, 221, 200, 0.16);
   --ink: #F3EFE6;
   --slate: #B9AB92;
-  --muted: #8A8878;
+  --muted: #A8A492;
   --navy: #FAF6EE;
   --orange: #FF8300;
   --orange-text: #FF8300;
@@ -232,6 +233,17 @@ body { background: var(--wash); }
   --warnBg: #3A2A10;
   --scroll-thumb: rgba(233, 221, 200, 0.22);
   --scroll-thumb-hover: rgba(233, 221, 200, 0.4);
+}
+
+/* Navy without Glass: solid panels are the same color as the boxes in them, so give the
+   boxes their own fill, make the lines stronger, and darken the page so panels lift off it */
+[data-theme="navy"]:not([data-glass]) {
+  --field-bg: #1B3657;
+  --field-line: rgba(233, 221, 200, 0.4);
+  --line: rgba(233, 221, 200, 0.22);
+}
+[data-theme="navy"]:not([data-glass]) body {
+  background: linear-gradient(175deg, #061529 0%, #081A33 50%, #051327 100%) fixed;
 }
 
 [data-theme="navy"] body {
@@ -423,6 +435,15 @@ body { background: var(--wash); }
 
 .wave-bg { animation: wave-in 0.8s ease both; }
 @keyframes wave-in { from { opacity: 0; } to { opacity: 1; } }
+/* shown when Glass gets turned off for being too slow */
+.slow-notice {
+  position: fixed; right: 18px; bottom: 18px; z-index: 50; max-width: 360px;
+  display: flex; align-items: center; gap: 10px; padding: 10px 12px;
+  background: var(--paper); color: var(--ink); font-size: 13px;
+}
+.slow-notice button { flex-shrink: 0; background: none; border: 0; padding: 4px; cursor: pointer; color: var(--orange-text); font: inherit; font-weight: 700; }
+.slow-notice button:last-child { color: var(--muted); display: flex; }
+
 /* reduced motion: turn off every transition and animation, including inline ones in the JSX.
    The hover lifts on .cta and .theme-swatch are switched off separately above. */
 @media (prefers-reduced-motion: reduce) {

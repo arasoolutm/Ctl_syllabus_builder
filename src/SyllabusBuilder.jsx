@@ -883,10 +883,47 @@ export default function SyllabusBuilder() {
     document.documentElement.setAttribute("data-theme", id);
     setTheme(id);
   });
-  const toggleGlass = () => changeLook(() => {
+  const toggleGlass = () => { glassPicked.current = true; setSlowNotice(false); changeLook(() => {
     document.documentElement.toggleAttribute("data-glass", !glass);
     setGlass(!glass);
-  });
+  }); };
+
+  // Performance: if Glass makes the page choppy, turn it off (it's the wave and blur that cost).
+  // Once someone turns Glass on or off themselves, leave it alone for this visit.
+  const glassPicked = useRef(false);
+  const [slowNotice, setSlowNotice] = useState(false);
+  const glassTooSlow = () => {
+    if (glassPicked.current) return;
+    setGlass(false);
+    setSlowNotice(true);
+  };
+  useEffect(() => {
+    if (!slowNotice) return undefined;
+    const t = setTimeout(() => setSlowNotice(false), 10000);
+    return () => clearTimeout(t);
+  }, [slowNotice]);
+
+  // Under 24 fps (visibly choppy) for 6 seconds straight counts as too slow. Not 30: Chrome's
+  // battery saver caps pages at 30 on purpose. Skips the first 3 seconds (loading) and gaps
+  // over half a second (switching tabs, exporting) so one hiccup doesn't count.
+  useEffect(() => {
+    if (!glass || glassPicked.current) return undefined;
+    let raf, last = performance.now(), windowStart = last, frames = 0, slow = 0;
+    const began = last;
+    const tick = (now) => {
+      if (now - last > 500) { windowStart = now; frames = 0; } else frames++;
+      last = now;
+      if (now - windowStart >= 2000) {
+        const fps = (frames * 1000) / (now - windowStart);
+        slow = fps < 24 && now - began > 3000 ? slow + 1 : 0;
+        windowStart = now; frames = 0;
+        if (slow >= 3) { glassTooSlow(); return; }
+      }
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [glass]);
   const [showPrinted, setShowPrinted] = useState(false);
   // true when the preview is showing the real print colors
   const printColors = theme !== "dark" || showPrinted;
@@ -2516,7 +2553,14 @@ export default function SyllabusBuilder() {
   /* ---------- editor layout: navigation, form controls, and matching live preview ---------- */
   return (
     <div className={wavesOnly ? "app-shell panels-hidden" : "app-shell"} style={{ fontFamily: "Inter, ui-sans-serif, system-ui, sans-serif", minHeight: "100vh" }}>
-      {glass && <WaveBackground light={theme !== "navy" && theme !== "dark"} />}
+      {glass && <WaveBackground light={theme !== "navy" && theme !== "dark"} onSoftwareGraphics={glassTooSlow} />}
+      {slowNotice && (
+        <div className="slow-notice app-panel" role="status">
+          <span>Turned off Glass because things were running slow.</span>
+          <button type="button" onClick={toggleGlass}>Undo</button>
+          <button type="button" aria-label="Dismiss" onClick={() => setSlowNotice(false)}><X size={14} /></button>
+        </div>
+      )}
       <iframe ref={frameRef} title="print" style={{ position: "fixed", width: 0, height: 0, border: 0, left: -9999 }} />
       {pendingDelete && (
         <div role="presentation" onMouseDown={() => setPendingDelete(null)} style={{ position: "fixed", inset: 0, zIndex: 10,
