@@ -1,11 +1,15 @@
-import React, { useState, useMemo, useRef, useEffect } from "react";
+import React, { useState, useMemo, useRef, useEffect, useLayoutEffect } from "react";
 import {
   BookOpen, User, MessageSquare, Target, Library, Scale, Gavel,
   ShieldCheck, CalendarDays, FileDown, Check, AlertTriangle, Plus, Trash2,
-  Save, Upload, Printer, Lock, Info, ChevronRight, Maximize2, Minimize2, FlaskConical, ChevronDown, X, Loader2,
+  Save, Upload, Printer, Lock, Info, ChevronRight, ChevronUp, Maximize2, Minimize2, FlaskConical, ChevronDown, X, Loader2,
   CircleX, ClipboardCheck
 } from "lucide-react";
+import { flushSync } from "react-dom";
+import { UI, inputBase } from "./ui.js";
+import Dropdown from "./Dropdown.jsx";
 import { SUBJECTS } from "./subjectCodes.js";
+import WaveBackground from "./WaveBackground.jsx";
 
 /* ============================================================
    UTM SYLLABUS BUILDER  ·  Center for Teaching and Learning
@@ -56,28 +60,31 @@ const C = {
   bad: "#C0392B",
 };
 
-const UI = {
-  wash: "var(--wash)",
-  paper: "var(--paper)",
-  tint: "var(--tint)",
-  line: "var(--line)",
-  ink: "var(--ink)",
-  slate: "var(--slate)",
-  muted: "var(--muted)",
-  navy: "var(--navy)",
-  orange: "var(--orange)",
-  good: "var(--good)",
-  goodBg: "var(--goodBg)",
-  warn: "var(--warn)",
-  warnBg: "var(--warnBg)",
-};
-
+// colors are the slices of each theme's circle. Update them if the theme changes in index.css.
 const THEMES = [
-    { id: "light", label: "Light Mode" },
-    { id: "dark", label: "Dark Mode" },
-    { id: "blue", label: "Blue Light Mode" },
-    { id: "blue+", label: "Blue Light+ Mode" },
+  { id: "light", label: "Light", colors: ["#FFFFFF", "#4A5568", "#1A1A1A", "#E8ECF2"] },
+  { id: "dark", label: "Dark", colors: ["#1A2333", "#CBD5E1", "#E5E7EB", "#0F1724"] },
+  { id: "navy", label: "Navy", colors: ["#12294A", "#B9AB92", "#F3EFE6", "#0A1F3D"] },
+  { id: "blue", label: "Blue Light", colors: ["#FBF4E6", "#5A4F3C", "#2A2318", "#EEDDBE"] },
+  { id: "blue+", label: "Blue Light+", colors: ["#F7E8CC", "#5C4A2E", "#2E2415", "#E6CC9C"] },
 ];
+// shrinks the text until it fits on one line (the theme name in the sidebar)
+function FitText({ text, className }) {
+  const ref = useRef(null);
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    el.style.fontSize = "";
+    let size = parseFloat(getComputedStyle(el).fontSize);
+    while (el.scrollWidth > el.clientWidth && size > 7) {
+      size -= 0.5;
+      el.style.fontSize = `${size}px`;
+    }
+  }, [text]);
+  return <div ref={ref} className={className} aria-live="polite"><span key={text}>{text}</span></div>;
+}
+
+const quadrants = ([a, b, c, d]) => `conic-gradient(${a} 0 25%, ${b} 0 50%, ${c} 0 75%, ${d} 0)`;
 
 /* ---------- Institutional content maintained by CTL ---------- */
 
@@ -569,11 +576,9 @@ const Lbl = ({ children, hint }) => (
   </div>
 );
 
-const inputBase = {
-  width: "100%", border: `1px solid ${UI.line}`, borderRadius: 4,
-  padding: "7px 10px", fontFamily: "Cambria, Georgia, serif",
-  fontSize: 14, color: UI.ink, background: UI.paper, outline: "none",
-};
+// the sidebar's selected and hover highlights; 40 is each tab's height
+const railPill = { position: "absolute", left: 6, right: 6, top: 6, height: 40, borderRadius: 9, pointerEvents: "none" };
+
 
 /* Rich-text fields are stored as a small HTML subset. Browsers wrap each new
    line in a <div>, so those blocks are kept (without attributes) while the
@@ -842,11 +847,104 @@ export default function SyllabusBuilder() {
     return () => window.removeEventListener("beforeunload", warnBeforeUnload);
   }, [hasUnsavedChanges]);
   const [tab, setTab] = useState(0);
-  const [theme,setTheme] = useState('light');
+  const [hoverTab, setHoverTab] = useState(null);
+  // remembered so the hover highlight slides from where it was last, not from the top
+  const lastHoverTab = useRef(0);
+  if (hoverTab !== null) lastHoverTab.current = hoverTab;
+  // starts as Light or Dark to match the computer's setting
+  const systemDark = () => window.matchMedia?.("(prefers-color-scheme: dark)").matches;
+  const [theme,setTheme] = useState(() => (systemDark() ? "dark" : "light"));
+  const themePicked = useRef(false); // once someone picks a theme, stop following the computer
+  const [glass, setGlass] = useState(true);
+  const [hoverTheme, setHoverTheme] = useState(null);
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const pickerRef = useRef(null);
+  useEffect(() => {
+    if (!pickerOpen) return undefined;
+    const onDown = (e) => { if (pickerRef.current && !pickerRef.current.contains(e.target)) setPickerOpen(false); };
+    document.addEventListener("mousedown", onDown);
+    return () => document.removeEventListener("mousedown", onDown);
+  }, [pickerOpen]);
+  const [panelsHidden, setPanelsHidden] = useState(false);
+  const wavesOnly = panelsHidden && glass;
   useEffect(() => {
     document.documentElement.setAttribute("data-theme", theme);
   }, [theme]);
+  useEffect(() => {
+    document.documentElement.toggleAttribute("data-glass", glass);
+  }, [glass]);
   const currentTheme = THEMES.find((t) => t.id === theme) || THEMES[0];
+
+  // fades between themes; older browsers and reduced motion just switch
+  const changeLook = (apply) => {
+    const reduce = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    if (!document.startViewTransition || reduce) { apply(); return; }
+    // the new theme has to be on the page before the fade starts
+    document.startViewTransition(() => flushSync(apply));
+  };
+  const applyTheme = (id) => changeLook(() => {
+    document.documentElement.setAttribute("data-theme", id);
+    setTheme(id);
+  });
+  const pickTheme = (id) => { themePicked.current = true; applyTheme(id); };
+  // follow the computer switching between light and dark mode while the app is open
+  useEffect(() => {
+    const mq = window.matchMedia?.("(prefers-color-scheme: dark)");
+    if (!mq) return undefined;
+    const onChange = (e) => { if (!themePicked.current) applyTheme(e.matches ? "dark" : "light"); };
+    mq.addEventListener("change", onChange);
+    return () => mq.removeEventListener("change", onChange);
+  }, []);
+  const toggleGlass = () => { glassPicked.current = true; hideNotice(); changeLook(() => {
+    document.documentElement.toggleAttribute("data-glass", !glass);
+    setGlass(!glass);
+  }); };
+
+  // Performance: if Glass makes the page choppy, turn it off (it's the wave and blur that cost).
+  // Once someone turns Glass on or off themselves, leave it alone for this visit.
+  const glassPicked = useRef(false);
+  const [slowNotice, setSlowNotice] = useState(false);
+  const noticeRef = useRef(null);
+  // slides the notice back out to the right before removing it
+  const hideNotice = () => {
+    const el = noticeRef.current;
+    const reduce = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    if (!el || reduce || !el.animate) { setSlowNotice(false); return; }
+    el.animate([{ transform: "none", opacity: 1 }, { transform: "translateX(calc(100% + 24px))", opacity: 0 }],
+      { duration: 250, easing: "ease-in", fill: "forwards" }).finished.then(() => setSlowNotice(false));
+  };
+  const glassTooSlow = () => {
+    if (glassPicked.current) return;
+    setGlass(false);
+    setSlowNotice(true);
+  };
+  useEffect(() => {
+    if (!slowNotice) return undefined;
+    const t = setTimeout(hideNotice, 10000);
+    return () => clearTimeout(t);
+  }, [slowNotice]);
+
+  // Under 24 fps (visibly choppy) for 6 seconds straight counts as too slow. Not 30: Chrome's
+  // battery saver caps pages at 30 on purpose. Skips the first 3 seconds (loading) and gaps
+  // over half a second (switching tabs, exporting) so one hiccup doesn't count.
+  useEffect(() => {
+    if (!glass || glassPicked.current) return undefined;
+    let raf, last = performance.now(), windowStart = last, frames = 0, slow = 0;
+    const began = last;
+    const tick = (now) => {
+      if (now - last > 500) { windowStart = now; frames = 0; } else frames++;
+      last = now;
+      if (now - windowStart >= 2000) {
+        const fps = (frames * 1000) / (now - windowStart);
+        slow = fps < 24 && now - began > 3000 ? slow + 1 : 0;
+        windowStart = now; frames = 0;
+        if (slow >= 3) { glassTooSlow(); return; }
+      }
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [glass]);
   const [showPrinted, setShowPrinted] = useState(false);
   // true when the preview is showing the real print colors
   const printColors = theme !== "dark" || showPrinted;
@@ -857,26 +955,8 @@ export default function SyllabusBuilder() {
   const [showTextKeybinds, setShowTextKeybinds] = useState(false);
 
   const [lookupStatus, setLookupStatus] = useState(null);
-  const [deliveryOpen, setDeliveryOpen] = useState(false);
-  const deliveryRef = useRef(null);
-
-  useEffect(() => {
-    if (!deliveryOpen) return undefined;
-    const onDocClick = (e) => {
-      if (deliveryRef.current && !deliveryRef.current.contains(e.target)) setDeliveryOpen(false);
-    };
-    const onKey = (e) => { if (e.key === "Escape") setDeliveryOpen(false); };
-    document.addEventListener("mousedown", onDocClick);
-    document.addEventListener("keydown", onKey);
-    return () => {
-      document.removeEventListener("mousedown", onDocClick);
-      document.removeEventListener("keydown", onKey);
-    };
-  }, [deliveryOpen]);
 
   const [termOptions, setTermOptions] = useState([]);
-  const [termOpen, setTermOpen] = useState(false);
-  const termRef = useRef(null);
 
   // If the live lookup can't be reached, use the offline JSON catalog instead.
   // Tries live again after 2 minutes so one Banner hiccup doesn't stick.
@@ -912,36 +992,7 @@ export default function SyllabusBuilder() {
     return () => { cancelled = true; };
   }, []);
 
-  useEffect(() => {
-    if (!termOpen) return undefined;
-    const onDocClick = (e) => {
-      if (termRef.current && !termRef.current.contains(e.target)) setTermOpen(false);
-    };
-    const onKey = (e) => { if (e.key === "Escape") setTermOpen(false); };
-    document.addEventListener("mousedown", onDocClick);
-    document.addEventListener("keydown", onKey);
-    return () => {
-      document.removeEventListener("mousedown", onDocClick);
-      document.removeEventListener("keydown", onKey);
-    };
-  }, [termOpen]);
 
-  const [deptOpen, setDeptOpen] = useState(false);
-  const deptRef = useRef(null);
-
-  useEffect(() => {
-    if (!deptOpen) return undefined;
-    const onDocClick = (e) => {
-      if (deptRef.current && !deptRef.current.contains(e.target)) setDeptOpen(false);
-    };
-    const onKey = (e) => { if (e.key === "Escape") setDeptOpen(false); };
-    document.addEventListener("mousedown", onDocClick);
-    document.addEventListener("keydown", onKey);
-    return () => {
-      document.removeEventListener("mousedown", onDocClick);
-      document.removeEventListener("keydown", onKey);
-    };
-  }, [deptOpen]);
 
   const [codeSuggestions, setCodeSuggestions] = useState([]);
   const [codeSuggestOpen, setCodeSuggestOpen] = useState(false);
@@ -1942,47 +1993,52 @@ export default function SyllabusBuilder() {
   /* ---------- readiness: report whether required syllabus content is complete ---------- */
   const hasText = (value) => typeof value === "string" && value.trim().length > 0;
   const checks = [
-    ["Course code, title, term, and credit hours", [d.code, d.title, d.term, d.credits].every(hasText)],
-    ["Meeting time and modality stated", hasText(d.modality) && (d.modality.startsWith("Online") || hasText(meetingDisplay))],
-    ["Instructor name and email", hasText(d.instructor) && hasText(d.email)],
-    ["Office hours and how to reach you", hasText(d.hours)],
-    ["Course description", hasText(d.description)],
-    ["Why this course matters, in your voice", hasText(d.welcome)],
-    ["At least three learning outcomes", realOutcomes.length >= 3],
-    ["Every outcome tied to an assessment", realOutcomes.length > 0 && unmapped.length === 0],
-    ["Required materials listed", hasText(d.texts) || d.materials.provided || d.materials.hardcopy || d.materials.online || hasText(d.materials.acquire)],
+    ["Course code, title, term, and credit hours", [d.code, d.title, d.term, d.credits].every(hasText), "Course"],
+    ["Meeting time and modality stated", hasText(d.modality) && (d.modality.startsWith("Online") || hasText(meetingDisplay)), "Course"],
+    ["Instructor name and email", hasText(d.instructor) && hasText(d.email), "Instructor"],
+    ["Office hours and how to reach you", hasText(d.hours), "Instructor"],
+    ["Course description", hasText(d.description), "Welcome"],
+    ["Why this course matters, in your voice", hasText(d.welcome), "Welcome"],
+    ["At least three learning outcomes", realOutcomes.length >= 3, "Outcomes"],
+    ["Every outcome tied to an assessment", realOutcomes.length > 0 && unmapped.length === 0, "Outcomes"],
+    ["Required materials listed", hasText(d.texts) || d.materials.provided || d.materials.hardcopy || d.materials.online || hasText(d.materials.acquire), "Materials"],
     [
       d.gradingMethod === "percentage"
         ? "Assessment weights total 100 percent"
         : "All assignments have valid point values",
       d.gradingMethod === "percentage"
         ? Math.abs(weightTotal - 100) < 0.01
-        : validPoints
+        : validPoints,
+      "Grading",
     ],
-    ["Grading scale", hasText(d.scale)],
-    ["Attendance policy", hasText(d.attendance)],
-    ["Late work and make-up policy", hasText(lateText)],
-    ["AI policy (required by UTM policy)", hasText(aiText)],
-    ["Accessibility statement included", d.inc.accessibility],
-    ["Academic integrity included", d.inc.integrity],
-    ["Crisis resources included", d.inc.crisis],
-    ["Schedule has at least one entry", auto || d.weeks.some((w) => hasText(w.topics) || hasText(w.dates))],
+    ["Grading scale", hasText(d.scale), "Grading"],
+    ["Attendance policy", hasText(d.attendance), "Policies"],
+    ["Late work and make-up policy", hasText(lateText), "Policies"],
+    ["AI policy (required by UTM policy)", hasText(aiText), "Policies"],
+    ["Accessibility statement included", d.inc.accessibility, "University"],
+    ["Academic integrity included", d.inc.integrity, "University"],
+    ["Crisis resources included", d.inc.crisis, "University"],
+    ["Schedule has at least one entry", auto || d.weeks.some((w) => hasText(w.topics) || hasText(w.dates)), "Schedule"],
     ...(isWeeklySchedule ? [
       [
         missingWeeks.length === 0
           ? "Every week in the schedule has topics"
           : `Topics missing for week${missingWeeks.length > 1 ? "s" : ""} ${missingWeeks.join(", ")}`,
-        missingWeeks.length === 0
+        missingWeeks.length === 0,
+        "Schedule",
       ],
-      [weeklyScheduleLabel, weeklyScheduleReady]
+      [weeklyScheduleLabel, weeklyScheduleReady, "Schedule"]
     ] : []),
     ...(d.hasLab ? [
-      ["Lab meeting time and location", hasText(d.lab.meeting) && hasText(d.lab.location)],
-      ["How the lab counts toward the course grade", hasText(d.lab.gradeNote)],
-      ["Lab safety expectations stated", hasText(d.lab.safety)],
+      ["Lab meeting time and location", hasText(d.lab.meeting) && hasText(d.lab.location), "Labs"],
+      ["How the lab counts toward the course grade", hasText(d.lab.gradeNote), "Labs"],
+      ["Lab safety expectations stated", hasText(d.lab.safety), "Labs"],
     ] : []),
   ];
   const passed = checks.filter((c) => c[1]).length;
+  const doneTabs = new Set(
+    [...new Set(checks.map((c) => c[2]))].filter((t) => checks.filter((c) => c[2] === t).every((c) => c[1]))
+  );
 
   /* ---------- accessibility: Panorama-style checks on the professor's own writing ---------- */
 
@@ -2509,21 +2565,29 @@ export default function SyllabusBuilder() {
   /** Renders a consistently styled action button with an optional icon. */
   const Btn = ({ onClick, children, icon: I, primary }) => (
     <button onClick={onClick} className="flex items-center gap-2 px-3 py-2 rounded text-sm font-semibold"
-      style={{ background: primary ? C.navy : UI.paper, color: primary ? "#fff" : UI.navy,
-        border: `1px solid ${primary ? C.navy : C.line}`, cursor: "pointer" }}>
+      style={{ background: primary ? UI.orange : UI.paper, color: primary ? "var(--on-orange)" : UI.navy,
+        border: `1px solid ${primary ? UI.orange : UI.fieldLine}`, cursor: "pointer" }}>
       {I && <I size={15} />}{children}
     </button>
   );
 
   /* ---------- editor layout: navigation, form controls, and matching live preview ---------- */
   return (
-    <div style={{ fontFamily: "Cambria, Georgia, serif", background: UI.wash, minHeight: "100vh" }}>
+    <div className={wavesOnly ? "app-shell panels-hidden" : "app-shell"} style={{ fontFamily: "Inter, ui-sans-serif, system-ui, sans-serif", minHeight: "100vh" }}>
+      {glass && <WaveBackground light={theme !== "navy" && theme !== "dark"} onSoftwareGraphics={glassTooSlow} />}
+      {slowNotice && (
+        <div ref={noticeRef} className="slow-notice app-panel" role="status">
+          <span>Turned off Glass because things were running slow.</span>
+          <button type="button" onClick={toggleGlass}>Undo</button>
+          <button type="button" aria-label="Dismiss" onClick={hideNotice}><X size={14} /></button>
+        </div>
+      )}
       <iframe ref={frameRef} title="print" style={{ position: "fixed", width: 0, height: 0, border: 0, left: -9999 }} />
       {pendingDelete && (
         <div role="presentation" onMouseDown={() => setPendingDelete(null)} style={{ position: "fixed", inset: 0, zIndex: 10,
           display: "flex", alignItems: "center", justifyContent: "center", padding: 20, background: "rgba(11,34,64,.38)" }}>
           <div role="dialog" aria-modal="true" aria-labelledby="delete-dialog-title" onMouseDown={(e) => e.stopPropagation()}
-            style={{ width: "min(100%, 420px)", background: UI.paper, borderRadius: 4, padding: 24, boxShadow: "0 12px 36px rgba(11,34,64,.24)" }}>
+            style={{ width: "min(100%, 420px)", background: UI.paper, border: `1px solid ${UI.line}`, borderRadius: 14, padding: 24, boxShadow: "0 12px 36px rgba(11,34,64,.24)" }}>
             <div id="delete-dialog-title" style={{ color: UI.navy, fontSize: 18, fontWeight: "bold", marginBottom: 8 }}>Delete this entry?</div>
             <div style={{ color: UI.slate, fontSize: 14, lineHeight: 1.5, marginBottom: 20 }}>
               This {({ outcomes: "learning outcome", items: "assignment or category", weeks: "schedule entry" }[pendingDelete.k] || "entry")} contains information. Are you sure you want to delete it?
@@ -2539,7 +2603,7 @@ export default function SyllabusBuilder() {
         <div role="presentation" onMouseDown={() => setShowTextKeybinds(false)} style={{ position: "fixed", inset: 0, zIndex: 1100,
           display: "flex", alignItems: "center", justifyContent: "center", padding: 20, background: "rgba(11,34,64,.38)" }}>
           <div role="dialog" aria-modal="true" aria-labelledby="text-keybinds-title" onMouseDown={(event) => event.stopPropagation()}
-            style={{ width: "min(100%, 340px)", background: UI.paper, border: `1px solid ${UI.line}`, borderRadius: 4, padding: 20, boxShadow: "0 12px 36px rgba(11,34,64,.24)" }}>
+            style={{ width: "min(100%, 340px)", background: UI.paper, border: `1px solid ${UI.line}`, borderRadius: 14, padding: 20, boxShadow: "0 12px 36px rgba(11,34,64,.24)" }}>
             <div id="text-keybinds-title" style={{ color: UI.navy, fontSize: 18, fontWeight: "bold", marginBottom: 14 }}>Text keybinds</div>
             <div style={{ display: "grid", gridTemplateColumns: "auto 1fr", gap: "10px 16px", alignItems: "center", color: UI.slate, fontSize: 14 }}>
               <kbd>Ctrl+B</kbd><span>Bold</span>
@@ -2554,60 +2618,115 @@ export default function SyllabusBuilder() {
       )}
 
       {/* masthead */}
-      <div style={{ background: C.navy, borderBottom: `4px solid ${C.orange}` }} className="px-5 py-3">
-        <div className="flex items-center justify-between flex-wrap gap-3">
-          <div className="flex items-center gap-4">
-            <UtmMark style={{ width: 114 }} />
-            <div style={{ borderLeft: "1px solid rgba(255,255,255,.3)", paddingLeft: 16 }}>
-              <div style={{ color: "#fff", fontSize: 15, fontWeight: "bold", lineHeight: 1.1 }}>Syllabus Builder</div>
-              <div style={{ color: C.orange, fontSize: 11, letterSpacing: 1 }}>CENTER FOR TEACHING AND LEARNING</div>
-            </div>
+      <div className="app-panel app-masthead">
+        <div className="masthead-left">
+          {/* keep this the same width as the sidebar so the logo stays centered over it */}
+          {glass ? (
+            <button type="button" className="masthead-mark masthead-mark-toggle" onClick={() => setPanelsHidden((h) => !h)}
+              aria-pressed={wavesOnly} title={wavesOnly ? "Show the panels" : "Hide the panels"}
+              aria-label={wavesOnly ? "Show the panels" : "Hide the panels"}>
+              <UtmMark style={{ width: 112 }} />
+            </button>
+          ) : (
+            <div className="masthead-mark"><UtmMark style={{ width: 112 }} /></div>
+          )}
+          <div className="masthead-title">
+            <div className="name">Syllabus Builder</div>
+            <div className="tag">Center for Teaching and Learning</div>
           </div>
-          <div className="flex items-center gap-2">
-            <div style={{ color: "#B9C6D8", fontSize: 12, marginRight: 6 }}>{passed} of {checks.length} complete</div>
-            <div style={{ width: 120, height: 6, background: "rgba(255,255,255,.2)", borderRadius: 3 }}>
-              <div style={{ width: `${(passed / checks.length) * 100}%`, height: "100%", background: C.orange, borderRadius: 3, transition: "width .3s" }} />
-            </div>
+        </div>
+        <div className="masthead-right">
+          <div className="progress-pill" title="Readiness checks passed">
+            <span className="count">{passed} of {checks.length} ready</span>
+            <div className="track"><i style={{ width: `${(passed / checks.length) * 100}%` }} /></div>
           </div>
+          <button className="cta" onClick={() => setTab(tabIndex("Export"))}>Export syllabus</button>
         </div>
       </div>
 
-      <div className="flex flex-wrap editor-row" style={{ alignItems: "flex-start" }}>
+      <div className="flex flex-wrap editor-row">
         {/* left rail */}
-        <div className="editor-rail" style={{ width: 150, background: UI.paper, borderRight: `1px solid ${UI.line}`, minHeight: "calc(100vh - 62px)", position: "relative" }}>
+        <div className="editor-rail app-panel" style={{ width: 184, position: "relative", overflow: "hidden", paddingTop: 6 }}>
           <div style={{
-            position: "absolute", left: 0, top: 0, width: "100%", height: 40,
-            background: UI.tint, borderLeft: `3px solid ${C.orange}`,
+            ...railPill,
+            background: "rgba(255,131,0,0.12)",
             transform: `translateY(${tab * 40}px)`,
             transition: "transform 0.25s ease",
-            pointerEvents: "none",
+          }} />
+          <div aria-hidden="true" style={{
+            ...railPill,
+            background: "color-mix(in srgb, var(--ink) 7%, transparent)",
+            transform: `translateY(${lastHoverTab.current * 40}px)`,
+            opacity: hoverTab !== null && hoverTab !== tab ? 1 : 0,
+            transition: "transform 0.2s ease, opacity 0.2s ease",
           }} />
           {TABS.map((t, i) => {
-            const on = tab === i; const I = t.i;
+            const on = tab === i; const done = doneTabs.has(t.n);
             return (
               <button key={t.n} onClick={() => setTab(i)}
+                onMouseEnter={() => setHoverTab(i)} onMouseLeave={() => setHoverTab(null)}
                 className="relative flex items-center gap-2 w-full px-3 text-sm text-left"
                 style={{ height: 40, background: "transparent", color: on ? UI.navy : UI.slate,
                   fontWeight: on ? "bold" : "normal", cursor: "pointer" }}>
-                <I size={15} />{t.n}
+                <span style={{ width: 21, height: 21, borderRadius: "50%", flexShrink: 0,
+                  display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: 10.5, fontWeight: 700,
+                  background: on ? C.orange : done ? UI.goodBg : UI.tint, color: on ? "var(--on-orange)" : done ? UI.good : UI.slate }}>
+                  <t.i size={12} strokeWidth={2.25} />
+                </span>
+                <span style={{ flex: 1 }}>{t.n}</span>
+                {done && <Check size={13} style={{ color: UI.good, flexShrink: 0 }} />}
               </button>
             );
           })}
-          <label style={{ display: "block", margin: 12, color: UI.ink }}>
-            <span style={{ display: "block", fontSize: 10, letterSpacing: 1, color: UI.muted, marginBottom: 4 }}>THEME</span>
-            <select
-              value={theme}
-              onChange={(event) => setTheme(event.target.value)}
-              aria-label={`Theme: ${currentTheme.label}`}
-              style={{ width: "100%", padding: "6px 8px", borderRadius: 4, cursor: "pointer",
-                boxSizing: "border-box", fontSize: 11, background: UI.paper, color: UI.ink,
-                border: `1px solid ${UI.line}` }}>
-              {THEMES.map((option) => <option key={option.id} value={option.id}>{option.label}</option>)}
-            </select>
-          </label>
+          <div ref={pickerRef} className={pickerOpen ? "theme-picker is-open" : "theme-picker"}
+            onMouseLeave={() => setHoverTheme(null)}>
+            <button type="button" className="theme-summary" onClick={() => setPickerOpen((o) => !o)}
+              aria-expanded={pickerOpen} aria-controls="theme-options" title="Change the theme">
+              <span className="theme-picker-label" id="theme-picker-label">THEME</span>
+              {(() => {
+                const base = THEMES.find((t) => t.id === hoverTheme) || currentTheme;
+                const withGlass = hoverTheme === "glass" ? !glass : glass;
+                const text = base.label + (withGlass ? " + Glass" : "");
+                const previewing = hoverTheme !== null && hoverTheme !== theme;
+                return (
+                  <FitText text={text} className={previewing ? "theme-name is-preview" : "theme-name"} />
+                );
+              })()}
+              <ChevronUp size={12} className="theme-chevron" aria-hidden="true" />
+            </button>
+            <div className="theme-options" id="theme-options"><div>
+            <div className="theme-swatches" role="radiogroup" aria-labelledby="theme-picker-label"
+              onMouseLeave={() => setHoverTheme(null)}>
+              {THEMES.map((t, i) => (
+                <button key={t.id} type="button" role="radio" aria-checked={theme === t.id} aria-label={t.label}
+                  tabIndex={theme === t.id ? 0 : -1}
+                  className="theme-swatch" style={{ background: quadrants(t.colors) }}
+                  onClick={() => { if (t.id !== theme) pickTheme(t.id); }}
+                  onMouseEnter={() => setHoverTheme(t.id)}
+                  onFocus={() => setHoverTheme(t.id)} onBlur={() => setHoverTheme(null)}
+                  onKeyDown={(e) => {
+                    const dir = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 }[e.key];
+                    if (!dir) return;
+                    e.preventDefault();
+                    const next = THEMES[(i + dir + THEMES.length) % THEMES.length];
+                    pickTheme(next.id);
+                    e.currentTarget.parentElement.children[THEMES.indexOf(next)].focus();
+                  }} />
+              ))}
+              <span className="theme-swatch-divider" aria-hidden="true" />
+              <button type="button" role="switch" aria-checked={glass} aria-label="Glass"
+                className="theme-swatch glass-swatch"
+                onClick={toggleGlass}
+                onMouseEnter={() => setHoverTheme("glass")}
+                onFocus={() => setHoverTheme("glass")} onBlur={() => setHoverTheme(null)}>
+                <span style={{ background: quadrants(currentTheme.colors) }} />
+              </button>
+            </div>
+            </div></div>
+          </div>
 </div>
         {/* form */}
-        <div ref={formRef} className="p-5 editor-form" style={{ flex: "1 1 420px", minWidth: 340, maxWidth: 620 }}>
+        <div ref={formRef} className="p-5 editor-form app-panel" style={{ flex: "1 1 420px", minWidth: 340, maxWidth: 620 }}>
           {tab === 0 && (<>
             <H>Course</H>
             <div className="flex gap-3 flex-wrap items-end">
@@ -2710,105 +2829,23 @@ export default function SyllabusBuilder() {
             <div className="flex gap-3 flex-wrap">
               <div style={{ flex: "1 1 130px" }}>
                 <Field label="Term" hint="used for the lookup too">
-                  <div ref={termRef} style={{ position: "relative" }}>
-                    <input
-                      style={{ ...inputBase, paddingRight: 30 }}
-                      value={d.term}
-                      placeholder="Fall 2026"
-                      autoComplete="off"
-                      onChange={(e) => set("term", e.target.value)}
-                      onFocus={() => { if (termOptions.length) setTermOpen(true); }}
-                    />
-                    {termOptions.length > 0 && (
-                      <button type="button" onClick={() => setTermOpen((o) => !o)}
-                        aria-haspopup="listbox" aria-expanded={termOpen} aria-label="Choose a term"
-                        style={{
-                          position: "absolute", right: 0, top: 0, bottom: 0, width: 28,
-                          display: "flex", alignItems: "center", justifyContent: "center",
-                          background: "transparent", cursor: "pointer",
-                        }}>
-                        <ChevronDown size={14} className="transition-transform duration-200"
-                          style={{ color: UI.slate, transform: termOpen ? "rotate(180deg)" : "none" }} />
-                      </button>
-                    )}
-                    <div role="listbox" className="transition-all duration-200"
-                      style={{
-                        position: "absolute", left: 0, right: 0, top: "calc(100% + 4px)", zIndex: 30,
-                        background: UI.paper, border: `1px solid ${UI.line}`, borderRadius: 4,
-                        boxShadow: "0 6px 16px rgba(0,0,0,.12)", overflow: "hidden", maxHeight: 220, overflowY: "auto",
-                        opacity: termOpen ? 1 : 0,
-                        transform: termOpen ? "translateY(0) scaleY(1)" : "translateY(-4px) scaleY(0.96)",
-                        transformOrigin: "top", pointerEvents: termOpen ? "auto" : "none",
-                      }}>
-                      {termOptions.map((t) => (
-                        <div key={t} role="option" aria-selected={d.term === t}
-                          onClick={() => { set("term", t); setTermOpen(false); }}
-                          onMouseEnter={(e) => { e.currentTarget.style.background = UI.tint; }}
-                          onMouseLeave={(e) => { e.currentTarget.style.background = d.term === t ? UI.tint : "transparent"; }}
-                          style={{
-                            padding: "7px 10px", fontSize: 13.5, cursor: "pointer",
-                            color: d.term === t ? UI.navy : UI.ink, fontWeight: d.term === t ? "bold" : "normal",
-                            background: d.term === t ? UI.tint : "transparent",
-                          }}>
-                          {t}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
+                  <Dropdown editable value={d.term} onChange={(v) => set("term", v)} placeholder="Fall 2026"
+                    ariaLabel="Term" maxHeight={220} options={termOptions.map((t) => ({ value: t, label: t }))} />
                 </Field>
               </div>
               <div style={{ flex: "1 1 130px" }}><Field label="Credit hours"><T value={d.credits} onChange={(v) => set("credits", v)} /></Field></div>
             </div>
             <Field label="Semester Length" hint="students read this before they register">
-              <select style={inputBase} value={d.semester} onChange={(e) => set("semester", e.target.value)}>
-                {["Full Semester", "Half of a Semester", "Third of a Semester"].map((m) => <option key={m}>{m}</option>)}
-              </select>
+              <Dropdown value={d.semester || ""} onChange={(v) => set("semester", v)} ariaLabel="Semester length" placeholder="Select semester length"
+                options={["Full Semester", "Half of a Semester", "Third of a Semester"].map((m) => ({ value: m, label: m }))} />
             </Field>
             <Field label="Delivery" hint="students read this before they register">
-              <div ref={deliveryRef} style={{ position: "relative" }}>
-                <button type="button" onClick={() => setDeliveryOpen((o) => !o)}
-                  aria-haspopup="listbox" aria-expanded={deliveryOpen}
-                  style={{ ...inputBase, display: "flex", alignItems: "center", justifyContent: "space-between", cursor: "pointer" }}>
-                  <span>{d.modality}</span>
-                  <ChevronDown size={14} className="transition-transform duration-200"
-                    style={{ color: UI.slate, flexShrink: 0, marginLeft: 8, transform: deliveryOpen ? "rotate(180deg)" : "none" }} />
-                </button>
-                <div role="listbox" className="transition-all duration-200"
-                  style={{
-                    position: "absolute", left: 0, right: 0, top: "calc(100% + 4px)", zIndex: 20,
-                    background: UI.paper, border: `1px solid ${UI.line}`, borderRadius: 4,
-                    boxShadow: "0 6px 16px rgba(0,0,0,.12)", overflow: "hidden",
-                    opacity: deliveryOpen ? 1 : 0,
-                    transform: deliveryOpen ? "translateY(0) scaleY(1)" : "translateY(-4px) scaleY(0.96)",
-                    transformOrigin: "top", pointerEvents: deliveryOpen ? "auto" : "none",
-                  }}>
-                  {["In person", "Hybrid", "Online synchronous", "Online asynchronous", "Dual Enrollment", "Internship"].map((m) => (
-                    <div key={m} role="option" aria-selected={d.modality === m}
-                      onClick={() => { set("modality", m); setDeliveryOpen(false); }}
-                      onMouseEnter={(e) => { e.currentTarget.style.background = UI.tint; }}
-                      onMouseLeave={(e) => { e.currentTarget.style.background = d.modality === m ? UI.tint : "transparent"; }}
-                      style={{
-                        padding: "8px 10px", fontSize: 14, cursor: "pointer",
-                        color: d.modality === m ? UI.navy : UI.ink, fontWeight: d.modality === m ? "bold" : "normal",
-                        background: d.modality === m ? UI.tint : "transparent",
-                      }}>
-                      {m}
-                    </div>
-                  ))}
-                </div>
-              </div>
+              <Dropdown value={d.modality} onChange={(v) => set("modality", v)} ariaLabel="Delivery"
+                options={["In person", "Hybrid", "Online synchronous", "Online asynchronous", "Dual Enrollment", "Internship"].map((m) => ({ value: m, label: m }))} />
             </Field>
                         <Field label="Meeting days" hint="leave blank if fully asynchronous">
-              <select
-                style={inputBase}
-                value={d.meetingPattern || ""}
-                onChange={(e) => set("meetingPattern", e.target.value)}
-              >
-                <option value="">Select meeting days</option>
-                {MEETING_PATTERNS.map((pattern) => (
-                  <option key={pattern.value} value={pattern.value}>{pattern.label}</option>
-                ))}
-              </select>
+              <Dropdown value={d.meetingPattern || ""} onChange={(v) => set("meetingPattern", v)}
+                placeholder="Select meeting days" ariaLabel="Meeting days" options={MEETING_PATTERNS} />
             </Field>
             {d.meetingPattern === "custom" && (
               <Field label="Custom meeting days">
@@ -2829,60 +2866,11 @@ export default function SyllabusBuilder() {
             <Field label="Room"><T value={d.location} onChange={(v) => set("location", v)} placeholder="Humanities 407" /></Field>
             <Field label="Other Meeting Room" hint="Only fill this if some classes take place in other room during the week"><T value={d.exlocation} onChange={(v) => set("exlocation", v)} placeholder="Humanities 409 on Fridays" /></Field>
             <Field label="Department" hint="type freely, or pick from the list">
-              <div ref={deptRef} style={{ position: "relative" }}>
-                <input
-                  style={{ ...inputBase, paddingRight: 30 }}
-                  value={d.dept}
-                  placeholder="Department of Computer Science"
-                  autoComplete="off"
-                  onChange={(e) => set("dept", e.target.value)}
-                  onFocus={() => setDeptOpen(true)}
-                />
-                <button type="button" onClick={() => setDeptOpen((o) => !o)}
-                  aria-haspopup="listbox" aria-expanded={deptOpen} aria-label="Choose a department"
-                  style={{
-                    position: "absolute", right: 0, top: 0, bottom: 0, width: 28,
-                    display: "flex", alignItems: "center", justifyContent: "center",
-                    background: "transparent", cursor: "pointer",
-                  }}>
-                  <ChevronDown size={14} className="transition-transform duration-200"
-                    style={{ color: UI.slate, transform: deptOpen ? "rotate(180deg)" : "none" }} />
-                </button>
-                <div role="listbox" className="transition-all duration-200"
-                  style={{
-                    position: "absolute", left: 0, right: 0, top: "calc(100% + 4px)", zIndex: 30,
-                    background: UI.paper, border: `1px solid ${UI.line}`, borderRadius: 4,
-                    boxShadow: "0 6px 16px rgba(0,0,0,.12)", overflow: "hidden", maxHeight: 260, overflowY: "auto",
-                    opacity: deptOpen ? 1 : 0,
-                    transform: deptOpen ? "translateY(0) scaleY(1)" : "translateY(-4px) scaleY(0.96)",
-                    transformOrigin: "top", pointerEvents: deptOpen ? "auto" : "none",
-                  }}>
-                  {DEPARTMENTS.map((g) => (
-                    <div key={g.college}>
-                      <div style={{ padding: "8px 10px 4px", fontSize: 12, fontWeight: "bold", textTransform: "uppercase", letterSpacing: .4, color: UI.slate }}>
-                        {g.college}
-                      </div>
-                      {g.names.map((name) => {
-                        const value = `Department of ${name}`;
-                        const on = d.dept === value;
-                        return (
-                          <div key={name} role="option" aria-selected={on}
-                            onClick={() => { set("dept", value); setDeptOpen(false); }}
-                            onMouseEnter={(e) => { e.currentTarget.style.background = UI.tint; }}
-                            onMouseLeave={(e) => { e.currentTarget.style.background = on ? UI.tint : "transparent"; }}
-                            style={{
-                              padding: "7px 10px 7px 20px", fontSize: 13.5, cursor: "pointer",
-                              color: on ? UI.navy : UI.ink, fontWeight: on ? "bold" : "normal",
-                              background: on ? UI.tint : "transparent",
-                            }}>
-                            {name}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  ))}
-                </div>
-              </div>
+              <Dropdown editable value={d.dept} onChange={(v) => set("dept", v)} placeholder="Department of Computer Science"
+                ariaLabel="Department" options={DEPARTMENTS.flatMap((g) => [
+                  { header: g.college },
+                  ...g.names.map((name) => ({ value: `Department of ${name}`, label: name })),
+                ])} />
             </Field>
             <Field label="Prerequisites"><T value={d.prereq} onChange={(v) => set("prereq", v)} placeholder="None" /></Field>
           </>)}
@@ -2933,7 +2921,7 @@ export default function SyllabusBuilder() {
             </label>
             {d.outcomes.map((o, i) => (
               <div key={i} data-box-key="outcomes" data-box-index={i} className="flex gap-2 mb-2 items-start">
-                <div style={{ width: 22, paddingTop: 8, color: C.orange, fontWeight: "bold", fontSize: 13 }}>{i + 1}</div>
+                <div style={{ width: 22, paddingTop: 8, color: UI.orangeText, fontWeight: "bold", fontSize: 13 }}>{i + 1}</div>
                 <div style={{ flex: 1 }}><A rows={2} value={o} onChange={(v) => setD((p) => { const a = [...p.outcomes]; a[i] = v; return { ...p, outcomes: a }; })}
                   placeholder="Students will evaluate ..." /></div>
                 <button onClick={() => drop("outcomes", i)} style={{ color: "#9AA5B5", marginTop: 8, cursor: "pointer" }}><Trash2 size={15} /></button>
@@ -2951,7 +2939,7 @@ export default function SyllabusBuilder() {
                            <span title="Already in your outcomes" style={{ color: UI.good, marginTop: 2 }}><Check size={14} /></span>
                          ) : (
                            <button onClick={() => setD((p) => ({ ...p, outcomes: [...p.outcomes.filter((x) => x.trim()), it] }))}
-                             style={{ color: C.orange, marginTop: 2, cursor: "pointer" }}><Plus size={14} /></button>
+                             style={{ color: UI.orangeText, marginTop: 2, cursor: "pointer" }}><Plus size={14} /></button>
                          )}
                       <div style={{ fontSize: 12.5, color: UI.slate, lineHeight: 1.45 }}>{it}</div>
                     </div>
@@ -3148,23 +3136,8 @@ export default function SyllabusBuilder() {
           {tab === 7 && (<>
             <H>Course Policies</H>
             <Field label="Attendance">
-              <select
-                style={{ ...inputBase, marginBottom: 8 }}
-                value=""
-                onChange={(e) => {
-                  const text = e.target.value;
-                  if (!text) return;
-                  if (
-                    d.attendance.trim() &&
-                    !window.confirm("Replace your current attendance policy?")
-                  ) {
-                    return;
-                  }
-                  set("attendance", text);
-                }}
-              >
-                <option value="">Please select a sample attendance policy, then edit it to fit your course</option>
-                {[
+              <Dropdown value="" placeholder="Please select a sample attendance policy, then edit it to fit your course" ariaLabel="Sample attendance policy" style={{ marginBottom: 8 }}
+                options={[
                   ["Graded",
                     'Attendance in this course means that you will be present for all in-person class meetings. Roll will be called/marked at the beginning of each class period. If you are not present during roll call, it is your responsibility to see the professor after class so that you may be marked tardy; otherwise, you will be marked absent for the day. If you need to miss class for a valid reason (school events, family matters, appointments, etc.) you must notify the professor in advance of your absence, or as near as possible to the class period in the event of emergencies. You need not be detailed, a simple "I am out sick today" will suffice!'
                   ],
@@ -3174,10 +3147,11 @@ export default function SyllabusBuilder() {
                   ["Online",
                     `This course has no fixed meeting time, so attendance is measured by your activity in Canvas rather than by your presence in a room. You are counted present in a given week if you have submitted that week's work, posted to the discussion board, or otherwise engaged with the week's module by the Sunday deadline. Two consecutive weeks with no Canvas activity will trigger an outreach from me and may be reported to Student Success as a retention concern. Federal financial aid regulations also require that we document academically related activity.`
                   ],
-                ].map(([label, text]) => (
-                  <option key={label} value={text}>{label}</option>
-                ))}
-              </select>
+                ].map(([label, text]) => ({ value: text, label }))}
+                onChange={(text) => {
+                  if (d.attendance.trim() && !window.confirm("Replace your current attendance policy?")) return;
+                  set("attendance", text);
+                }} />
 
               <A
                 rows={8}
@@ -3187,23 +3161,8 @@ export default function SyllabusBuilder() {
               />
             </Field> 
             <Field label="What engagement looks like here" hint="optional, but it removes a lot of guesswork">
-              <select
-                style={{ ...inputBase, marginBottom: 8 }}
-                value=""
-                onChange={(e) => {
-                  const text = e.target.value;
-                  if (!text) return;
-                  if (
-                    d.participation.trim() &&
-                    !window.confirm("Replace your current engagement policy?")
-                  ) {
-                    return;
-                  }
-                  set("participation", text);
-                }}
-              >
-                <option value="">Please select a sample engagement policy, then edit it to fit your course</option>
-                {[
+              <Dropdown value="" placeholder="Please select a sample engagement policy, then edit it to fit your course" ariaLabel="Sample engagement policy" style={{ marginBottom: 8 }}
+                options={[
                   [
                     "Discussion & Q&A",
                     "Merely showing up and sitting through class is not participation. Active engagement means arriving having read the assigned material, asking and answering questions during class discussions, listening respectfully to classmates, and contributing thoughtfully to small-group activities."
@@ -3220,10 +3179,11 @@ export default function SyllabusBuilder() {
                     "Online & Asynchronous",
                     "In an online course, engagement means staying visibly connected to the class community each week. Logging into Canvas regularly, posting substantive and timely responses on discussion boards, engaging with your peers' ideas, and reaching out during office hours or by email when questions come up all count."
                   ],
-                ].map(([label, text]) => (
-                  <option key={label} value={text}>{label}</option>
-                ))}
-              </select>
+                ].map(([label, text]) => ({ value: text, label }))}
+                onChange={(text) => {
+                  if (d.participation.trim() && !window.confirm("Replace your current engagement policy?")) return;
+                  set("participation", text);
+                }} />
 
               <A
                 rows={4}
@@ -3233,27 +3193,25 @@ export default function SyllabusBuilder() {
               />
             </Field>
             <Field label="Late work and make-up" hint="choose a sample, then edit as needed">
-              <select value={d.lateSample} onChange={(e) => {
-                const sample = LATE_POLICIES.find((policy) => policy.label === e.target.value);
-                set("lateSample", e.target.value);
-                set("late", sample?.text || "");
-              }} style={{ ...inputBase, marginBottom: 8 }}>
-                <option value="">Choose a sample policy...</option>
-                {LATE_POLICIES.map((policy) => <option key={policy.label} value={policy.label}>{policy.label}</option>)}
-              </select>
+              <Dropdown value={d.lateSample} placeholder="Choose a sample policy..." ariaLabel="Sample late work policy"
+                style={{ marginBottom: 8 }} options={LATE_POLICIES.map((policy) => ({ value: policy.label, label: policy.label }))}
+                onChange={(v) => {
+                  const sample = LATE_POLICIES.find((policy) => policy.label === v);
+                  set("lateSample", v);
+                  set("late", sample?.text || "");
+                }} />
               <A rows={3} value={d.late} onChange={(v) => set("late", v)} placeholder="Describe your late work deadlines, penalties, extensions, and make-up arrangements." />
             </Field>
             {d.lateAdditional.map((policy, i) => (
               <div key={i} data-box-key="lateAdditional" data-box-index={i}>
               <Field label="Additional late work policy" hint="choose a sample, then edit as needed">
-                <select value={policy.sample} onChange={(e) => {
-                  const sample = LATE_POLICIES.find((option) => option.label === e.target.value);
-                  setDeep("lateAdditional", i, "sample", e.target.value);
-                  setDeep("lateAdditional", i, "text", sample?.text || "");
-                }} style={{ ...inputBase, marginBottom: 8 }}>
-                  <option value="">Choose a sample policy...</option>
-                  {LATE_POLICIES.map((option) => <option key={option.label} value={option.label}>{option.label}</option>)}
-                </select>
+                <Dropdown value={policy.sample} placeholder="Choose a sample policy..." ariaLabel="Sample late work policy"
+                  style={{ marginBottom: 8 }} options={LATE_POLICIES.map((option) => ({ value: option.label, label: option.label }))}
+                  onChange={(v) => {
+                    const sample = LATE_POLICIES.find((option) => option.label === v);
+                    setDeep("lateAdditional", i, "sample", v);
+                    setDeep("lateAdditional", i, "text", sample?.text || "");
+                  }} />
                 <A rows={3} value={policy.text} onChange={(v) => setDeep("lateAdditional", i, "text", v)} placeholder="Describe an additional late work or make-up arrangement." />
                 <div className="flex justify-end mt-2">
                   <Btn onClick={() => drop("lateAdditional", i)} icon={Trash2}>Remove policy</Btn>
@@ -3300,7 +3258,7 @@ export default function SyllabusBuilder() {
               <div key={k} className="mb-3 p-3 rounded" style={{ background: UI.paper, border: `1px solid ${UI.line}` }}>
                 <label className="flex items-center gap-2" style={{ cursor: "pointer" }}>
                   <input type="checkbox" checked={d.inc[k]} onChange={(e) => set("inc", { ...d.inc, [k]: e.target.checked })} />
-                  <Lock size={12} style={{ color: C.orange }} />
+                  <Lock size={12} style={{ color: UI.orangeText }} />
                   <span style={{ color: UI.navy, fontWeight: "bold", fontSize: 13.5 }}>{v.title}</span>
                 </label>
                 <div style={{ fontSize: 12, color: UI.slate, marginTop: 6, lineHeight: 1.5, maxHeight: 86, overflow: "auto", whiteSpace: "pre-wrap" }}>{v.text}</div>
@@ -3311,8 +3269,15 @@ export default function SyllabusBuilder() {
           {tab === 9 && (<>
             <H>Schedule</H>
             <Field label="Schedule format">
-              <select style={inputBase} value={d.scheduleType || "weekly"} onChange={(e) => {
-                const next = e.target.value;
+              <Dropdown value={d.scheduleType || "weekly"} ariaLabel="Schedule format"
+                options={[
+                  { value: "weekly", label: "Weekly" },
+                  { value: "modular", label: "Modular" },
+                  { value: "summer-full", label: "Summer: Full" },
+                  { value: "summer-first-half", label: "Summer: First half" },
+                  { value: "summer-second-half", label: "Summer: Second half" },
+                ]}
+                onChange={(next) => {
                 if (next === "summer-full" || next === "summer-first-half" || next === "summer-second-half") {
                   applySummerPreset(next);
                   return;
@@ -3322,13 +3287,7 @@ export default function SyllabusBuilder() {
                   label: /^(Week|Module) \d+$/.test(w.label)
                     ? w.label.replace(/^(Week|Module)/, next === "modular" ? "Module" : "Week") : w.label,
                 })) }));
-              }}>
-                <option value="weekly">Weekly</option>
-                <option value="modular">Modular</option>
-                <option value="summer-full">Summer: Full</option>
-                <option value="summer-first-half">Summer: First half</option>
-                <option value="summer-second-half">Summer: Second half</option>
-              </select>
+              }} />
             </Field>
             <div className="flex gap-2 flex-wrap mb-4">
               <Btn onClick={() => applySummerPreset("summer-full")} icon={Plus}>Add full summer schedule</Btn>
@@ -3580,7 +3539,7 @@ export default function SyllabusBuilder() {
         </div>
 
         {/* preview */}
-        <div className={previewFullscreen ? "" : "p-5"} style={previewFullscreen
+        <div className={previewFullscreen ? "" : "p-5 app-panel editor-preview"} style={previewFullscreen
           ? { position: "fixed", inset: 0, zIndex: 1000, display: "flex", flexDirection: "column", background: UI.wash }
           : { flex: "1 1 460px", minWidth: 360 }}>
           <div className="flex items-center justify-between gap-3 mb-2" style={{
@@ -3588,7 +3547,7 @@ export default function SyllabusBuilder() {
             ...(previewFullscreen ? { background: UI.paper, borderBottom: `1px solid ${UI.line}`, padding: "12px 20px", marginBottom: 0 } : {}),
           }}>
                         <div className="flex items-center gap-2">
-              <ChevronRight size={13} style={{ color: C.orange }} />
+              <ChevronRight size={13} style={{ color: UI.orangeText }} />
               {printColors ? "THIS IS EXACTLY WHAT EXPORTS" : "DARK PREVIEW · EXPORTS PRINT IN LIGHT"}
             </div>
             <div className="flex items-center gap-2">
@@ -3633,7 +3592,7 @@ export default function SyllabusBuilder() {
                         <div ref={previewRef} className={showPrinted ? "doc-preview" : "doc-preview themed"} style={{
               border: `1px solid ${UI.line}`, borderRadius: 3, boxSizing: "border-box",
               width: "8.5in", maxWidth: "100%", padding: "0.8in",
-              maxHeight: previewFullscreen ? "none" : "calc(100vh - 130px)", overflow: previewFullscreen ? "visible" : "auto",
+              maxHeight: previewFullscreen ? "none" : "calc(100vh - 196px)", overflow: previewFullscreen ? "visible" : "auto",
               boxShadow: "0 1px 4px rgba(11,34,64,.08)",
               ...(previewFullscreen ? { maxWidth: 1100, minHeight: "100%", margin: "0 auto" } : {}),
             }}>
@@ -3690,7 +3649,7 @@ function ReviewPanel({ groups, onJump }) {
                   </div>
                   {!filled && r.required && r.tab !== undefined && (
                     <button onClick={() => onJump(r.tab)}
-                      style={{ color: UI.orange, fontSize: 12, fontWeight: "bold", cursor: "pointer" }}>Fix</button>
+                      style={{ color: UI.orangeText, fontSize: 12, fontWeight: "bold", cursor: "pointer" }}>Fix</button>
                   )}
                 </div>
               );
